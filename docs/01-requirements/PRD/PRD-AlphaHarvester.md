@@ -69,7 +69,7 @@
 │  │ 模組 G-02：全域標的治理與多因子排名 (Global Universe & Factor Ranking Engine)    │  │
 │  │  - 全市場三大資產層級硬約束過濾 (TER ≤ 0.45%、AUM > 100 億、流動性)               │  │
 │  │  - 半年度 (6/30, 12/31) 全市場多因子評分 (MOM, Sharpe, Hurst, 相關性, 定額排行)  │  │
-│  │  - 新上市 ETF 孵化觀測池 (New ETF Incubation Watchlist)                           │  │
+│  │  - 新上市 ETF 快速通道與月度動態標記 (Core Fast-Track & Monthly Universe Refresh)   │  │
 │  │  ➜ 產出：【全域合規標的池與因子總排名清單 (Global Ranked Universe)】              │  │
 │  └────────────────────────────────────────┬─────────────────────────────────────────┘  │
 │                                           │ 提供客觀標的排名                           │
@@ -140,6 +140,7 @@
   * 10 年期美國公債實質殖利率 (`DGS10`) 與 20 年期殖利率 (`DGS20`)。
 * **證交所定期定額排行榜**：每月 15 日前定時拉取證交所公告之「定期定額交易戶數 Top 20 ETF 標的與戶數」。
 * **新上市 ETF 與基本面**：自動比對掛牌清單，維護掛牌日期、追蹤指數、發行投信、最新總費用率 (TER) 與資產規模 (AUM)；定時拉取各 ETF 的公開除息日程（除息日 Ex-Date、發放日 Payment Date、每股現金股利 $D$）。
+* **外部接口技術規格書 (External Specs)**：所有外部資料源（TWSE/TPEx OpenAPI、TWSE MIS、Yahoo Finance、FRED）之連線端點、即時驗證範例與欄位轉換契約，請嚴格參見 [External Interface Specifications](../external-specs/README.md)。
 
 #### 2. 數據齊備性守門員 (Data Completeness Gatekeeper)
 * 在每天盤後執行下游因子運算前，守門員自動執行檢核：
