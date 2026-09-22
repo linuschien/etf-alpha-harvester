@@ -76,6 +76,10 @@
 - **AC1 (新上市 ETF 自動偵測與輕量元資料)**：系統定時比對 TWSE/TPEx 最新掛牌名單，凡新掛牌原型 ETF 自動登錄其 `ticker`、`name`、`listing_date` (掛牌日期)、`underlying_index`、`issuer` (發行投信)、`ter` (總費用率) 與最新 `aum`，直接保存於資產元資料，**不額外建立獨立暫存資料表**。
 - **AC2 (掛牌天數動態計算與滿 30 交易日門檻)**：系統每日由 `CURRENT_DATE - listing_date` 動態計算掛牌天數；當實際累積收盤交易日數達 **$N \ge 30$ 個交易日** 時，系統自動啟動回歸資料採集標籤，納入模組 G-02 之月度分類與篩選管線。
 - **AC3 (公開除息日程採集)**：每日檢索公開資訊觀測站之 ETF 配息公告，獲取包含 `ex_date` (除息日)、`payment_date` (發放日)、`dividend_per_share` (每股配息金額)，存入 `DividendAnnouncement`。
+- **AC4 (標的分割與反分割事件採集 - Corporate Action Splits)**：
+  - 系統每日 08:00 TST 定時自 Yahoo Finance API (`events=split`) 與證交所除權公告檢索標的分割資訊。
+  - 一旦檢出分割事件，自動寫入 `CorporateAction` 表，記錄 `ticker`、`action_type` (SPLIT/REVERSE_SPLIT)、`effective_date` (生效日)、`split_ratio`、`numerator` 與 `denominator`。
+  - 同時自動對該標的之歷史價格序列進行向後還原折算，寫入 `adj_close_price`，確保下游均線與波動度模型平滑過渡。
 
 ---
 

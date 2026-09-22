@@ -48,6 +48,12 @@
   - 在持倉清單各標的右側提供「校正庫存」按鈕。
   - 點擊彈出對話框，使用者直接填入券商 App 顯示的最新「真實總股數」與「加權平均成本」，點擊「強制校準」。
   - 系統直接覆寫該筆持倉紀錄，並於背景新增一筆 `PositionCalibrationLog`（記錄校正前數值、校正後數值、時間戳記），保證歷史軌跡清晰。
+- **AC3 (標的分割與反分割自動折算 - Corporate Action Auto-Split)**：
+  - 當系統於每日 08:00 TST 批次偵測到全域 `CorporateAction`（生效日為當日之分割或反分割事件）：
+  - 系統自動掃描所有持有該標的之個人持倉，執行等比折算：
+    $$\text{new\_shares} = \text{old\_shares} \times \text{split\_ratio}, \quad \text{new\_avg\_cost} = \frac{\text{old\_avg\_cost}}{\text{split\_ratio}}$$
+  - 總持倉成本與未實現損益維持 100% 守恆不變，並自動於背景寫入 `PositionAuditEvent`（記錄 `event_type = 'SPLIT'`、前/後股數、前/後成本與生效日期）。
+  - 具備嚴格冪等性：以 `(user_id, symbol, effective_date)` 驗證，同一分割事件永不重複套用。
 
 ---
 

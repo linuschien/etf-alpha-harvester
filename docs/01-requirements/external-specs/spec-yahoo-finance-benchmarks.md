@@ -33,12 +33,26 @@ This specification defines the integration with Yahoo Finance v8 Chart API. This
 * **Query Parameters**:
   - `interval`: `1d` (Daily bars)
   - `range`: `1mo`, `3mo`, `6mo`, `1y`, `5y`
+  - `events`: `div,split` (Corporate actions: dividends and stock splits)
 * **Headers**:
   ```http
   User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
   Accept: application/json
   ```
 * **Live Probe Result**: HTTP 200 verified across all Big 5 indices and Taiwan tickers.
+* **Corporate Action Split Structure (Verified)**:
+  ```json
+  "events": {
+    "splits": {
+      "1718026200": {
+        "date": 1718026200,
+        "numerator": 10.0,
+        "denominator": 1.0,
+        "splitRatio": "10:1"
+      }
+    }
+  }
+  ```
 
 #### Verified Live Response Sample (`0050.TW` & `^TWII`)
 ```json

@@ -21,12 +21,13 @@
 
 | 實體 / 物件 | 英文代碼 | 定義 | 關鍵屬性 |
 | --- | --- | --- | --- |
-| **市場行情快照** | `MarketDailyQuote` | 單一 ETF 在特定交易日的市場價量。 | `ticker`, `trade_date`, `close_price`, `open_price`, `high_price`, `low_price`, `volume` |
+| **市場行情快照** | `MarketDailyQuote` | 單一 ETF 在特定交易日的市場價量與還原價。 | `ticker`, `trade_date`, `close_price` (原始未還原), `adj_close_price` (調整後還原), `volume` |
 | **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率。 | `record_date`, `us_ig_corp_ytm`, `us_treasury_10y`, `us_treasury_20y`, `state` |
 | **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對 ETF 進行客觀多因子計算之分數與排名。 | `ticker`, `evaluation_date`, `asset_class`, `total_score`, `global_rank`, `ter`, `aum_twd` |
 | **定期定額熱門排行** | `DcaPopularityRank` | 臺灣證交所每月公告之定期定額交易戶數排行。 | `ticker`, `ranking_month`, `rank_position`, `account_count` |
 | **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，免獨立新標的表。 | `ticker`, `name`, `listing_date`, `underlying_index`, `issuer`, `ter`, `aum_twd` |
 | **除息公告資訊** | `DividendAnnouncement` | 發行投信公開公告之 ETF 每期除權息日程。 | `ticker`, `ex_date` (除息日), `payment_date` (發放日), `dividend_per_share` |
+| **標的分割與除權事件** | `CorporateAction` | 標的分割、反分割或減資事件，用於歷史行情還原與個人持倉自動等比折算。 | `ticker`, `action_type` (SPLIT/REVERSE_SPLIT), `effective_date`, `split_ratio`, `numerator`, `denominator` |
 
 ### 2.2 個人投組層實體 (Personal Entities)
 
@@ -37,6 +38,7 @@
 | **再平衡執行工單** | `RebalanceWorkOrder` | 工單求解器產出之單筆整股與盤中零股交易指令。 | `order_id`, `user_id`, `ticker`, `action` (BUY/SELL), `round_lots` (張), `odd_shares` (股), `priority` |
 | **交易成交流水帳** | `TradeTransaction` | 使用者確認成交之買賣記錄（記錄已實現資本利得）。 | `tx_id`, `user_id`, `ticker`, `action`, `shares`, `price`, `fees`, `tax`, `realized_gain` |
 | **已實現配息收益記錄** | `DividendTransaction` | 除息發放日自動結算入帳之配息流水帳。 | `div_id`, `user_id`, `ticker`, `payment_date`, `shares_held`, `dividend_per_share`, `total_dividend`, `tax_tag` |
+| **持倉審計事件流水** | `PositionAuditEvent` | 因標的分割、反分割或手動微調校正產生之持倉變更紀錄。 | `event_id`, `user_id`, `ticker`, `event_type` (SPLIT/CALIBRATION), `old_shares`, `new_shares`, `old_avg_cost`, `new_avg_cost`, `event_date` |
 | **資產淨值月快照** | `MonthlyPortfolioSnapshot` | 每月總資產淨值與增減變動記錄（取代 Excel）。 | `snapshot_month`, `total_net_worth`, `equity_value`, `bond_value`, `free_cash`, `mom_change_amount`, `mom_change_pct` |
 
 ---
