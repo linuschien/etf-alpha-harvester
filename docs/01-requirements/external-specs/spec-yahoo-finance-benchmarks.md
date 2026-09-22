@@ -53,6 +53,12 @@ This specification defines the integration with Yahoo Finance v8 Chart API. This
     }
   }
   ```
+* **0050 Benchmark Split Case Study (June 2025 1:4 Split)**:
+  - Effective Date: `2025-06-18` (Resumed trading post 1:4 split).
+  - Pre-split close on 2025-06-10: 188.65 TWD.
+  - Post-split reference opening price on 2025-06-18: 47.16 TWD.
+  - **Yahoo Finance Adjustment Behavior**: All historical quotes before 2025-06-18 were retroactively divided by 4.0 in Yahoo's `close` and `adjclose` series.
+  - **Personal Ledger Requirement**: Any personal holding acquired prior to 2025-06-18 must be scaled ($\text{shares} \times 4.0$, $\text{avg\_cost} / 4.0$) to avoid $-75\%$ false drawdown!
 
 #### Verified Live Response Sample (`0050.TW` & `^TWII`)
 ```json
