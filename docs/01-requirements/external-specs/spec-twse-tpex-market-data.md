@@ -234,6 +234,40 @@ This specification defines the integration interfaces for Taiwan Stock Exchange 
 
 ---
 
+### 2.6 TWSE Suspended Securities & Trading Halts (暫停交易證券)
+
+* **Source**: TWSE Open Data API
+* **URL**: `https://openapi.twse.com.tw/v1/exchangeReport/TWTAWU`
+* **Method**: `GET`
+* **Headers**: `Accept: application/json`
+* **Update Frequency**: Daily (08:00 TST / Prior to market open)
+* **Purpose**: Identifies securities currently suspended due to stock splits, reverse splits, or capital reduction.
+
+#### Response Schema (Sample Row)
+```json
+[
+  {
+    "Number": "1",
+    "Code": "0050",
+    "Name": "元大台灣50",
+    "TradingHaltDate": "1140611",
+    "TradingHaltTime": "080000",
+    "TradingResumptionDate": "1140618",
+    "TradingResumptionTime": "080000"
+  }
+]
+```
+
+#### Field Mapping & Suspension Handling
+| Upstream Field | Target System Property | Processing Rule |
+| :--- | :--- | :--- |
+| `Code` | `symbol` | Ticker in suspension |
+| `TradingHaltDate` | `suspension_start_date` | Converted to ISO Date (`YYYY-MM-DD`) |
+| `TradingResumptionDate` | `resumption_date` | Converted to ISO Date (`YYYY-MM-DD`) |
+| Derived | `trading_status` | Set to `SUSPENDED_FOR_SPLIT` during the interval $[\text{HaltDate}, \text{ResumptionDate})$ |
+
+---
+
 ## 3. Data Transformation & Ingestion Logic
 
 ### 3.1 ROC Date Conversion Algorithm
