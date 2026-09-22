@@ -270,8 +270,8 @@ sequenceDiagram
     participant MIS as TWSE MIS
     participant DB as Cloud SQL (PostgreSQL)
 
-    Note over Cron: Daily at 16:30 TST
-    Cron->>Engine: Trigger Daily Ingestion Job
+    Note over Cron: Daily at 08:00 TST (00:00 UTC, Cron: 0 0 * * *)
+    Cron->>Engine: Trigger Unified Ingestion Job
     Engine->>TWSE: GET /opendata/t187ap47_L (Master List)
     TWSE-->>Engine: 200 OK (271 ETFs)
     Engine->>TWSE: GET /exchangeReport/STOCK_DAY_ALL
@@ -285,7 +285,7 @@ sequenceDiagram
     Engine->>Engine: Merge Quotes with NAV & Calculate AUM
     Engine->>DB: Upsert into global_securities & global_daily_market_quotes
     
-    opt Monthly Refresh (Every 15th at 17:00 TST)
+    opt Monthly DCA Refresh (Every 16th at 08:00 TST)
         Engine->>TWSE: GET /ETFReport/ETFRank (DCA Top 20)
         TWSE-->>Engine: 200 OK (Top 20 Rankings)
         Engine->>DB: Upsert into global_dca_rankings

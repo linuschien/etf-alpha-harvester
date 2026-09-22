@@ -55,8 +55,8 @@ sequenceDiagram
     participant P02 as P-02 個人工單與帳本
     participant UI as 戰情室 Web Dashboard
 
-    Sch->>G01: 15:30 觸發 TWSE/TPEx 收盤行情拉取
-    Sch->>G01: 定時拉取 FRED 公司債 YTM 與公債殖利率
+    Sch->>G01: 08:00 TST (UTC 00:00) 觸發全球五大指數、TWSE/TPEx 與公債殖利率統一拉取
+    Sch->>G01: 執行數據標準化與齊備性檢查
     G01->>Gate: 提交當日採集數據
     alt 數據齊備性驗證
         Gate->>Gate: 檢查無缺漏且數值合理 (PASS)
@@ -95,7 +95,7 @@ flowchart TD
 
 | PRD 章節 | 領域模組 | User Story 編號 | 使用者故事摘要 | 關鍵驗收指標 |
 | --- | --- | --- | --- | --- |
-| **PRD 3.1** | G-01 數據基石 | **US-G01-01** | 台股 ETF 與五大基準指數日行情採集 | 每日 15:30 採集 ETF 與 ^TWII, ^GSPC, ^NDX, ^SOX, ^N225 |
+| **PRD 3.1** | G-01 數據基石 | **US-G01-01** | 台股 ETF 與五大基準指數日行情採集 | 每日 08:00 TST (UTC 00:00) 採集 ETF 與 ^TWII, ^GSPC, ^NDX, ^SOX, ^N225 |
 | **PRD 3.1** | G-01 數據基石 | **US-G01-02** | FRED 宏觀利率定時採集 | 每日美東收盤拉取 US IG Corp YTM 與公債殖利率 |
 | **PRD 3.1** | G-01 數據基石 | **US-G01-03** | 證交所定期定額熱門排行採集 | 每月 15 日前採集 Top 20 ETF 戶數與排行 |
 | **PRD 3.1** | G-01 數據基石 | **US-G01-04** | 新上市 ETF 基本面與除息日程採集 | 掛牌滿 30 交易日自動納入監測，免獨立 Table |

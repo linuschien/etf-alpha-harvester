@@ -133,10 +133,9 @@ When calculating regression between a Taiwan ETF (`0050.TW`) and a foreign bench
 
 ## 5. Ingestion Schedule & Throttling Policies
 
-1. **Daily Sync Time**:
-   - Taiwan Market (`^TWII`, `0050.TW`): 16:30 TST.
-   - US Market (`^GSPC`, `^NDX`, `^SOX`, `^TNX`): 06:00 TST next morning (post US close).
-   - Japan Market (`^N225`): 16:00 TST (post Tokyo close).
+1. **Unified Daily Sync Time**:
+   - **Trigger Time**: Daily at 08:00 TST (00:00 UTC, Cron: `0 0 * * *`).
+   - **Rationale**: At 08:00 TST, all three target regions (Taiwan, Japan, and US) and the US Treasury department have 100% completed clearing and settlement for the preceding 24-hour cycle. Single unified query covers all benchmarks (`^TWII`, `^GSPC`, `^NDX`, `^SOX`, `^N225`, `^TNX`).
 2. **Rate Limiting & Headers**:
    - Random jitter between requests: 500ms ~ 1500ms.
    - User-Agent rotation: Standard modern desktop browser user-agents to avoid 429 Too Many Requests.

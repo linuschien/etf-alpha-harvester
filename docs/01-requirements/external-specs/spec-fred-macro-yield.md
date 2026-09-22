@@ -132,7 +132,7 @@ AlphaHarvester natively supports a **Dual-Mode architecture** so that the system
 
 ```mermaid
 flowchart TD
-    Trigger([Daily Macro Sync Job\n07:00 TST]) --> CheckKey{FRED_API_KEY\nConfigured?}
+    Trigger([Unified Macro Sync Job\n08:00 TST / 00:00 UTC]) --> CheckKey{FRED_API_KEY\nConfigured?}
     
     CheckKey -->|YES: Key Provided| TryFRED{Query FRED API\nBAMLC0A0CM}
     TryFRED -->|Success 200| SaveFRED[(Store Exact Corp Yield\n& Treasury Rates)]

@@ -59,7 +59,7 @@ flowchart TD
     end
 
     subgraph "AlphaHarvester Ingestion Engine (G-01)"
-        Scheduler["Ingestion Scheduler\n(16:30 Daily / 15th Monthly)"]
+        Scheduler["Unified Scheduler\n(08:00 TST Daily / 00:00 UTC)"]
         Sanitizer["Data Sanitizer & Converter\n(ROC Date -> ISO, Strings -> Numbers)"]
         Gatekeeper["Gatekeeper Validation Engine\n(US-G01-05 Missing Data Halt)"]
     end
