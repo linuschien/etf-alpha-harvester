@@ -1,0 +1,59 @@
+# hexagonal-service-manifest-schema.yaml
+# Specification Version: 2026.Q2
+# Governance: Strict Architectural Compliance
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "Strict Hexagonal Microservice Manifest"
+description: "Standardized schema for defining Hexagonal Architecture services with mandatory strict validation of ports and adapters."
+type: object
+required: [service_name, architecture, adapters]
+additionalProperties: false # Root-level strict enforcement
+
+properties:
+  service_name:
+    type: string
+    description: "The unique identifier for the microservice. Example: 'hems-charging-station-manager'."
+
+  architecture:
+    const: "Hexagonal"
+    description: "Force the architectural pattern to Hexagonal (Ports & Adapters)."
+
+  adapters:
+    type: array
+    description: "A comprehensive list of all primary and secondary adapters within the service."
+    minItems: 1
+    items:
+      type: object
+      required: [name, type, port, tech]
+      additionalProperties: false # Adapter-level strict enforcement
+      properties:
+        name:
+          type: string
+          pattern: ".*Adapter$"
+          description: "Class name of the adapter. Must follow the naming convention suffixing with 'Adapter'."
+        
+        type:
+          enum: ["Primary", "Secondary"]
+          description: "Defines if the adapter is Driving (Primary) or Driven (Secondary)."
+        
+        tech:
+          type: string
+          description: "The implementation technology stack. Examples: 'FastAPI', 'RabbitMQ', 'PostgreSQL', 'ModbusTCP'."
+        
+        stereotype:
+          type: string
+          default: "<<Service>>"
+          description: "UML stereotype mapping for the component. Defaults to <<Service>>."
+        
+        port:
+          type: object
+          required: [interface, layer]
+          additionalProperties: false # Port-level strict enforcement
+          description: "Definition of the port interface that this adapter connects to."
+          properties:
+            interface:
+              type: string
+              description: "The name of the Interface defined in the Domain layer."
+            
+            layer:
+              enum: ["domain.ports.input", "domain.ports.output"]
+              description: "Explicit mapping to the hexagonal input/output layer boundaries."

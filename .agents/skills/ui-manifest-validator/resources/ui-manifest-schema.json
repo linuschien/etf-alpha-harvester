@@ -1,0 +1,278 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Universal SDD UI PIM Meta-Schema (Full Spec)",
+    "description": "SDD Production Line: Semantic Intent Specification with Interaction Logic, Contractual Linkage, and UX Design Principles.",
+    "$defs": {
+        "ux_principle_ref": {
+            "type": "string",
+            "description": "A UX design principle or heuristic reference. May be a BDD Scenario title (in docs/02-design-specs/behavior-specs/user/) OR one of the canonical UX principle identifiers: 'nielsen:visibility', 'nielsen:feedback', 'nielsen:control', 'nielsen:consistency', 'nielsen:error-prevention', 'nielsen:recognition', 'nielsen:flexibility', 'nielsen:aesthetic', 'nielsen:recovery', 'nielsen:help', 'gestalt:proximity', 'gestalt:similarity', 'gestalt:closure', 'visual-hierarchy:size', 'visual-hierarchy:weight', 'visual-hierarchy:color', 'fitts-law', 'hicks-law', 'millers-law', 'f-pattern'.",
+            "examples": [
+                "US-03: Teacher submits grade",
+                "nielsen:feedback",
+                "fitts-law",
+                "gestalt:proximity"
+            ]
+        },
+        "feedback_config": {
+            "type": "object",
+            "description": "Declarative feedback configuration for action results. Ensures every user action communicates success or failure (Nielsen #1: Visibility of System Status).",
+            "required": ["on_success", "on_error"],
+            "additionalProperties": false,
+            "properties": {
+                "on_success": {
+                    "type": "object",
+                    "description": "Feedback shown when the action completes successfully.",
+                    "required": ["type", "message_key"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "type": {
+                            "enum": ["toast", "dialog", "inline"],
+                            "description": "'toast' = transient notification; 'dialog' = blocking message dialog; 'inline' = inline status text next to the element."
+                        },
+                        "message_key": {
+                            "type": "string",
+                            "description": "i18n key or literal text for the success message."
+                        }
+                    }
+                },
+                "on_error": {
+                    "type": "object",
+                    "description": "Feedback shown when the action fails (system error or validation failure).",
+                    "required": ["type", "message_key"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "type": {
+                            "enum": ["toast", "dialog", "inline"],
+                            "description": "'toast' = transient notification; 'dialog' = blocking error dialog; 'inline' = inline error message."
+                        },
+                        "message_key": {
+                            "type": "string",
+                            "description": "i18n key or literal text for the error message."
+                        }
+                    }
+                }
+            }
+        },
+        "column_def": {
+            "type": "object",
+            "description": "Definition of a single table column, including optional sort support.",
+            "required": ["field", "label"],
+            "additionalProperties": false,
+            "properties": {
+                "field": {
+                    "type": "string",
+                    "description": "The data field name this column maps to (must match the entity attribute name from the UML model)."
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Column header label (use canonical Glossary term)."
+                },
+                "sortable": {
+                    "type": "boolean",
+                    "description": "If true, the column header renders a sort control. Defaults to false. Apply Fitts' Law — sort trigger must be clearly clickable.",
+                    "default": false
+                },
+                "default_sort": {
+                    "enum": ["asc", "desc"],
+                    "description": "If set, this column is the default sort column on initial render."
+                }
+            }
+        },
+        "ui_element": {
+            "type": "object",
+            "required": [
+                "id",
+                "abstract_type"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "The unique functional identifier for this element. Used as a key for State Management and as a 'target_id' for interactions."
+                },
+                "abstract_type": {
+                    "description": "The Web Components-based semantic category. Dictates the core behavior and role of the component in a platform-independent manner.",
+                    "enum": [
+                        "Container",
+                        "Section",
+                        "Grid",
+                        "Stack",
+                        "Heading",
+                        "Text",
+                        "Metric",
+                        "Chart",
+                        "Table",
+                        "Field",
+                        "Selection",
+                        "Switch",
+                        "Trigger",
+                        "Overlay"
+                    ]
+                },
+                "semantic_variant": {
+                    "type": "string",
+                    "description": "A hint for the Transpiler/Jig to select a specific implementation variant. Common values: 'primary', 'secondary', 'destructive', 'icon' (Trigger); 'modal', 'drawer', 'tooltip', 'confirm-dialog', 'error-dialog', 'success-dialog' (Overlay); 'date-picker', 'text', 'number', 'search', 'textarea' (Field); 'data-table', 'summary-table' (Table); 'page', 'card', 'panel' (Container); 'form-section', 'list-section', 'summary-section' (Section); 'kpi-grid', 'card-grid' (Grid); 'action-bar', 'breadcrumb', 'filter-bar' (Stack); 'dropdown', 'radio', 'checkbox', 'multi-select' (Selection)."
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The human-readable label or the internationalization (i18n) key for the component's display name."
+                },
+                "data_ref": {
+                    "type": "string",
+                    "description": "Contractual Pointer: References either (1) the exact 'operationId' in docs/02-design-specs/api-contracts/openapi.yaml for REST mutations and single-entity reads, OR (2) the GraphQL resolver method name from docs/02-design-specs/uml/*_contract.puml for collection reads (e.g., 'listGradeRecords', 'listClasses'). Collection GET operations are DEPRECATED_TO_GRAPHQL — use the resolver method name, not the deprecated REST operationId. The actual GraphQL query document is dynamic and does not need to be pre-defined; only the resolver name is contractually anchored."
+                },
+                "behavior_ref": {
+                    "type": "string",
+                    "description": "Contractual Pointer: References either (1) a Scenario title in docs/02-design-specs/behavior-specs/user/*.feature that defines the UI logic/validation, OR (2) a canonical UX principle identifier (e.g., 'nielsen:feedback', 'fitts-law', 'gestalt:proximity'). See $defs.ux_principle_ref for the full list of valid UX principle identifiers. Multiple principles may be comma-separated."
+                },
+                "ux_hints": {
+                    "type": "object",
+                    "description": "Structured UX design annotations providing layout, cognitive-load, and accessibility guidance derived from established design laws. These are declarative hints for the Transpiler/Jig — not behavioral logic.",
+                    "additionalProperties": false,
+                    "properties": {
+                        "principles": {
+                            "type": "array",
+                            "description": "List of UX principle identifiers that govern this element's design. Used to guide the Transpiler in component selection and layout decisions.",
+                            "items": {
+                                "$ref": "#/$defs/ux_principle_ref"
+                            }
+                        },
+                        "max_visible_options": {
+                            "type": "integer",
+                            "description": "Hick's Law: Maximum number of choices to display before collapsing into a 'More' overflow. Recommended ≤ 7.",
+                            "maximum": 7
+                        },
+                        "group_size_hint": {
+                            "type": "integer",
+                            "description": "Miller's Law: Suggested grouping size for related items (e.g., fields per form section, columns per table). Recommended 5–9.",
+                            "minimum": 3,
+                            "maximum": 9
+                        },
+                        "primary_action_placement": {
+                            "enum": ["top-left", "top-right", "bottom-left", "bottom-right", "inline"],
+                            "description": "F-Pattern guidance: primary CTAs and most important information should anchor to 'top-left'. Avoid placing CTAs at 'bottom-right' unless secondary."
+                        },
+                        "gestalt_group": {
+                            "type": "string",
+                            "description": "Gestalt Proximity/Similarity: A logical group name shared by related elements (e.g., 'grade-inputs', 'filter-controls'). Elements with the same gestalt_group should be rendered in close visual proximity."
+                        }
+                    }
+                },
+                "feedback": {
+                    "$ref": "#/$defs/feedback_config",
+                    "description": "Action feedback configuration. REQUIRED for all Trigger elements that perform mutations (create, update, delete, import, export, calculate). Ensures Nielsen's Heuristic #1 (Visibility) and #9 (Help users recover from errors). System-level errors (5xx) must always use 'dialog' type."
+                },
+                "confirm_delete": {
+                    "type": "object",
+                    "description": "Destructive action confirmation gate. REQUIRED for all delete/remove Triggers. Forces the user to type a confirmation keyword before the action is submitted, preventing accidental data loss.",
+                    "required": ["keyword_label", "keyword_value"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "keyword_label": {
+                            "type": "string",
+                            "description": "Instruction text shown to the user (e.g., 'Please type the class name to confirm deletion')."
+                        },
+                        "keyword_value": {
+                            "type": "string",
+                            "description": "The dynamic data field whose value the user must type verbatim (e.g., '{{class.name}}'). Use mustache-style template syntax to reference the entity being deleted."
+                        }
+                    }
+                },
+                "columns": {
+                    "type": "array",
+                    "description": "Column definitions for Table elements. Enables column-level sort control (Fitts' Law: sort trigger must be large enough to click; Miller's Law: limit visible columns to 7±2). Only valid when abstract_type is 'Table'.",
+                    "items": {
+                        "$ref": "#/$defs/column_def"
+                    }
+                },
+                "interactions": {
+                    "type": "array",
+                    "description": "Defines declarative event-driven logic between components within the same UI scope.",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "on_event",
+                            "target_id",
+                            "behavior_ref"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "on_event": {
+                                "enum": [
+                                    "on_click",
+                                    "on_change",
+                                    "on_submit",
+                                    "on_hover"
+                                ],
+                                "description": "The UI event that triggers this interaction."
+                            },
+                            "target_id": {
+                                "type": "string",
+                                "description": "The 'id' of another ui_element in this schema that will react to this event."
+                            },
+                            "behavior_ref": {
+                                "type": "string",
+                                "description": "Points to a BDD Scenario title OR a canonical UX principle identifier explaining the transformation or data-flow during this interaction."
+                            }
+                        }
+                    }
+                },
+                "required": {
+                    "type": "boolean",
+                    "description": "Indicates if this field is required for validation."
+                },
+                "checks": {
+                    "type": "array",
+                    "description": "Declarative validation checks (e.g., required, formats).",
+                    "items": {
+                        "type": "object",
+                        "required": ["type", "message"],
+                        "additionalProperties": false,
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "description": "Validation type (e.g., 'required', 'min', 'max')."
+                            },
+                            "message": {
+                                "type": "string",
+                                "description": "Error message when validation fails."
+                            },
+                            "args": {
+                                "type": "object",
+                                "description": "Optional arguments for this check."
+                            }
+                        }
+                    }
+                },
+                "children": {
+                    "type": "array",
+                    "description": "Recursive list of nested ui_elements. Enables complex tree-based UI layouts.",
+                    "items": {
+                        "$ref": "#/$defs/ui_element"
+                    }
+                }
+            }
+        }
+    },
+    "type": "object",
+    "required": [
+        "ui_id",
+        "domain_module",
+        "root_element"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "ui_id": {
+            "type": "string",
+            "description": "Unique identifier for this specific UI specification file (e.g., 'grade-entry-board', 'semester-dashboard')."
+        },
+        "domain_module": {
+            "type": "string",
+            "description": "Domain containment. Must align with the Package/Namespace defined in UML models and the Glossary."
+        },
+        "root_element": {
+            "$ref": "#/$defs/ui_element",
+            "description": "The single entry point for the UI component tree. All visual elements are nested within this node."
+        }
+    }
+}
