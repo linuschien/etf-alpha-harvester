@@ -25,7 +25,7 @@
 | **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率。 | `record_date`, `us_ig_corp_ytm`, `us_treasury_10y`, `us_treasury_20y`, `state` |
 | **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對 ETF 進行客觀多因子計算之分數與排名。 | `ticker`, `evaluation_date`, `asset_class`, `total_score`, `global_rank`, `ter`, `aum_twd` |
 | **定期定額熱門排行** | `DcaPopularityRank` | 臺灣證交所每月公告之定期定額交易戶數排行。 | `ticker`, `ranking_month`, `rank_position`, `account_count` |
-| **新上市 ETF 觀測項目** | `NewEtfWatchItem` | 掛牌未滿 2 年的新發行 ETF 追蹤資訊。 | `ticker`, `name`, `listing_date`, `underlying_index`, `issuer`, `ter`, `aum` |
+| **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，免獨立新標的表。 | `ticker`, `name`, `listing_date`, `underlying_index`, `issuer`, `ter`, `aum_twd` |
 | **除息公告資訊** | `DividendAnnouncement` | 發行投信公開公告之 ETF 每期除權息日程。 | `ticker`, `ex_date` (除息日), `payment_date` (發放日), `dividend_per_share` |
 
 ### 2.2 個人投組層實體 (Personal Entities)
