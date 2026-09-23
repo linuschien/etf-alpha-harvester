@@ -1,0 +1,46 @@
+@startuml benchmark_index_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "BenchmarkIndexRestController" <<RestController>> {
+    ' --- Mutations ---
+    + createBenchmarkIndex(req: BenchmarkIndexRequest): ResponseEntity<BenchmarkIndexResponse>
+    + updateBenchmarkIndex(benchmarkId: UUID, req: BenchmarkIndexRequest): ResponseEntity<BenchmarkIndexResponse>
+    + deleteBenchmarkIndex(benchmarkId: UUID): ResponseEntity<Void>
+    ' --- Single-resource Query ---
+    + getBenchmarkIndexById(benchmarkId: UUID): ResponseEntity<BenchmarkIndexResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "BenchmarkIndexGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listBenchmarkIndices(filter: BenchmarkIndexFilterInput): List<BenchmarkIndex>
+    + getBenchmarkIndexById(id: UUID): Optional<BenchmarkIndex>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "BenchmarkIndexRepository" <<Repository>> {
+    + save(entity: BenchmarkIndex): BenchmarkIndex
+    + findById(id: UUID): Optional<BenchmarkIndex>
+    + findByTicker(ticker: String): Optional<BenchmarkIndex>
+    + findByExample(example: Example<BenchmarkIndex>): List<BenchmarkIndex>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of BenchmarkIndexRepository
+  Optimistic Locking enforced.
+  Repository MUST check version field before save.
+end note
+
+' === Dependency Arrows ===
+"BenchmarkIndexRestController"  ..> "BenchmarkIndexRepository" : uses
+"BenchmarkIndexGraphQLResolver" ..> "BenchmarkIndexRepository" : uses
+
+@enduml
+

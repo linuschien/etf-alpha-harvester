@@ -1,0 +1,64 @@
+@startuml macro_yield_snapshot_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "MacroYieldSnapshotRestController" <<RestController>> {
+    ' --- Ingest / Delete ---
+    + createMacroYieldSnapshot(req: MacroYieldSnapshotRequest): ResponseEntity<MacroYieldSnapshotResponse>
+    + deleteMacroYieldSnapshot(snapshotId: UUID): ResponseEntity<Void>
+    ' --- Custom Actions (Batch Job Triggers) ---
+    + triggerSyncMacroYieldJob(): ResponseEntity<OperationStatus>
+    ' --- Single-resource Query ---
+    + getMacroYieldSnapshotById(snapshotId: UUID): ResponseEntity<MacroYieldSnapshotResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "MacroYieldSnapshotGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listMacroYieldSnapshots(filter: MacroYieldFilterInput): List<MacroYieldSnapshot>
+    + getMacroYieldSnapshotById(id: UUID): Optional<MacroYieldSnapshot>
+    + getLatestMacroYieldSnapshot(): Optional<MacroYieldSnapshot>
+  }
+}
+
+package "application.port.in" {
+  interface "MacroYieldSnapshotCommandService" <<Service>> {
+    + recordYieldSnapshot(req: MacroYieldSnapshotRequest): MacroYieldSnapshotResponse
+    + deleteYieldSnapshot(snapshotId: UUID): void
+    + syncMacroYield(): OperationStatus
+  }
+
+  interface "MacroYieldSnapshotQueryService" <<Service>> {
+    + getYieldSnapshotById(id: UUID): Optional<MacroYieldSnapshotResponse>
+    + listYieldSnapshots(filter: MacroYieldFilterInput): List<MacroYieldSnapshot>
+    + getLatestYieldSnapshot(): Optional<MacroYieldSnapshot>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "MacroYieldSnapshotRepository" <<Repository>> {
+    + save(entity: MacroYieldSnapshot): MacroYieldSnapshot
+    + findById(id: UUID): Optional<MacroYieldSnapshot>
+    + findByRecordDate(recordDate: LocalDate): Optional<MacroYieldSnapshot>
+    + findByExample(example: Example<MacroYieldSnapshot>): List<MacroYieldSnapshot>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of MacroYieldSnapshotRepository
+  Immutable Macro Observation Ledger.
+  Append-only FRED market yields; no version or audit timestamps required.
+end note
+
+' === Dependency Arrows (CQRS) ===
+"MacroYieldSnapshotRestController"  ..> "MacroYieldSnapshotCommandService" : uses
+"MacroYieldSnapshotRestController"  ..> "MacroYieldSnapshotQueryService"   : uses (GET by ID)
+"MacroYieldSnapshotGraphQLResolver" ..> "MacroYieldSnapshotQueryService"   : uses
+"MacroYieldSnapshotCommandService"  ..> "MacroYieldSnapshotRepository"     : uses
+"MacroYieldSnapshotQueryService"    ..> "MacroYieldSnapshotRepository"     : uses
+
+@enduml

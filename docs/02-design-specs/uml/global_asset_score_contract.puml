@@ -1,0 +1,65 @@
+@startuml global_asset_score_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "GlobalAssetScoreRestController" <<RestController>> {
+    ' --- Ingest / Delete ---
+    + createGlobalAssetScore(req: GlobalAssetScoreRequest): ResponseEntity<GlobalAssetScoreResponse>
+    + deleteGlobalAssetScore(scoreId: UUID): ResponseEntity<Void>
+    ' --- Custom Actions (Batch Job Triggers) ---
+    + triggerEvaluateUniverseJob(): ResponseEntity<OperationStatus>
+    ' --- Single-resource Query ---
+    + getGlobalAssetScoreById(scoreId: UUID): ResponseEntity<GlobalAssetScoreResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "GlobalAssetScoreGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listGlobalAssetScores(filter: GlobalAssetScoreFilterInput): List<GlobalAssetScore>
+    + getGlobalAssetScoreById(id: UUID): Optional<GlobalAssetScore>
+    + getScoresByAssetClass(assetClass: CandidateAssetClass, evaluationDate: LocalDate): List<GlobalAssetScore>
+  }
+}
+
+package "application.port.in" {
+  interface "GlobalAssetScoreCommandService" <<Service>> {
+    + recordAssetScore(req: GlobalAssetScoreRequest): GlobalAssetScoreResponse
+    + deleteScore(scoreId: UUID): void
+    + evaluateUniverse(): OperationStatus
+  }
+
+  interface "GlobalAssetScoreQueryService" <<Service>> {
+    + getScoreById(id: UUID): Optional<GlobalAssetScoreResponse>
+    + listScores(filter: GlobalAssetScoreFilterInput): List<GlobalAssetScore>
+    + getScoresByAssetClass(assetClass: CandidateAssetClass, evaluationDate: LocalDate): List<GlobalAssetScore>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "GlobalAssetScoreRepository" <<Repository>> {
+    + save(entity: GlobalAssetScore): GlobalAssetScore
+    + findById(id: UUID): Optional<GlobalAssetScore>
+    + findByTickerAndEvaluationDate(ticker: String, evaluationDate: LocalDate): Optional<GlobalAssetScore>
+    + findByAssetClassAndEvaluationDate(assetClass: CandidateAssetClass, evaluationDate: LocalDate): List<GlobalAssetScore>
+    + findByExample(example: Example<GlobalAssetScore>): List<GlobalAssetScore>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of GlobalAssetScoreRepository
+  Immutable Evaluation Score Ledger.
+  Point-in-time calculation snapshots; no version or audit timestamps required.
+end note
+
+' === Dependency Arrows (CQRS) ===
+"GlobalAssetScoreRestController"  ..> "GlobalAssetScoreCommandService" : uses
+"GlobalAssetScoreRestController"  ..> "GlobalAssetScoreQueryService"   : uses (GET by ID)
+"GlobalAssetScoreGraphQLResolver" ..> "GlobalAssetScoreQueryService"   : uses
+"GlobalAssetScoreCommandService"  ..> "GlobalAssetScoreRepository"     : uses
+"GlobalAssetScoreQueryService"    ..> "GlobalAssetScoreRepository"     : uses
+
+@enduml

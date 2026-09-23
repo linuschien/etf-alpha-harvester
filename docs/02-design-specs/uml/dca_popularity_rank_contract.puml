@@ -1,0 +1,46 @@
+@startuml dca_popularity_rank_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "DcaPopularityRankRestController" <<RestController>> {
+    ' --- Ingest / Delete ---
+    + createDcaPopularityRank(req: DcaPopularityRankRequest): ResponseEntity<DcaPopularityRankResponse>
+    + deleteDcaPopularityRank(rankId: UUID): ResponseEntity<Void>
+    ' --- Single-resource Query ---
+    + getDcaPopularityRankById(rankId: UUID): ResponseEntity<DcaPopularityRankResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "DcaPopularityRankGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listDcaPopularityRanks(filter: DcaPopularityFilterInput): List<DcaPopularityRank>
+    + getDcaPopularityRankById(id: UUID): Optional<DcaPopularityRank>
+    + getTop20DcaRanks(year: Integer, month: Integer): List<DcaPopularityRank>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "DcaPopularityRankRepository" <<Repository>> {
+    + save(entity: DcaPopularityRank): DcaPopularityRank
+    + findById(id: UUID): Optional<DcaPopularityRank>
+    + findByRankingYearAndRankingMonth(year: Integer, month: Integer): List<DcaPopularityRank>
+    + findByAssetId(assetId: UUID): List<DcaPopularityRank>
+    + findByExample(example: Example<DcaPopularityRank>): List<DcaPopularityRank>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of DcaPopularityRankRepository
+  Immutable Monthly Ranking Snapshot Ledger.
+  Read-only TWSE monthly ranks; no version or audit timestamps required.
+end note
+
+' === Dependency Arrows ===
+"DcaPopularityRankRestController"  ..> "DcaPopularityRankRepository" : uses
+"DcaPopularityRankGraphQLResolver" ..> "DcaPopularityRankRepository" : uses
+
+@enduml

@@ -1,0 +1,184 @@
+// AlphaHarvester - Global Services DBML Schema (Hardened Edition)
+// Generated according to dbml-generator standards
+
+Project alpha_harvester_global {
+  database_type: 'PostgreSQL'
+  Note: 'AlphaHarvester Global Market Intelligence and Asset Governance Schema'
+}
+
+// ----------------------------------------------------
+// Enumerations
+// ----------------------------------------------------
+
+Enum candidate_asset_class {
+  CORE
+  SATELLITE
+  DEFENSIVE
+}
+
+Enum corporate_action_type {
+  SPLIT
+  REVERSE_SPLIT
+}
+
+Enum tax_tag {
+  OVERSEAS_76W
+  DOMESTIC_54C
+}
+
+// ----------------------------------------------------
+// Tables
+// ----------------------------------------------------
+
+Table global_asset_metadata {
+  id uuid [pk]
+  ticker varchar [not null, unique, note: 'TWSE/TPEx ETF Ticker Symbol (e.g. 0050, 00757)']
+  name varchar [not null, note: 'Full Chinese/English Name of ETF']
+  listing_date timestamp [not null, note: 'IPO Listing Date']
+  underlying_index varchar [note: 'Tracked Benchmark Index Name']
+  issuer varchar [note: 'Fund House / Asset Management Firm']
+  total_expense_ratio decimal(6,4) [note: 'Total Expense Ratio (TER), e.g. 0.0024 for 0.24%']
+  fund_size_twd decimal(18,2) [note: 'Assets Under Management in TWD']
+  asset_class candidate_asset_class [not null, note: 'Candidate Asset Class (CORE, SATELLITE, DEFENSIVE)']
+  version integer [not null, default: 1]
+  created_at timestamp [not null, default: `now()` ]
+  updated_at timestamp [not null, default: `now()` ]
+  deleted_at timestamp
+
+  Note: 'Authoritative ETF Metadata Catalog. Listing duration is computed dynamically from listing_date.'
+}
+
+Table benchmark_index {
+  id uuid [pk]
+  ticker varchar [not null, unique, note: 'Index Symbol (e.g. ^TWII, ^GSPC, ^NDX, ^SOX, ^N225, ^VIX, ^VXN, ^MOVE, FEAR_GREED)']
+  name varchar [not null, note: 'Index Display Name']
+  region varchar [note: 'Region/Market (e.g. TW, US, JP, GLOBAL)']
+  description text [note: 'Detailed description of the benchmark indicator']
+  version integer [not null, default: 1]
+  created_at timestamp [not null, default: `now()` ]
+  updated_at timestamp [not null, default: `now()` ]
+  deleted_at timestamp
+
+  Note: 'Global market benchmarks, implied volatility indices, and macro sentiment gauges.'
+}
+
+Table market_daily_quote {
+  id uuid [pk]
+  asset_id uuid [note: 'Foreign key to global_asset_metadata.id if ETF quote']
+  benchmark_id uuid [note: 'Foreign key to benchmark_index.id if Benchmark quote']
+  ticker varchar [not null, note: 'Ticker symbol matching ETF or Benchmark Index']
+  trade_date timestamp [not null, note: 'Trading date (UTC / TST 00:00:00)']
+  open_price decimal(12,4)
+  high_price decimal(12,4)
+  low_price decimal(12,4)
+  close_price decimal(12,4) [not null, note: 'Unadjusted official settlement close price']
+  adjusted_close_price decimal(12,4) [not null, note: 'Backward-adjusted close price smoothing splits & dividends']
+  volume_shares bigint [note: 'Total trading volume in shares']
+  trade_value_twd decimal(18,2) [note: 'Total turnover amount in TWD (liquidity filter)']
+  net_asset_value decimal(12,4) [note: 'Net Asset Value (NAV) per share. NULL for benchmark indices.']
+  discount_premium_percentage decimal(6,4) [note: '((close_price - nav) / nav) * 100%. NULL for benchmark indices.']
+
+  indexes {
+    (ticker, trade_date) [unique]
+    trade_date
+    asset_id
+    benchmark_id
+  }
+
+  Note: 'Immutable daily time-series quote engine for both ETFs and global benchmark indices (read-only facts).'
+}
+
+Table macro_yield_snapshot {
+  id uuid [pk]
+  record_date timestamp [not null, unique, note: 'FRED observation date']
+  us_corporate_bond_effective_yield decimal(6,4) [not null, note: 'ICE BofA US Corporate Effective Yield (FRED: BAMLC0A0CM, %)']
+  us_10_year_treasury_yield decimal(6,4) [not null, note: 'US 10-Year Treasury Yield (FRED: DGS10, %)']
+  us_20_year_treasury_yield decimal(6,4) [not null, note: 'US 20-Year Treasury Yield (FRED: DGS20, %)']
+  yield_spread_10y_minus_2y decimal(6,4) [not null, note: '10Y minus 2Y Yield Spread (Inversion Warning, %)']
+
+  Note: 'Pure objective interest rate facts from FRED (read-only daily observation). MacroState and CrisisLevel are pure memory functions.'
+}
+
+Table global_asset_score {
+  id uuid [pk]
+  asset_id uuid [not null]
+  ticker varchar [not null]
+  evaluation_date timestamp [not null, note: 'Evaluation timestamp (monthly refresh or semi-annual lock)']
+  asset_class candidate_asset_class [not null, note: 'Segmented candidate group']
+  class_rank integer [not null, note: 'Independent rank within candidate asset class (Rank 1, 2, 3...)']
+  composite_score decimal(6,2) [not null, note: 'Normalized total score [0, 100]']
+  total_expense_ratio decimal(6,4)
+  fund_size_twd decimal(18,2)
+  is_qualified boolean [not null, default: true, note: 'Passed all hard constraints for this class']
+  disqualification_reason text [note: 'Detailed failure reason if disqualified']
+
+  indexes {
+    (asset_class, evaluation_date, class_rank)
+    (ticker, evaluation_date) [unique]
+  }
+
+  Note: 'Segmented candidate asset ranking ledger (point-in-time calculation snapshots). Core, Satellite, and Defensive rank independently.'
+}
+
+Table dca_popularity_rank {
+  id uuid [pk]
+  asset_id uuid [not null]
+  ticker varchar [not null]
+  ranking_year integer [not null, note: 'e.g. 2026']
+  ranking_month integer [not null, note: 'e.g. 8']
+  rank_position integer [not null, note: '1 to 20']
+  regular_investor_count integer [not null, note: 'Total regular DCA trading accounts']
+
+  indexes {
+    (ticker, ranking_year, ranking_month) [unique]
+    (ranking_year, ranking_month, rank_position)
+  }
+
+  Note: 'Taiwan Stock Exchange (TWSE) monthly regular DCA popularity ranking snapshots (read-only monthly facts).'
+}
+
+Table dividend_announcement {
+  id uuid [pk]
+  asset_id uuid [not null]
+  ticker varchar [not null]
+  ex_date timestamp [not null, note: 'Ex-dividend date']
+  payment_date timestamp [not null, note: 'Dividend distribution / payment date']
+  dividend_per_share decimal(10,4) [not null, note: 'Cash dividend per share in TWD']
+  tax_tag tax_tag [not null, note: 'Tax category: OVERSEAS_76W or DOMESTIC_54C']
+
+  indexes {
+    (ticker, ex_date) [unique]
+    payment_date
+  }
+
+  Note: 'Official ETF dividend schedule announced by asset management firms (immutable distribution event log).'
+}
+
+Table corporate_action {
+  id uuid [pk]
+  asset_id uuid [not null]
+  ticker varchar [not null]
+  action_type corporate_action_type [not null, note: 'SPLIT or REVERSE_SPLIT']
+  effective_date timestamp [not null, note: 'Effective stock split date']
+  split_to_shares integer [not null, note: 'Shares after split (numerator, e.g. 4)']
+  split_from_shares integer [not null, note: 'Shares before split (denominator, e.g. 1)']
+
+  indexes {
+    (ticker, effective_date) [unique]
+  }
+
+  Note: 'Stock splits and reverse splits event log using integer division to eliminate 1-share floating-point errors (immutable action facts).'
+}
+
+// ----------------------------------------------------
+// Relationships & Referential Integrity
+// ----------------------------------------------------
+
+Ref: global_asset_metadata.id < market_daily_quote.asset_id [delete: cascade]
+Ref: benchmark_index.id < market_daily_quote.benchmark_id [delete: cascade]
+Ref: global_asset_metadata.id < global_asset_score.asset_id [delete: cascade]
+Ref: global_asset_metadata.id < dca_popularity_rank.asset_id [delete: cascade]
+Ref: global_asset_metadata.id < dividend_announcement.asset_id [delete: cascade]
+Ref: global_asset_metadata.id < corporate_action.asset_id [delete: cascade]
+
+

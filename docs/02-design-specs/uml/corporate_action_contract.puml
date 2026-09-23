@@ -1,0 +1,47 @@
+@startuml corporate_action_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "CorporateActionRestController" <<RestController>> {
+    ' --- Ingest / Delete ---
+    + createCorporateAction(req: CorporateActionRequest): ResponseEntity<CorporateActionResponse>
+    + deleteCorporateAction(actionId: UUID): ResponseEntity<Void>
+    ' --- Single-resource Query ---
+    + getCorporateActionById(actionId: UUID): ResponseEntity<CorporateActionResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "CorporateActionGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listCorporateActions(filter: CorporateActionFilterInput): List<CorporateAction>
+    + getCorporateActionById(id: UUID): Optional<CorporateAction>
+    + getEffectiveSplits(ticker: String, effectiveDate: LocalDate): List<CorporateAction>
+    + listCorporateActionsByAssetId(assetId: UUID): List<CorporateAction>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "CorporateActionRepository" <<Repository>> {
+    + save(entity: CorporateAction): CorporateAction
+    + findById(id: UUID): Optional<CorporateAction>
+    + findByTickerAndEffectiveDate(ticker: String, effectiveDate: LocalDate): Optional<CorporateAction>
+    + findByAssetId(assetId: UUID): List<CorporateAction>
+    + findByExample(example: Example<CorporateAction>): List<CorporateAction>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of CorporateActionRepository
+  Immutable Corporate Action Ledger.
+  Stock split event records; no version or audit timestamps required.
+end note
+
+' === Dependency Arrows ===
+"CorporateActionRestController"  ..> "CorporateActionRepository" : uses
+"CorporateActionGraphQLResolver" ..> "CorporateActionRepository" : uses
+
+@enduml

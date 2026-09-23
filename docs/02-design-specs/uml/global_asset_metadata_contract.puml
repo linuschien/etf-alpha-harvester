@@ -1,0 +1,47 @@
+@startuml global_asset_metadata_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "GlobalAssetMetadataRestController" <<RestController>> {
+    ' --- Mutations ---
+    + createGlobalAsset(req: GlobalAssetMetadataRequest): ResponseEntity<GlobalAssetMetadataResponse>
+    + updateGlobalAsset(assetId: UUID, req: GlobalAssetMetadataRequest): ResponseEntity<GlobalAssetMetadataResponse>
+    + patchGlobalAsset(assetId: UUID, req: GlobalAssetMetadataPatchRequest): ResponseEntity<GlobalAssetMetadataResponse>
+    + deleteGlobalAsset(assetId: UUID): ResponseEntity<Void>
+    ' --- Single-resource Query ---
+    + getGlobalAssetById(assetId: UUID): ResponseEntity<GlobalAssetMetadataResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "GlobalAssetMetadataGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listGlobalAssets(filter: GlobalAssetFilterInput): List<GlobalAssetMetadata>
+    + getGlobalAssetById(id: UUID): Optional<GlobalAssetMetadata>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "GlobalAssetMetadataRepository" <<Repository>> {
+    + save(entity: GlobalAssetMetadata): GlobalAssetMetadata
+    + findById(id: UUID): Optional<GlobalAssetMetadata>
+    + findByTicker(ticker: String): Optional<GlobalAssetMetadata>
+    + findByExample(example: Example<GlobalAssetMetadata>): List<GlobalAssetMetadata>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of GlobalAssetMetadataRepository
+  Optimistic Locking enforced.
+  Repository MUST check version field before save.
+end note
+
+' === Dependency Arrows ===
+"GlobalAssetMetadataRestController"  ..> "GlobalAssetMetadataRepository" : uses
+"GlobalAssetMetadataGraphQLResolver" ..> "GlobalAssetMetadataRepository" : uses
+
+@enduml
+

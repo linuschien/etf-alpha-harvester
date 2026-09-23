@@ -1,0 +1,47 @@
+@startuml dividend_announcement_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "DividendAnnouncementRestController" <<RestController>> {
+    ' --- Ingest / Delete ---
+    + createDividendAnnouncement(req: DividendAnnouncementRequest): ResponseEntity<DividendAnnouncementResponse>
+    + deleteDividendAnnouncement(announcementId: UUID): ResponseEntity<Void>
+    ' --- Single-resource Query ---
+    + getDividendAnnouncementById(announcementId: UUID): ResponseEntity<DividendAnnouncementResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "DividendAnnouncementGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listDividendAnnouncements(filter: DividendAnnouncementFilterInput): List<DividendAnnouncement>
+    + getDividendAnnouncementById(id: UUID): Optional<DividendAnnouncement>
+    + getUpcomingDividends(startDate: LocalDate, endDate: LocalDate): List<DividendAnnouncement>
+    + listDividendsByAssetId(assetId: UUID): List<DividendAnnouncement>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "DividendAnnouncementRepository" <<Repository>> {
+    + save(entity: DividendAnnouncement): DividendAnnouncement
+    + findById(id: UUID): Optional<DividendAnnouncement>
+    + findByTickerAndExDate(ticker: String, exDate: LocalDate): Optional<DividendAnnouncement>
+    + findByAssetId(assetId: UUID): List<DividendAnnouncement>
+    + findByExample(example: Example<DividendAnnouncement>): List<DividendAnnouncement>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of DividendAnnouncementRepository
+  Immutable Dividend Announcement Ledger.
+  Distribution facts announced by asset managers; no version or audit timestamps required.
+end note
+
+' === Dependency Arrows ===
+"DividendAnnouncementRestController"  ..> "DividendAnnouncementRepository" : uses
+"DividendAnnouncementGraphQLResolver" ..> "DividendAnnouncementRepository" : uses
+
+@enduml

@@ -1,0 +1,70 @@
+@startuml market_daily_quote_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+package "adapter.in.web.rest" {
+  interface "MarketDailyQuoteRestController" <<RestController>> {
+    ' --- Ingest / Delete ---
+    + createMarketDailyQuote(req: MarketDailyQuoteRequest): ResponseEntity<MarketDailyQuoteResponse>
+    + deleteMarketDailyQuote(quoteId: UUID): ResponseEntity<Void>
+    ' --- Custom Actions (Batch Job Triggers) ---
+    + triggerSyncMarketDataJob(): ResponseEntity<OperationStatus>
+    ' --- Single-resource Query ---
+    + getMarketDailyQuoteById(quoteId: UUID): ResponseEntity<MarketDailyQuoteResponse>
+  }
+}
+
+package "adapter.in.web.graphql" {
+  interface "MarketDailyQuoteGraphQLResolver" <<GraphQLResolver>> {
+    ' --- Collection / Filtered Queries ---
+    + listMarketDailyQuotes(filter: MarketDailyQuoteFilterInput): List<MarketDailyQuote>
+    + getMarketDailyQuoteById(id: UUID): Optional<MarketDailyQuote>
+    + getQuoteTimeSeries(ticker: String, startDate: LocalDate, endDate: LocalDate): List<MarketDailyQuote>
+    + listQuotesByAssetId(assetId: UUID): List<MarketDailyQuote>
+    + listQuotesByBenchmarkId(benchmarkId: UUID): List<MarketDailyQuote>
+  }
+}
+
+package "application.port.in" {
+  interface "MarketDailyQuoteCommandService" <<Service>> {
+    + ingestQuote(req: MarketDailyQuoteRequest): MarketDailyQuoteResponse
+    + deleteQuote(quoteId: UUID): void
+    + syncMarketData(): OperationStatus
+  }
+
+  interface "MarketDailyQuoteQueryService" <<Service>> {
+    + getQuoteById(id: UUID): Optional<MarketDailyQuoteResponse>
+    + listQuotes(filter: MarketDailyQuoteFilterInput): List<MarketDailyQuote>
+    + getQuoteTimeSeries(ticker: String, startDate: LocalDate, endDate: LocalDate): List<MarketDailyQuote>
+    + getQuotesByAssetId(assetId: UUID): List<MarketDailyQuote>
+    + getQuotesByBenchmarkId(benchmarkId: UUID): List<MarketDailyQuote>
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "MarketDailyQuoteRepository" <<Repository>> {
+    + save(entity: MarketDailyQuote): MarketDailyQuote
+    + findById(id: UUID): Optional<MarketDailyQuote>
+    + findByTickerAndTradeDate(ticker: String, tradeDate: LocalDate): Optional<MarketDailyQuote>
+    + findByAssetId(assetId: UUID): List<MarketDailyQuote>
+    + findByBenchmarkId(benchmarkId: UUID): List<MarketDailyQuote>
+    + findByExample(example: Example<MarketDailyQuote>): List<MarketDailyQuote>
+    + deleteById(id: UUID): void
+  }
+}
+
+note right of MarketDailyQuoteRepository
+  Immutable Time-Series Ledger.
+  Append-only historical facts; no version or audit timestamps required.
+end note
+
+' === Dependency Arrows (CQRS) ===
+"MarketDailyQuoteRestController"  ..> "MarketDailyQuoteCommandService" : uses
+"MarketDailyQuoteRestController"  ..> "MarketDailyQuoteQueryService"   : uses (GET by ID)
+"MarketDailyQuoteGraphQLResolver" ..> "MarketDailyQuoteQueryService"   : uses
+"MarketDailyQuoteCommandService"  ..> "MarketDailyQuoteRepository"     : uses
+"MarketDailyQuoteQueryService"    ..> "MarketDailyQuoteRepository"     : uses
+
+@enduml
