@@ -17,23 +17,24 @@
 
 ## 2. 核心領域實體與值物件 (Core Domain Entities & Value Objects)
 
-### 2.1 系統全域層實體 (Global Entities)
+### 2.1 系統全域層實體 (Global Entities - Clean Code 正名)
 
 | 實體 / 物件 | 英文代碼 | 定義 | 關鍵屬性 |
 | --- | --- | --- | --- |
-| **市場行情快照** | `MarketDailyQuote` | 單一 ETF 在特定交易日的市場價量與還原價。 | `ticker`, `trade_date`, `close_price` (原始未還原), `adj_close_price` (調整後還原), `volume` |
-| **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率。 | `record_date`, `us_ig_corp_ytm`, `us_treasury_10y`, `us_treasury_20y`, `state` |
-| **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對 ETF 進行客觀多因子計算之分數與排名。 | `ticker`, `evaluation_date`, `asset_class`, `total_score`, `global_rank`, `ter`, `aum_twd` |
-| **定期定額熱門排行** | `DcaPopularityRank` | 臺灣證交所每月公告之定期定額交易戶數排行。 | `ticker`, `ranking_month`, `rank_position`, `account_count` |
-| **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，免獨立新標的表。 | `ticker`, `name`, `listing_date`, `underlying_index`, `issuer`, `ter`, `aum_twd` |
-| **除息公告資訊** | `DividendAnnouncement` | 發行投信公開公告之 ETF 每期除權息日程。 | `ticker`, `ex_date` (除息日), `payment_date` (發放日), `dividend_per_share` |
-| **標的分割與除權事件** | `CorporateAction` | 標的分割、反分割或減資事件，用於歷史行情還原與個人持倉自動等比折算。 | `ticker`, `action_type` (SPLIT/REVERSE_SPLIT), `effective_date`, `split_ratio`, `numerator`, `denominator` |
+| **全域基準指數** | `BenchmarkIndex` | 全球 9 大市場行情、波動度恐慌與綜合情緒基準指標。 | `ticker` (^TWII, ^GSPC, ^NDX, ^SOX, ^N225, ^VIX, ^VXN, ^MOVE, FEAR_GREED), `name`, `region`, `description` |
+| **市場行情快照** | `MarketDailyQuote` | 單一標的或基準在特定交易日的市場價量、淨值與折溢價。 | `ticker`, `trade_date`, `open_price`, `high_price`, `low_price`, `close_price`, `adjusted_close_price`, `volume_shares`, `trade_value_twd`, `net_asset_value`, `discount_premium_percentage` |
+| **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率事實（資料庫純資料化，無狀態旗標）。 | `record_date`, `us_corporate_bond_effective_yield`, `us_10_year_treasury_yield`, `us_20_year_treasury_yield`, `yield_spread_10y_minus_2y` |
+| **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對各組候選標的進行客觀評分與組內獨立排名。 | `ticker`, `evaluation_date`, `asset_class` (`CandidateAssetClass`), `class_rank`, `composite_score`, `total_expense_ratio`, `fund_size_twd`, `is_qualified`, `disqualification_reason` |
+| **定期定額熱門排行** | `DcaPopularityRank` | 臺灣證交所每月公告之定期定額交易戶數排行（年份與月份獨立）。 | `ticker`, `ranking_year`, `ranking_month`, `rank_position`, `regular_investor_count` |
+| **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，免冗餘旗標。 | `ticker`, `name`, `listing_date`, `underlying_index`, `issuer`, `total_expense_ratio`, `fund_size_twd`, `asset_class` (`CandidateAssetClass`) |
+| **除息公告資訊** | `DividendAnnouncement` | 發行投信公開公告之 ETF 每期除權息日程。 | `ticker`, `ex_date` (除息日), `payment_date` (發放日), `dividend_per_share`, `tax_tag` (`OVERSEAS_76W` / `DOMESTIC_54C`) |
+| **標的分割與除權事件** | `CorporateAction` | 標的分割與反分割事件，採整數除法架構徹底消除浮點數 1 股帳差。 | `ticker`, `action_type` (SPLIT/REVERSE_SPLIT), `effective_date`, `split_from_shares`, `split_to_shares` |
 
 ### 2.2 個人投組層實體 (Personal Entities)
 
 | 實體 / 物件 | 英文代碼 | 定義 | 關鍵屬性 |
 | --- | --- | --- | --- |
-| **個人持倉** | `PersonalPosition` | 使用者實際持有的單一標的現況（極簡模型）。 | `user_id`, `ticker`, `asset_class`, `total_shares`, `avg_cost_price`, `holding_since_date` (起扣日/時間錨點), `current_price` |
+| **個人持倉** | `PersonalPosition` | 使用者實際持有的單一標的現況（極簡模型）。 | `user_id`, `ticker`, `asset_class` (`PositionAssetClass`), `total_shares`, `avg_cost_price`, `holding_since_date` (起扣日/時間錨點), `current_price` |
 | **定期定額扣款排程** | `DcaSchedule` | 單一標的之獨立自動扣款設定。 | `user_id`, `ticker`, `dca_days` (扣款日陣列), `dca_amount` (約定扣款額), `dca_status` |
 | **再平衡執行工單** | `RebalanceWorkOrder` | 工單求解器產出之單筆整股交易指令（整張優先、避開零股）。 | `order_id`, `user_id`, `ticker`, `action` (BUY/SELL), `round_lots` (張), `odd_shares` (股), `priority` |
 | **交易成交流水帳** | `TradeTransaction` | 使用者確認成交之買賣記錄與期初開帳現金流（供 XIRR 精準計算）。 | `tx_id`, `user_id`, `ticker`, `action` (BASELINE / DCA_BUY / DIP_BUY / CALIBRATION_ADJUSTMENT / PROFIT_SELL / ORPHAN_SELL), `shares`, `price`, `amount` (現金流), `fees`, `tax`, `realized_gain` |
@@ -45,20 +46,20 @@
 
 ## 3. 領域列舉值與狀態機 (Domain Enums & State Machines)
 
-### 3.1 宏觀利率狀態 (`MacroState`)
+### 3.1 宏觀利率狀態 (`MacroState` - 記憶體純函數運算)
 | 列舉值 | 英文代碼 | 判定條件 | 系統處置行為 |
 | --- | --- | --- | --- |
-| **高利蓄水期** | `STATE_1_ACCUMULATE` | 美國投資級公司債 YTM $> 5.0\%$ | 債券維持積極定額扣款；衛星利潤 30% 注水債券；股債目標比 80% : 20%。 |
-| **常態平衡期** | `STATE_2_NEUTRAL` | $4.0\% \le \text{YTM} \le 5.0\%$ | 債券停止續扣；債息全額回填股票；股債目標比 85% : 15%。 |
-| **低利收割期** | `STATE_3_HARVEST` | 美國投資級公司債 YTM $< 3.5\%$ | 債券觸發停利不續扣；分批出清債券賺取價差；100% 抄底核心股票；股債目標比 95% : 5%。 |
+| **高利蓄水期** | `STATE_1_ACCUMULATE` | 美國投資級公司債有效殖利率 $> 5.0\%$ | 債券維持積極定額扣款；衛星利潤 30% 注水債券；建議股債比 80% : 20%。 |
+| **常態平衡期** | `STATE_2_NEUTRAL` | $4.0\% \le \text{殖利率} \le 5.0\%$ | 債券停止續扣；債息全額回填股票；建議股債比 85% : 15%。 |
+| **低利收割期** | `STATE_3_HARVEST` | 美國投資級公司債有效殖利率 $< 3.5\%$ | 債券觸發停利不續扣；分批出清債券賺取價差；100% 抄底核心股票；建議股債比 95% : 5%。 |
 
-### 3.2 資產層級與標的狀態 (`PositionAssetClass`)
-| 列舉值 | 英文代碼 | 業務定義 |
+### 3.2 候選池分組與持倉狀態 (`CandidateAssetClass` vs `PositionAssetClass`)
+| 列舉範圍 | 代碼與所屬分組 | 業務定義 |
 | --- | --- | --- |
-| **核心大盤** | `CORE` | 長期資產基石，穩健 Beta 增長（如 0050、006208、00646），永久豁免主動出清。 |
-| **動能衛星** | `SATELLITE` | 趨勢動能標的，提供夏農波動收割超額利潤。 |
-| **防禦債券** | `DEFENSIVE` | 現券型投資級公司債 ETF（如 00720B），鎖定高息防禦墊。 |
-| **孤兒標的** | `ORPHAN` | 跌出半年度 1.4N 緩衝區外之舊標的，系統停止扣款並排定優先出清。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`CORE` (核心大盤)** | 長期資產基石，穩健 Beta 增長（如 0050、006208、00646），組內獨立排名 `class_rank`，永久豁免主動出清。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`SATELLITE` (動能衛星)** | 趨勢動能標的，提供夏農波動收割超額利潤，組內獨立排名 `class_rank`。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`DEFENSIVE` (防禦債券)** | 現券型投資級公司債 ETF（如 00720B），鎖定高息防禦墊，組內獨立排名 `class_rank`。 |
+| **個人專屬狀態**<br>`PositionAssetClass` | **`ORPHAN` (孤兒標的)** | **全域候選池嚴格排除**！僅當個人持有之舊標的跌出半年度 1.4N 緩衝區外時於個人層賦予，系統停止續扣並排定優先出清。 |
 
 ### 3.3 扣款排程狀態 (`DcaScheduleStatus`)
 | 列舉值 | 英文代碼 | 業務定義 |

@@ -172,6 +172,7 @@ enum TaxTag {
 }
 
 note right of GlobalAssetMetadata : ID MUST be a UUID v4\nListing days computed dynamically from listing_date
+note right of BenchmarkIndex : Tracks 9 global benchmarks & sentiment gauges:\n1. Broad & Tech: ^TWII (TAIEX), ^GSPC (S&P 500), ^NDX (Nasdaq 100), ^SOX (PHLX Semi), ^N225 (Nikkei)\n2. Volatility: ^VIX (S&P 500 Volatility), ^VXN (Nasdaq 100 Volatility), ^MOVE (US Treasury Volatility)\n3. Sentiment: FEAR_GREED (CNN Fear & Greed Index, 0-100)
 note right of GlobalAssetScore : Segmented Ranking within CandidateAssetClass\nCore, Satellite, and Defensive rank independently\nORPHAN is strictly a Personal Position state
 note right of DcaPopularityRank : Year and month explicitly separated (e.g. 2026, 8)
 note right of MacroYieldSnapshot : Pure market interest rate facts from FRED\nState logic (Accumulate/Neutral/Harvest) computed in memory
