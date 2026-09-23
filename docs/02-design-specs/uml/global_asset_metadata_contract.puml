@@ -4,63 +4,35 @@
 skinparam packageStyle rectangle
 skinparam defaultFontName Inter
 
-package "adapter.in.web.rest" {
-  interface "GlobalAssetMetadataRestController" <<RestController>> {
-    ' --- Mutations ---
-    + createGlobalAsset(req: GlobalAssetMetadataRequest): ResponseEntity<GlobalAssetMetadataResponse>
-    + updateGlobalAsset(assetId: UUID, req: GlobalAssetMetadataRequest): ResponseEntity<GlobalAssetMetadataResponse>
-    + patchGlobalAsset(assetId: UUID, req: GlobalAssetMetadataPatchRequest): ResponseEntity<GlobalAssetMetadataResponse>
-    + deleteGlobalAsset(assetId: UUID): ResponseEntity<Void>
-    ' --- Custom Actions (Batch Job Triggers) ---
-    + syncGlobalAssets(): ResponseEntity<OperationStatus>
-    ' --- Single-resource Query ---
-    + getGlobalAssetById(assetId: UUID): ResponseEntity<GlobalAssetMetadataResponse>
-  }
-}
+title GlobalAssetMetadata - GraphQL Query & Persistence Contract
 
 package "adapter.in.web.graphql" {
   interface "GlobalAssetMetadataGraphQLResolver" <<GraphQLResolver>> {
-    ' --- Collection / Filtered Queries ---
+    ' --- UI Read Gateway ---
     + listGlobalAssets(filter: GlobalAssetFilterInput): List<GlobalAssetMetadata>
     + getGlobalAssetById(id: UUID): Optional<GlobalAssetMetadata>
-  }
-}
-
-package "application.port.in" {
-  interface "GlobalAssetMetadataCommandService" <<Service>> {
-    + createAsset(req: GlobalAssetMetadataRequest): GlobalAssetMetadataResponse
-    + updateAsset(assetId: UUID, req: GlobalAssetMetadataRequest): GlobalAssetMetadataResponse
-    + patchAsset(assetId: UUID, req: GlobalAssetMetadataPatchRequest): GlobalAssetMetadataResponse
-    + deleteAsset(assetId: UUID): void
-    + syncGlobalAssets(): OperationStatus
-  }
-
-  interface "GlobalAssetMetadataQueryService" <<Service>> {
-    + getAssetById(id: UUID): Optional<GlobalAssetMetadataResponse>
-    + listAssets(filter: GlobalAssetFilterInput): List<GlobalAssetMetadata>
+    + getGlobalAssetByTicker(ticker: String): Optional<GlobalAssetMetadata>
   }
 }
 
 package "adapter.out.persistence" {
   interface "GlobalAssetMetadataRepository" <<Repository>> {
     + save(entity: GlobalAssetMetadata): GlobalAssetMetadata
+    + saveAll(entities: List<GlobalAssetMetadata>): List<GlobalAssetMetadata>
     + findById(id: UUID): Optional<GlobalAssetMetadata>
     + findByTicker(ticker: String): Optional<GlobalAssetMetadata>
+    + findAll(): List<GlobalAssetMetadata>
     + findByExample(example: Example<GlobalAssetMetadata>): List<GlobalAssetMetadata>
-    + deleteById(id: UUID): void
   }
 }
 
 note right of GlobalAssetMetadataRepository
-  Optimistic Locking enforced.
-  Repository MUST check version field before save.
+  Master Data Catalog.
+  Updated via automated MarketDataSyncService pipeline.
+  Read exclusively via GraphQL Query Gateway.
 end note
 
-' === Dependency Arrows (CQRS) ===
-"GlobalAssetMetadataRestController"  ..> "GlobalAssetMetadataCommandService" : uses
-"GlobalAssetMetadataRestController"  ..> "GlobalAssetMetadataQueryService"   : uses (GET by ID)
-"GlobalAssetMetadataGraphQLResolver" ..> "GlobalAssetMetadataQueryService"   : uses
-"GlobalAssetMetadataCommandService"  ..> "GlobalAssetMetadataRepository"     : uses
-"GlobalAssetMetadataQueryService"    ..> "GlobalAssetMetadataRepository"     : uses
+' === Dependency Arrows ===
+"GlobalAssetMetadataGraphQLResolver" ..> "GlobalAssetMetadataRepository" : queries
 
 @enduml

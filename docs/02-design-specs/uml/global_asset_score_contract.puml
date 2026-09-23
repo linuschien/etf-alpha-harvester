@@ -4,42 +4,22 @@
 skinparam packageStyle rectangle
 skinparam defaultFontName Inter
 
-package "adapter.in.web.rest" {
-  interface "GlobalAssetScoreRestController" <<RestController>> {
-    ' --- Ingest ---
-    + createGlobalAssetScore(req: GlobalAssetScoreRequest): ResponseEntity<GlobalAssetScoreResponse>
-    ' --- Custom Actions (Batch Job Triggers) ---
-    + evaluateGlobalAssetScores(): ResponseEntity<OperationStatus>
-    ' --- Single-resource Query ---
-    + getGlobalAssetScoreById(scoreId: UUID): ResponseEntity<GlobalAssetScoreResponse>
-  }
-}
+title GlobalAssetScore - GraphQL Query & Persistence Contract
 
 package "adapter.in.web.graphql" {
   interface "GlobalAssetScoreGraphQLResolver" <<GraphQLResolver>> {
-    ' --- Collection / Filtered Queries ---
+    ' --- UI Read Gateway ---
     + listGlobalAssetScores(filter: GlobalAssetScoreFilterInput): List<GlobalAssetScore>
     + getGlobalAssetScoreById(id: UUID): Optional<GlobalAssetScore>
     + getScoresByAssetClass(assetClass: CandidateAssetClass, evaluationDate: LocalDate): List<GlobalAssetScore>
-  }
-}
-
-package "application.port.in" {
-  interface "GlobalAssetScoreCommandService" <<Service>> {
-    + recordAssetScore(req: GlobalAssetScoreRequest): GlobalAssetScoreResponse
-    + evaluateGlobalAssetScores(): OperationStatus
-  }
-
-  interface "GlobalAssetScoreQueryService" <<Service>> {
-    + getScoreById(id: UUID): Optional<GlobalAssetScoreResponse>
-    + listScores(filter: GlobalAssetScoreFilterInput): List<GlobalAssetScore>
-    + getScoresByAssetClass(assetClass: CandidateAssetClass, evaluationDate: LocalDate): List<GlobalAssetScore>
+    + getScoreByTicker(ticker: String, evaluationDate: LocalDate): Optional<GlobalAssetScore>
   }
 }
 
 package "adapter.out.persistence" {
   interface "GlobalAssetScoreRepository" <<Repository>> {
     + save(entity: GlobalAssetScore): GlobalAssetScore
+    + saveAll(entities: List<GlobalAssetScore>): List<GlobalAssetScore>
     + findById(id: UUID): Optional<GlobalAssetScore>
     + findByTickerAndEvaluationDate(ticker: String, evaluationDate: LocalDate): Optional<GlobalAssetScore>
     + findByAssetClassAndEvaluationDate(assetClass: CandidateAssetClass, evaluationDate: LocalDate): List<GlobalAssetScore>
@@ -48,15 +28,12 @@ package "adapter.out.persistence" {
 }
 
 note right of GlobalAssetScoreRepository
-  Immutable Evaluation Score Ledger.
-  Point-in-time calculation snapshots; no deletes, version, or audit timestamps.
+  Immutable Candidate Evaluation Snapshots.
+  Calculated via GlobalAssetScoreEvaluationService (POST /globalAssetScores:evaluate).
+  Read exclusively via GraphQL Query Gateway.
 end note
 
-' === Dependency Arrows (CQRS) ===
-"GlobalAssetScoreRestController"  ..> "GlobalAssetScoreCommandService" : uses
-"GlobalAssetScoreRestController"  ..> "GlobalAssetScoreQueryService"   : uses (GET by ID)
-"GlobalAssetScoreGraphQLResolver" ..> "GlobalAssetScoreQueryService"   : uses
-"GlobalAssetScoreCommandService"  ..> "GlobalAssetScoreRepository"     : uses
-"GlobalAssetScoreQueryService"    ..> "GlobalAssetScoreRepository"     : uses
+' === Dependency Arrows ===
+"GlobalAssetScoreGraphQLResolver" ..> "GlobalAssetScoreRepository" : queries
 
 @enduml

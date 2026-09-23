@@ -4,18 +4,11 @@
 skinparam packageStyle rectangle
 skinparam defaultFontName Inter
 
-package "adapter.in.web.rest" {
-  interface "CorporateActionRestController" <<RestController>> {
-    ' --- Ingest ---
-    + createCorporateAction(req: CorporateActionRequest): ResponseEntity<CorporateActionResponse>
-    ' --- Single-resource Query ---
-    + getCorporateActionById(actionId: UUID): ResponseEntity<CorporateActionResponse>
-  }
-}
+title CorporateAction - GraphQL Query & Persistence Contract
 
 package "adapter.in.web.graphql" {
   interface "CorporateActionGraphQLResolver" <<GraphQLResolver>> {
-    ' --- Collection / Filtered Queries ---
+    ' --- UI Read Gateway ---
     + listCorporateActions(filter: CorporateActionFilterInput): List<CorporateAction>
     + getCorporateActionById(id: UUID): Optional<CorporateAction>
     + getEffectiveSplits(ticker: String, effectiveDate: LocalDate): List<CorporateAction>
@@ -26,6 +19,7 @@ package "adapter.in.web.graphql" {
 package "adapter.out.persistence" {
   interface "CorporateActionRepository" <<Repository>> {
     + save(entity: CorporateAction): CorporateAction
+    + saveAll(entities: List<CorporateAction>): List<CorporateAction>
     + findById(id: UUID): Optional<CorporateAction>
     + findByTickerAndEffectiveDate(ticker: String, effectiveDate: LocalDate): Optional<CorporateAction>
     + findByAssetId(assetId: UUID): List<CorporateAction>
@@ -34,12 +28,12 @@ package "adapter.out.persistence" {
 }
 
 note right of CorporateActionRepository
-  Immutable Corporate Action Ledger.
-  Stock split event records; no deletes, version, or audit timestamps.
+  Immutable Stock Split & Corporate Action Events.
+  Ingested from TWSE via MarketDataSyncService (POST /marketData:sync).
+  Read exclusively via GraphQL Query Gateway.
 end note
 
 ' === Dependency Arrows ===
-"CorporateActionRestController"  ..> "CorporateActionRepository" : uses
-"CorporateActionGraphQLResolver" ..> "CorporateActionRepository" : uses
+"CorporateActionGraphQLResolver" ..> "CorporateActionRepository" : queries
 
 @enduml

@@ -135,6 +135,33 @@ package "Persistence Contracts" {
         +Create(CorporateAction data): CorporateAction
         +GetById(String id): CorporateAction
     }
+package "Ingress & Orchestration Services (Cloud Scheduler / Jobs)" {
+    class MarketDataSyncService <<Service>> {
+        +syncMarketData(scope: String): MarketDataSyncResponse
+        -syncGlobalAssets(): Integer
+        -syncMarketDailyQuotes(): Integer
+        -syncMacroYields(): Integer
+        -syncDcaPopularityRanks(): Integer
+        -syncCorporateActionsAndDividends(): Integer
+    }
+
+    class GlobalAssetScoreEvaluationService <<Service>> {
+        +evaluateGlobalAssetScores(): GlobalAssetScoreEvaluationResponse
+    }
+}
+
+package "Query Ingress (UI Read Gateway)" {
+    interface GlobalServicesGraphQLResolver <<GraphQLResolver>> {
+        +listGlobalAssets(filter: GlobalAssetFilterInput): List<GlobalAssetMetadata>
+        +getGlobalAssetByTicker(ticker: String): GlobalAssetMetadata
+        +listBenchmarkIndices(): List<BenchmarkIndex>
+        +getMarketQuoteTimeSeries(ticker: String, startDate: LocalDate, endDate: LocalDate): List<MarketDailyQuote>
+        +getLatestMacroYieldSnapshot(): MacroYieldSnapshot
+        +listCandidateScores(assetClass: CandidateAssetClass): List<GlobalAssetScore>
+        +listTop20DcaRanks(year: Integer, month: Integer): List<DcaPopularityRank>
+        +listDividendAnnouncements(ticker: String): List<DividendAnnouncement>
+        +listCorporateActions(ticker: String): List<CorporateAction>
+    }
 }
 
 ' Relationships & Ownership

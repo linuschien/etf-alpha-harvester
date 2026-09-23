@@ -4,18 +4,11 @@
 skinparam packageStyle rectangle
 skinparam defaultFontName Inter
 
-package "adapter.in.web.rest" {
-  interface "DividendAnnouncementRestController" <<RestController>> {
-    ' --- Ingest ---
-    + createDividendAnnouncement(req: DividendAnnouncementRequest): ResponseEntity<DividendAnnouncementResponse>
-    ' --- Single-resource Query ---
-    + getDividendAnnouncementById(announcementId: UUID): ResponseEntity<DividendAnnouncementResponse>
-  }
-}
+title DividendAnnouncement - GraphQL Query & Persistence Contract
 
 package "adapter.in.web.graphql" {
   interface "DividendAnnouncementGraphQLResolver" <<GraphQLResolver>> {
-    ' --- Collection / Filtered Queries ---
+    ' --- UI Read Gateway ---
     + listDividendAnnouncements(filter: DividendAnnouncementFilterInput): List<DividendAnnouncement>
     + getDividendAnnouncementById(id: UUID): Optional<DividendAnnouncement>
     + getUpcomingDividends(startDate: LocalDate, endDate: LocalDate): List<DividendAnnouncement>
@@ -26,6 +19,7 @@ package "adapter.in.web.graphql" {
 package "adapter.out.persistence" {
   interface "DividendAnnouncementRepository" <<Repository>> {
     + save(entity: DividendAnnouncement): DividendAnnouncement
+    + saveAll(entities: List<DividendAnnouncement>): List<DividendAnnouncement>
     + findById(id: UUID): Optional<DividendAnnouncement>
     + findByTickerAndExDate(ticker: String, exDate: LocalDate): Optional<DividendAnnouncement>
     + findByAssetId(assetId: UUID): List<DividendAnnouncement>
@@ -34,12 +28,12 @@ package "adapter.out.persistence" {
 }
 
 note right of DividendAnnouncementRepository
-  Immutable Dividend Announcement Ledger.
-  Distribution facts announced by asset managers; no deletes, version, or audit timestamps.
+  Immutable Dividend Announcement Schedules.
+  Ingested from TWSE/Fund Houses via MarketDataSyncService (POST /marketData:sync).
+  Read exclusively via GraphQL Query Gateway.
 end note
 
 ' === Dependency Arrows ===
-"DividendAnnouncementRestController"  ..> "DividendAnnouncementRepository" : uses
-"DividendAnnouncementGraphQLResolver" ..> "DividendAnnouncementRepository" : uses
+"DividendAnnouncementGraphQLResolver" ..> "DividendAnnouncementRepository" : queries
 
 @enduml

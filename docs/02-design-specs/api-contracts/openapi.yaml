@@ -3,607 +3,74 @@ info:
   title: AlphaHarvester - Global Services API
   description: >
     Transportation layer specification for AlphaHarvester Global Market Intelligence and Asset Governance.
-    Enforces Collection GET bans (GraphQL gateway redirection), optimistic concurrency locking (409 Conflict),
-    and strictly formatted camelCase parameters.
-  version: 3.4.0
+    
+    Architecture Principles:
+    1. Operational Ingress Only: REST transport layer is strictly reserved for Cloud Scheduler / webhook triggers
+       (`POST /marketData:sync` and `POST /globalAssetScores:evaluate`).
+    2. GraphQL Query Gateway: All domain entity reads (ETFs, benchmarks, historical quotes, FRED macro yields,
+       candidate scores, DCA rankings, dividends, and stock splits) are routed exclusively through the GraphQL Gateway (`/graphql`).
+    3. Zero Fake CRUD: Eliminates all artificial, unused REST CRUD endpoints. All market data is ingested via automated pipelines.
+  version: 3.5.0
 servers:
   - url: /api/v1
     description: Production Cloud Run API Gateway
 
 paths:
   # ----------------------------------------------------
-  # Global Asset Metadata Resource
+  # Unified Market Data Synchronization Pipeline
   # ----------------------------------------------------
-  /globalAssets:
+  /marketData:sync:
     post:
-      summary: Register a new ETF asset metadata entry
-      operationId: createGlobalAsset
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GlobalAssetMetadataRequest'
-      responses:
-        '201':
-          description: ETF metadata entry successfully created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GlobalAssetMetadataResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List ETF asset metadata entries (Deprecated to GraphQL)
-      operationId: listGlobalAssets
-      deprecated: true
+      summary: Daily batch synchronization of all external market intelligence data
       description: >
-        Collection GET queries are deprecated in the REST transport layer.
-        Please route all collection listing and multi-attribute filtering requests to the GraphQL Resolver gateway.
-      responses:
-        '200':
-          description: Collection response redirected to GraphQL
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/GlobalAssetMetadataResponse'
-
-  /globalAssets/{assetId}:
-    parameters:
-      - name: assetId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
-    get:
-      summary: Retrieve single ETF metadata by UUID
-      operationId: getGlobalAssetById
-      responses:
-        '200':
-          description: Successful single-resource lookup
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GlobalAssetMetadataResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-    put:
-      summary: Replace ETF metadata entry (Idempotent sync)
-      operationId: updateGlobalAsset
+        Triggered daily at 08:00 TST by Cloud Scheduler (or on-demand by ops).
+        Executes the complete market intelligence data collection pipeline:
+        1. Syncs ETF metadata catalog from TWSE (t187ap47_L) and TPEx (tpex_mainboard_quotes).
+        2. Syncs daily closing quotes, trading volume, turnover, NAV, and discount/premium percentages.
+        3. Syncs 9 global benchmark and volatility indices (^TWII, ^GSPC, ^NDX, ^SOX, ^N225, ^VIX, ^VXN, ^MOVE, FEAR_GREED).
+        4. Syncs FRED macroeconomic interest rate yields (US 10Y, 20Y Treasury, Corporate bond yield).
+        5. Syncs TWSE monthly Top 20 regular DCA investor popularity rankings (ETFRank).
+        6. Syncs ETF dividend distribution schedules and corporate actions (stock splits).
+      operationId: syncMarketData
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GlobalAssetMetadataRequest'
+              $ref: '#/components/schemas/MarketDataSyncRequest'
       responses:
         '200':
-          description: Successfully replaced
+          description: Full market data synchronization completed successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GlobalAssetMetadataResponse'
+                $ref: '#/components/schemas/MarketDataSyncResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
-    patch:
-      summary: Partially update ETF metadata
-      operationId: patchGlobalAsset
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GlobalAssetMetadataPatchRequest'
-      responses:
-        '200':
-          description: Successfully patched
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GlobalAssetMetadataResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
-    delete:
-      summary: Soft delete an ETF metadata entry
-      operationId: deleteGlobalAsset
-      responses:
-        '204':
-          description: Successfully deleted
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  /globalAssets:sync:
-    post:
-      summary: Daily Cloud Scheduler external trigger to sync ETF catalog from TWSE/TPEx OpenAPI
-      operationId: syncGlobalAssets
-      responses:
-        '200':
-          description: Metadata catalog synchronization completed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationStatus'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
   # ----------------------------------------------------
-  # Benchmark Indices Resource
+  # Candidate Asset Multi-Factor Scoring Pipeline
   # ----------------------------------------------------
-  /benchmarkIndices:
-    post:
-      summary: Register a global benchmark or sentiment index
-      operationId: createBenchmarkIndex
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BenchmarkIndexRequest'
-      responses:
-        '201':
-          description: Benchmark index created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BenchmarkIndexResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List benchmark indices (Deprecated to GraphQL)
-      operationId: listBenchmarkIndices
-      deprecated: true
-      description: Route collection queries to GraphQL Resolver gateway.
-      responses:
-        '200':
-          description: GraphQL redirection
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/BenchmarkIndexResponse'
-
-  /benchmarkIndices/{benchmarkId}:
-    parameters:
-      - name: benchmarkId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22"
-    get:
-      summary: Retrieve single benchmark index by UUID
-      operationId: getBenchmarkIndexById
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BenchmarkIndexResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-    put:
-      summary: Update benchmark index
-      operationId: updateBenchmarkIndex
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BenchmarkIndexRequest'
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BenchmarkIndexResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
-    delete:
-      summary: Delete benchmark index
-      operationId: deleteBenchmarkIndex
-      responses:
-        '204':
-          description: Deleted
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  # ----------------------------------------------------
-  # Market Daily Quotes Resource
-  # ----------------------------------------------------
-  /marketDailyQuotes:
-    post:
-      summary: Ingest a daily market quote record
-      operationId: createMarketDailyQuote
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MarketDailyQuoteRequest'
-      responses:
-        '201':
-          description: Quote ingested
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MarketDailyQuoteResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List daily quotes (Deprecated to GraphQL)
-      operationId: listMarketDailyQuotes
-      deprecated: true
-      description: Route time-series and filtered collection queries to GraphQL Resolver gateway.
-      responses:
-        '200':
-          description: GraphQL redirection
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MarketDailyQuoteResponse'
-
-  /marketDailyQuotes:sync:
-    post:
-      summary: Daily Cloud Scheduler external trigger for quotes and benchmarks
-      operationId: syncMarketDailyQuotes
-      responses:
-        '200':
-          description: Job executed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationStatus'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /marketDailyQuotes/{quoteId}:
-    parameters:
-      - name: quoteId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33"
-    get:
-      summary: Retrieve single daily quote
-      operationId: getMarketDailyQuoteById
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MarketDailyQuoteResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  # ----------------------------------------------------
-  # Macro Yield Snapshot Resource
-  # ----------------------------------------------------
-  /macroYieldSnapshots:
-    post:
-      summary: Record daily FRED macro yield data
-      operationId: createMacroYieldSnapshot
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MacroYieldSnapshotRequest'
-      responses:
-        '201':
-          description: Recorded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MacroYieldSnapshotResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List macro yield snapshots (Deprecated to GraphQL)
-      operationId: listMacroYieldSnapshots
-      deprecated: true
-      description: Route to GraphQL Resolver gateway.
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MacroYieldSnapshotResponse'
-
-  /macroYieldSnapshots:sync:
-    post:
-      summary: Daily Cloud Scheduler external trigger for FRED yields
-      operationId: syncMacroYieldSnapshots
-      responses:
-        '200':
-          description: Job executed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationStatus'
-
-  /macroYieldSnapshots/{snapshotId}:
-    parameters:
-      - name: snapshotId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380a44"
-    get:
-      summary: Retrieve single macro yield snapshot
-      operationId: getMacroYieldSnapshotById
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MacroYieldSnapshotResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  # ----------------------------------------------------
-  # Global Asset Score Resource
-  # ----------------------------------------------------
-  /globalAssetScores:
-    post:
-      summary: Persist calculated candidate score and class rank
-      operationId: createGlobalAssetScore
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GlobalAssetScoreRequest'
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GlobalAssetScoreResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List asset scores (Deprecated to GraphQL)
-      operationId: listGlobalAssetScores
-      deprecated: true
-      description: Route to GraphQL Resolver gateway for class filtering and sorting.
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/GlobalAssetScoreResponse'
-
   /globalAssetScores:evaluate:
     post:
-      summary: Trigger factor ranking and score evaluation job
+      summary: Trigger quantitative multi-factor scoring and candidate ranking
+      description: >
+        Executes factor evaluation models for candidate ETFs:
+        1. Validates hard gates (Listing days >= 30, R^2 >= 0.95, Total Expense Ratio <= 0.45%, |Discount/Premium| <= 0.5%).
+        2. Independently ranks candidates within CandidateAssetClass (CORE, SATELLITE, DEFENSIVE).
+        3. Persists point-in-time score snapshots into the GlobalAssetScore ledger.
       operationId: evaluateGlobalAssetScores
       responses:
         '200':
-          description: Job executed successfully
+          description: Candidate asset scoring and class ranking completed successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationStatus'
-
-  /globalAssetScores/{scoreId}:
-    parameters:
-      - name: scoreId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "e4eebc99-9c0b-4ef8-bb6d-6bb9bd380a55"
-    get:
-      summary: Retrieve single asset score
-      operationId: getGlobalAssetScoreById
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GlobalAssetScoreResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  # ----------------------------------------------------
-  # DCA Popularity Rank Resource
-  # ----------------------------------------------------
-  /dcaPopularityRanks:
-    post:
-      summary: Register or ingest monthly DCA popularity rank
-      operationId: createDcaPopularityRank
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DcaPopularityRankRequest'
-      responses:
-        '201':
-          description: DCA rank created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DcaPopularityRankResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List DCA popularity ranks (Deprecated to GraphQL)
-      operationId: listDcaPopularityRanks
-      deprecated: true
-      description: Route to GraphQL Resolver gateway.
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/DcaPopularityRankResponse'
-
-  /dcaPopularityRanks/{rankId}:
-    parameters:
-      - name: rankId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380a66"
-    get:
-      summary: Retrieve single DCA popularity rank
-      operationId: getDcaPopularityRankById
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DcaPopularityRankResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  # ----------------------------------------------------
-  # Dividend Announcement Resource
-  # ----------------------------------------------------
-  /dividendAnnouncements:
-    post:
-      summary: Register dividend announcement
-      operationId: createDividendAnnouncement
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DividendAnnouncementRequest'
-      responses:
-        '201':
-          description: Dividend announcement created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DividendAnnouncementResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List dividend announcements (Deprecated to GraphQL)
-      operationId: listDividendAnnouncements
-      deprecated: true
-      description: Route to GraphQL Resolver gateway.
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/DividendAnnouncementResponse'
-
-  /dividendAnnouncements/{announcementId}:
-    parameters:
-      - name: announcementId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "01eebc99-9c0b-4ef8-bb6d-6bb9bd380a77"
-    get:
-      summary: Retrieve single dividend announcement
-      operationId: getDividendAnnouncementById
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DividendAnnouncementResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  # ----------------------------------------------------
-  # Corporate Action Resource
-  # ----------------------------------------------------
-  /corporateActions:
-    post:
-      summary: Record corporate action (e.g. stock split)
-      operationId: createCorporateAction
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CorporateActionRequest'
-      responses:
-        '201':
-          description: Corporate action recorded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CorporateActionResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-    get:
-      summary: List corporate actions (Deprecated to GraphQL)
-      operationId: listCorporateActions
-      deprecated: true
-      description: Route to GraphQL Resolver gateway.
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/CorporateActionResponse'
-
-  /corporateActions/{actionId}:
-    parameters:
-      - name: actionId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: "12eebc99-9c0b-4ef8-bb6d-6bb9bd380a88"
-    get:
-      summary: Retrieve single corporate action
-      operationId: getCorporateActionById
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CorporateActionResponse'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
+                $ref: '#/components/schemas/GlobalAssetScoreEvaluationResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
 components:
   schemas:
@@ -622,9 +89,22 @@ components:
       enum: [OVERSEAS_76W, DOMESTIC_54C]
       example: "OVERSEAS_76W"
 
-    OperationStatus:
+    MarketDataSyncRequest:
       type: object
-      required: [status, message, executedAt]
+      properties:
+        scope:
+          type: string
+          enum: [ALL, METADATA, QUOTES, MACRO_YIELDS, DCA_RANKS, DIVIDENDS_AND_SPLITS]
+          default: ALL
+          example: "ALL"
+        evaluateAfterSync:
+          type: boolean
+          default: true
+          example: true
+
+    MarketDataSyncResponse:
+      type: object
+      required: [status, message, executedAt, syncedRecords]
       properties:
         status:
           type: string
@@ -636,56 +116,60 @@ components:
           type: string
           format: date-time
           example: "2026-09-23T08:00:00Z"
+        syncedRecords:
+          type: object
+          required: [etfAssetsCount, dailyQuotesCount, macroYieldSnapshotsCount, dcaPopularityRanksCount, dividendAnnouncementsCount, corporateActionsCount]
+          properties:
+            etfAssetsCount:
+              type: integer
+              example: 389
+            dailyQuotesCount:
+              type: integer
+              example: 398
+            macroYieldSnapshotsCount:
+              type: integer
+              example: 1
+            dcaPopularityRanksCount:
+              type: integer
+              example: 20
+            dividendAnnouncementsCount:
+              type: integer
+              example: 12
+            corporateActionsCount:
+              type: integer
+              example: 1
 
-    GlobalAssetMetadataRequest:
+    GlobalAssetScoreEvaluationResponse:
       type: object
-      required: [ticker, name, listingDate, assetClass]
+      required: [status, message, executedAt, evaluatedCandidatesCount, coreCount, satelliteCount, defensiveCount]
       properties:
-        ticker:
+        status:
           type: string
-          example: "006208"
-        name:
+          example: "SUCCESS"
+        message:
           type: string
-          example: "富邦台灣采吉50證券投資信託基金"
-        listingDate:
+          example: "Candidate asset scoring and class ranking completed successfully."
+        executedAt:
           type: string
           format: date-time
-          example: "2012-07-17T00:00:00Z"
-        underlyingIndex:
-          type: string
-          example: "富時臺灣證券交易所臺灣50指數"
-        issuer:
-          type: string
-          example: "富邦投信"
-        totalExpenseRatio:
-          type: number
-          format: decimal
-          example: 0.0024
-        fundSizeTwd:
-          type: number
-          format: decimal
-          example: 185000000000.00
-        assetClass:
-          $ref: '#/components/schemas/CandidateAssetClass'
+          example: "2026-09-23T08:05:00Z"
+        evaluatedCandidatesCount:
+          type: integer
+          example: 389
+        coreCount:
+          type: integer
+          example: 2
+        satelliteCount:
+          type: integer
+          example: 5
+        defensiveCount:
+          type: integer
+          example: 3
 
-    GlobalAssetMetadataPatchRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          example: "富邦台灣采吉50證券投資信託基金"
-        totalExpenseRatio:
-          type: number
-          format: decimal
-          example: 0.0022
-        fundSizeTwd:
-          type: number
-          format: decimal
-          example: 195000000000.00
-        assetClass:
-          $ref: '#/components/schemas/CandidateAssetClass'
-
-    GlobalAssetMetadataResponse:
+    # ----------------------------------------------------
+    # Domain Entity Schemas (Read via GraphQL Gateway)
+    # ----------------------------------------------------
+    GlobalAssetMetadata:
       type: object
       required: [id, ticker, name, listingDate, assetClass, version, createdAt, updatedAt]
       properties:
@@ -731,24 +215,7 @@ components:
           format: date-time
           example: "2026-09-23T08:00:00Z"
 
-    BenchmarkIndexRequest:
-      type: object
-      required: [ticker, name]
-      properties:
-        ticker:
-          type: string
-          example: "^VIX"
-        name:
-          type: string
-          example: "CBOE Volatility Index"
-        region:
-          type: string
-          example: "US"
-        description:
-          type: string
-          example: "Market volatility gauge and extreme panic sentiment detector."
-
-    BenchmarkIndexResponse:
+    BenchmarkIndex:
       type: object
       required: [id, ticker, name, version, createdAt, updatedAt]
       properties:
@@ -780,65 +247,7 @@ components:
           format: date-time
           example: "2026-09-23T08:00:00Z"
 
-    MarketDailyQuoteRequest:
-      type: object
-      required: [ticker, tradeDate, closePrice, adjustedClosePrice]
-      properties:
-        assetId:
-          type: string
-          format: uuid
-          nullable: true
-          example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
-        benchmarkId:
-          type: string
-          format: uuid
-          nullable: true
-          example: null
-        ticker:
-          type: string
-          example: "0050"
-        tradeDate:
-          type: string
-          format: date-time
-          example: "2026-09-23T00:00:00Z"
-        openPrice:
-          type: number
-          format: decimal
-          example: 47.1000
-        highPrice:
-          type: number
-          format: decimal
-          example: 47.5000
-        lowPrice:
-          type: number
-          format: decimal
-          example: 47.0500
-        closePrice:
-          type: number
-          format: decimal
-          example: 47.3000
-        adjustedClosePrice:
-          type: number
-          format: decimal
-          example: 47.3000
-        volumeShares:
-          type: integer
-          format: int64
-          example: 15400000
-        tradeValueTwd:
-          type: number
-          format: decimal
-          example: 728420000.00
-        netAssetValue:
-          type: number
-          format: decimal
-          example: 47.2800
-        discountPremiumPercentage:
-          type: number
-          format: decimal
-          example: 0.0423
-
-    MarketDailyQuoteResponse:
+    MarketDailyQuote:
       type: object
       required: [id, ticker, tradeDate, closePrice, adjustedClosePrice]
       properties:
@@ -900,32 +309,7 @@ components:
           format: decimal
           example: 0.0423
 
-    MacroYieldSnapshotRequest:
-      type: object
-      required: [recordDate, usCorporateBondEffectiveYield, us10YearTreasuryYield, us20YearTreasuryYield, yieldSpread10yMinus2y]
-      properties:
-        recordDate:
-          type: string
-          format: date-time
-          example: "2026-09-23T00:00:00Z"
-        usCorporateBondEffectiveYield:
-          type: number
-          format: decimal
-          example: 0.0525
-        us10YearTreasuryYield:
-          type: number
-          format: decimal
-          example: 0.0415
-        us20YearTreasuryYield:
-          type: number
-          format: decimal
-          example: 0.0440
-        yieldSpread10yMinus2y:
-          type: number
-          format: decimal
-          example: 0.0025
-
-    MacroYieldSnapshotResponse:
+    MacroYieldSnapshot:
       type: object
       required: [id, recordDate, usCorporateBondEffectiveYield, us10YearTreasuryYield, us20YearTreasuryYield, yieldSpread10yMinus2y]
       properties:
@@ -954,43 +338,7 @@ components:
           format: decimal
           example: 0.0025
 
-    GlobalAssetScoreRequest:
-      type: object
-      required: [ticker, evaluationDate, assetClass, classRank, compositeScore]
-      properties:
-        ticker:
-          type: string
-          example: "00757"
-        evaluationDate:
-          type: string
-          format: date-time
-          example: "2026-06-30T18:00:00Z"
-        assetClass:
-          $ref: '#/components/schemas/CandidateAssetClass'
-        classRank:
-          type: integer
-          example: 1
-        compositeScore:
-          type: number
-          format: decimal
-          example: 94.50
-        totalExpenseRatio:
-          type: number
-          format: decimal
-          example: 0.0085
-        fundSizeTwd:
-          type: number
-          format: decimal
-          example: 52000000000.00
-        isQualified:
-          type: boolean
-          example: true
-        disqualificationReason:
-          type: string
-          nullable: true
-          example: null
-
-    GlobalAssetScoreResponse:
+    GlobalAssetScore:
       type: object
       required: [id, ticker, evaluationDate, assetClass, classRank, compositeScore, isQualified]
       properties:
@@ -1030,27 +378,7 @@ components:
           nullable: true
           example: null
 
-    DcaPopularityRankRequest:
-      type: object
-      required: [ticker, rankingYear, rankingMonth, rankPosition, regularInvestorCount]
-      properties:
-        ticker:
-          type: string
-          example: "0050"
-        rankingYear:
-          type: integer
-          example: 2026
-        rankingMonth:
-          type: integer
-          example: 8
-        rankPosition:
-          type: integer
-          example: 1
-        regularInvestorCount:
-          type: integer
-          example: 1280028
-
-    DcaPopularityRankResponse:
+    DcaPopularityRank:
       type: object
       required: [id, ticker, rankingYear, rankingMonth, rankPosition, regularInvestorCount]
       properties:
@@ -1074,29 +402,7 @@ components:
           type: integer
           example: 1280028
 
-    DividendAnnouncementRequest:
-      type: object
-      required: [ticker, exDate, paymentDate, dividendPerShare, taxTag]
-      properties:
-        ticker:
-          type: string
-          example: "0050"
-        exDate:
-          type: string
-          format: date-time
-          example: "2026-07-16T00:00:00Z"
-        paymentDate:
-          type: string
-          format: date-time
-          example: "2026-08-08T00:00:00Z"
-        dividendPerShare:
-          type: number
-          format: decimal
-          example: 1.2500
-        taxTag:
-          $ref: '#/components/schemas/TaxTag'
-
-    DividendAnnouncementResponse:
+    DividendAnnouncement:
       type: object
       required: [id, ticker, exDate, paymentDate, dividendPerShare, taxTag]
       properties:
@@ -1122,27 +428,7 @@ components:
         taxTag:
           $ref: '#/components/schemas/TaxTag'
 
-    CorporateActionRequest:
-      type: object
-      required: [ticker, actionType, effectiveDate, splitToShares, splitFromShares]
-      properties:
-        ticker:
-          type: string
-          example: "0050"
-        actionType:
-          $ref: '#/components/schemas/CorporateActionType'
-        effectiveDate:
-          type: string
-          format: date-time
-          example: "2025-06-18T00:00:00Z"
-        splitToShares:
-          type: integer
-          example: 4
-        splitFromShares:
-          type: integer
-          example: 1
-
-    CorporateActionResponse:
+    CorporateAction:
       type: object
       required: [id, ticker, actionType, effectiveDate, splitToShares, splitFromShares]
       properties:
@@ -1197,24 +483,6 @@ components:
                 type: string
                 example: "Target entity ID not found."
 
-    ConflictError:
-      description: 409 Conflict - Optimistic Concurrency Locking Failure
-      content:
-        application/json:
-          schema:
-            type: object
-            required: [error, message, currentVersion]
-            properties:
-              error:
-                type: string
-                example: "OPTIMISTIC_LOCKING_FAILURE"
-              message:
-                type: string
-                example: "Resource version mismatch. Reload entity before submitting."
-              currentVersion:
-                type: integer
-                example: 2
-
     InternalServerError:
       description: 500 Internal Server Error
       content:
@@ -1228,4 +496,4 @@ components:
                 example: "INTERNAL_SERVER_ERROR"
               message:
                 type: string
-                example: "Unexpected failure occurred during job execution."
+                example: "Unexpected failure occurred during pipeline execution."

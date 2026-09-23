@@ -1,0 +1,68 @@
+@startuml market_orchestration_contract
+
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam defaultFontName Inter
+
+title Market Orchestration & Pipeline Ingress Contract (REST Ingress)
+
+package "adapter.in.web.rest" {
+  interface "MarketOrchestrationRestController" <<RestController>> {
+    ' --- External Scheduler / Webhook Ingress ---
+    + syncMarketData(req: MarketDataSyncRequest): ResponseEntity<MarketDataSyncResponse>
+    + evaluateGlobalAssetScores(): ResponseEntity<GlobalAssetScoreEvaluationResponse>
+  }
+}
+
+package "application.port.in" {
+  interface "MarketDataSyncUseCase" <<Service>> {
+    + syncMarketData(req: MarketDataSyncRequest): MarketDataSyncResponse
+  }
+
+  interface "GlobalAssetScoreEvaluationUseCase" <<Service>> {
+    + evaluateGlobalAssetScores(): GlobalAssetScoreEvaluationResponse
+  }
+}
+
+package "application.service" {
+  class "MarketDataSyncService" implements MarketDataSyncUseCase {
+    - syncGlobalAssets(): Integer
+    - syncMarketDailyQuotes(): Integer
+    - syncMacroYields(): Integer
+    - syncDcaPopularityRanks(): Integer
+    - syncCorporateActionsAndDividends(): Integer
+  }
+
+  class "GlobalAssetScoreEvaluationService" implements GlobalAssetScoreEvaluationUseCase {
+    + evaluateFactorScores(): Integer
+  }
+}
+
+package "adapter.out.persistence" {
+  interface "GlobalAssetMetadataRepository" <<Repository>>
+  interface "BenchmarkIndexRepository" <<Repository>>
+  interface "MarketDailyQuoteRepository" <<Repository>>
+  interface "MacroYieldSnapshotRepository" <<Repository>>
+  interface "GlobalAssetScoreRepository" <<Repository>>
+  interface "DcaPopularityRankRepository" <<Repository>>
+  interface "DividendAnnouncementRepository" <<Repository>>
+  interface "CorporateActionRepository" <<Repository>>
+}
+
+' === Dependency Arrows ===
+"MarketOrchestrationRestController" ..> "MarketDataSyncUseCase" : uses (POST /marketData:sync)
+"MarketOrchestrationRestController" ..> "GlobalAssetScoreEvaluationUseCase" : uses (POST /globalAssetScores:evaluate)
+
+"MarketDataSyncService" ..> "GlobalAssetMetadataRepository" : persists
+"MarketDataSyncService" ..> "BenchmarkIndexRepository" : persists
+"MarketDataSyncService" ..> "MarketDailyQuoteRepository" : persists
+"MarketDataSyncService" ..> "MacroYieldSnapshotRepository" : persists
+"MarketDataSyncService" ..> "DcaPopularityRankRepository" : persists
+"MarketDataSyncService" ..> "DividendAnnouncementRepository" : persists
+"MarketDataSyncService" ..> "CorporateActionRepository" : persists
+
+"GlobalAssetScoreEvaluationService" ..> "MarketDailyQuoteRepository" : reads quotes for R2/Vol
+"GlobalAssetScoreEvaluationService" ..> "GlobalAssetScoreRepository" : persists score snapshots
+
+@enduml
+

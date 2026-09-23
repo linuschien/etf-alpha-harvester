@@ -4,27 +4,22 @@
 skinparam packageStyle rectangle
 skinparam defaultFontName Inter
 
-package "adapter.in.web.rest" {
-  interface "DcaPopularityRankRestController" <<RestController>> {
-    ' --- Ingest ---
-    + createDcaPopularityRank(req: DcaPopularityRankRequest): ResponseEntity<DcaPopularityRankResponse>
-    ' --- Single-resource Query ---
-    + getDcaPopularityRankById(rankId: UUID): ResponseEntity<DcaPopularityRankResponse>
-  }
-}
+title DcaPopularityRank - GraphQL Query & Persistence Contract
 
 package "adapter.in.web.graphql" {
   interface "DcaPopularityRankGraphQLResolver" <<GraphQLResolver>> {
-    ' --- Collection / Filtered Queries ---
+    ' --- UI Read Gateway ---
     + listDcaPopularityRanks(filter: DcaPopularityFilterInput): List<DcaPopularityRank>
     + getDcaPopularityRankById(id: UUID): Optional<DcaPopularityRank>
     + getTop20DcaRanks(year: Integer, month: Integer): List<DcaPopularityRank>
+    + listDcaRanksByAssetId(assetId: UUID): List<DcaPopularityRank>
   }
 }
 
 package "adapter.out.persistence" {
   interface "DcaPopularityRankRepository" <<Repository>> {
     + save(entity: DcaPopularityRank): DcaPopularityRank
+    + saveAll(entities: List<DcaPopularityRank>): List<DcaPopularityRank>
     + findById(id: UUID): Optional<DcaPopularityRank>
     + findByRankingYearAndRankingMonth(year: Integer, month: Integer): List<DcaPopularityRank>
     + findByAssetId(assetId: UUID): List<DcaPopularityRank>
@@ -33,12 +28,12 @@ package "adapter.out.persistence" {
 }
 
 note right of DcaPopularityRankRepository
-  Immutable Monthly Ranking Snapshot Ledger.
-  Read-only TWSE monthly ranks; no deletes, version, or audit timestamps.
+  Immutable Monthly DCA Investor Popularity Rankings.
+  Ingested monthly from TWSE via MarketDataSyncService (POST /marketData:sync).
+  Read exclusively via GraphQL Query Gateway.
 end note
 
 ' === Dependency Arrows ===
-"DcaPopularityRankRestController"  ..> "DcaPopularityRankRepository" : uses
-"DcaPopularityRankGraphQLResolver" ..> "DcaPopularityRankRepository" : uses
+"DcaPopularityRankGraphQLResolver" ..> "DcaPopularityRankRepository" : queries
 
 @enduml
