@@ -1,4 +1,4 @@
-@startuml
+@startuml GlobalServicesDomainModel
 skinparam style strictuml
 title Domain Model - Global Services Module (Clean Code Edition)
 
