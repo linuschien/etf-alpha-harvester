@@ -113,18 +113,29 @@
        - 回撤雷達聚焦於所選單一市場，時間軸完全依該市場的實際交易日連續繪製，避免 5 條線交錯重疊成為蜘蛛網，讓投資人清晰辨識所屬市場是否觸碰黃金防線。
     2. **5 大基準相對強度對比圖 (Comparative Trend)**：
        - X 軸採日曆日 (Calendar Date)，並落實金融標準之**「前值平滑遞延 (Last Observation Carried Forward, LOCF / Forward-Fill)」**：當某市場休市時，其指數點位自動延續前一交易日收盤價呈現平滑橫線，完全消除日期斷裂問題。
+* **技術分析輔助系統：四條生命線與月線布林通道**：
+  - **四條核心均線**：
+    - 🟡 **月線 (20MA)**：短線多空生命線（布林通道中軌）。
+    - 🟣 **季線 (60MA)**：中線法人多空分水嶺，波段第一防線。
+    - 🟠 **半年線 (120MA)**：中長線景氣折返線，中期修正關鍵支撐。
+    - 🔵 **年線 (240MA)**：長線牛熊生死線，跌破為歷史級大底超值區。
+  - **月線布林通道 (Bollinger Bands, 20MA $\pm 2\sigma$)**：
+    - 覆蓋 95.4% 統計常態分佈，上下軌間填充淺藍色半透明帶狀陰影 (Band Cloud)。
+    - 收盤價跌破下軌 ($20\text{MA} - 2\sigma$) 時，下軌轉為高亮綠色，標記「統計極端超跌、均值回歸在即」。
 * **52 週高點回撤監控（黃金分割率 Fibonacci Retracement）**：
   - 監控所選基準距過去 252 交易日最高點的即時回撤率：
   - **-23.6% 警戒線【初級黃金回撤帶：強勢多頭呼吸區】**：多頭常態拉回，定期定額靜默扣款，不需恐慌。
   - **-38.2% 警戒線【黃金分割多空防線：超跌撈底黃金坑】**：若跌幅接近此線且 VIX/VXN 飆高，系統判定為被動流動性錯殺，觸發「超跌加碼雷達」。
   - **-61.8% 警戒線【黃金比例終極支撐：黑天鵝極端救災線】**：百年罕見系統性危機，啟動「終極救災條款」（建議債券套現 50% 抄底股票核心）。
-  - **提供切換控制項**：`[ 經典黃金分割 (Fibonacci: -23.6%, -38.2%, -61.8%) ]` / `[ 整數門檻 (-10%, -20%, -30%) ]`。
+* **圖表上方工具列 (Indicator Toolbar)**：
+  - 提供獨立切換按鈕，支援 LocalStorage 記憶偏好：
+    `[ 均線 (MA: 20/60/120/240) ✓ ]`  `[ 布林通道 (BB: 20, 2σ) ✓ ]`  `[ 黃金分割線 (Fib) ✓ ]`
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ 全球 5 大基準指數 52 週高點回撤率監控 (Drawdown Radar)                                              │
 │ 基準切換：[ ^TWII 台股加權 (選中) ] [ ^GSPC 標普500 ] [ ^NDX 那指 ] [ ^SOX 費半 ] [ ^N225 日經 ]    │
-│ 刻度切換：[ 經典黃金分割率 (選中) ]  [ 整數閥值 (-10%, -20%, -30%) ]                                │
+│ 指標工具：[ 均線 (20/60/120/240) ✓ ]  [ 布林通道 (20, 2σ) ✓ ]  [ 黃金分割率 (選中) | 整數閥值 ]       │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤
 │   0% ─── 52 週最高點 (歷史天花板)                                                                 │
 │                                                                                                   │
@@ -132,7 +143,7 @@
 │                                                                                                   │
 │ -23.6% ═══════════════════════════════════════════════════════════════════ (黃金呼吸線)         │
 │          ▲                                                                                        │
-│          │ 當前台股 (^TWII) 回撤 -14.2% (正常呼吸帶，維持日常定期定額)                               │
+│          │ 當前台股 (^TWII) 回撤 -14.2% (回踩季線 60MA 獲支撐，處於月線布林中軌附近)              │
 │                                                                                                   │
 │ -38.2% ═══════════════════════════════════════════════════════════════════ (黃金撈底線 ⚠️)       │
 │                                                                                                   │
@@ -193,10 +204,46 @@
 ```
 
 #### 3. 標的詳細資訊抽屜 (Asset Detail Drawer)
-* 點擊任一標的列，自右側滑出抽屜，展示：
-  1. 基本檔案：發行投信、追蹤指數、掛牌日期、累計掛牌天數。
-  2. 多因子得分拆解雷達圖 (Spider Radar Chart)：TER 得分、AUM 得分、追蹤誤差得分、折溢價得分、動能得分等。
-  3. 近 6 個月還原收盤價 K 線與 200 EMA 走勢圖。
+* 點擊任一標的列，自右側滑出抽屜，展示四大模組：
+  1. **基本檔案與配息政策**：發行投信、追蹤指數、掛牌日期、累計掛牌天數、法定配息週期（月配/季配/半年配/不配息）。
+  2. **多因子得分拆解雷達圖 (Spider Radar Chart)**：TER 得分、AUM 得分、追蹤誤差得分、折溢價得分、動能得分等組內排名因子分解。
+  3. **歷史還原日 K 線與技術分析系統**：
+     - 展示近 6 個月 ~ 1 年之日 K 線（基於 `adjusted_close_price` 還原除息與分割）。
+     - **標配四條生命線**：🟡 20MA（月線）、🟣 60MA（季線）、🟠 120MA（半年線）、🔵 240MA（年線）。
+     - **標配月線布林通道 (20MA $\pm 2\sigma$)**：上下軌間填充淺藍色半透明帶狀陰影 (Band Cloud)；收盤跌穿下軌時下軌轉為綠色高亮。
+     - 工具列支援 `[ 均線 (MA) ✓ ]` `[ 布林通道 (BB) ✓ ]` 獨立開關。
+  4. **🎯 超跌加碼勝率評分卡片 (Dip-Buying Opportunity Score, $S_{\text{dip}} \in [0, 100]$)**：
+     - 由記憶體純函數 (Pure Function) 依最新市場數據即時運算，以四維信號共振求解單筆加碼之歷史勝率與安全邊際：
+       $$S_{\text{dip}} = \underbrace{S_{\text{bollinger}}}_{\text{統計維度 (30%)}} + \underbrace{S_{\text{fibonacci}}}_{\text{空間維度 (25%)}} + \underbrace{S_{\text{ma\_support}}}_{\text{趨勢維度 (25%)}} + \underbrace{S_{\text{panic}}}_{\text{情緒維度 (20%)}}$$
+     - **四維度打分準則**：
+       - ① **統計維度 ($S_{\text{bollinger}}$, 30分)**：布林通道位置 $\%B = \frac{\text{Price} - \text{Lower}}{\text{Upper} - \text{Lower}}$。$\%B \le 0.0$ (跌穿下軌) 得 30 分；$0.0 < \%B \le 0.15$ 得 20 分；$0.15 < \%B \le 0.30$ 得 10 分；$\%B > 0.5$ 得 0 分。
+       - ② **空間維度 ($S_{\text{fibonacci}}$, 25分)**：52 週回撤率。跌幅 $\ge 38.2\%$ 得 25 分；$23.6\% \le \text{跌幅} < 38.2\%$ 得 20 分；$14.6\% \le \text{跌幅} < 23.6\%$ 得 12 分；$< 10\%$ 得 0 分。
+       - ③ **趨勢維度 ($S_{\text{ma\_support}}$, 25分)**：四條均線乖離與支撐。跌破年線 (240MA) 且負乖離 $\le -5\%$ 得 25 分；跌破半年線 (120MA) 或回踩年線支撐得 18 分；跌破季線 (60MA) 或回踩半年線得 12 分；均線多頭排列得 0 分。
+       - ④ **情緒維度 ($S_{\text{panic}}$, 20分)**：期權恐慌與貪婪指數。VIX $\ge 35$ (或科技衛星 VXN $\ge 40$) 得 20 分；$30 \le \text{VIX} < 35$ (或 CNN 貪婪 $< 20$) 得 15 分；$25 \le \text{VIX} < 30$ 得 8 分；VIX $< 20$ 得 0 分。
+     - **得分評級與勝率階梯表**：
+       | 得分 ($S_{\text{dip}}$) | 訊號燈與評級 | 歷史 1 年持有正報酬勝率 (大盤型) | 系統建議動作 |
+       | :--- | :--- | :--- | :--- |
+       | **80 ~ 100 分** | 🟢 **【五星黃金坑】** | **$\ge 90\%$** | **單筆加碼最佳時機！** 產生單筆超跌工單，調用交割戶停利閒置資金果斷撈底。 |
+       | **60 ~ 79 分** | 🟢 **【四星超跌區】** | **$75\% \sim 85\%$** | **具備高度安全邊際**。提示可分批加碼，或調高下期定期定額注資金額。 |
+       | **40 ~ 59 分** | 🟡 **【三星平穩區】** | **$60\% \sim 70\%$** | **常態健康回檔**。嚴格維持紀律，日常定期定額靜默扣款，不需額外加碼。 |
+       | **0 ~ 39 分** | ⚪ **【低星觀望區】** | 市場估值偏高 | **嚴禁單筆追高加碼**，避免高基期接刀。 |
+
+```text
+┌────────────────────────────────────────────────────────┐
+│ 🎯 超跌加碼勝率指數 (Dip-Buying Opportunity Score)     │
+│ [ 86 分 ] 🟢 【五星黃金坑】(預估 1 年勝率 > 90%)       │
+│                                                        │
+│ 📊 四維共振因子達成狀況：                              │
+│  ✓ 統計：跌穿月線布林下軌 (20MA - 2σ)    (+30分)       │
+│  ✓ 空間：52 週回撤達 -24.8% (突破黃金防線) (+20分)     │
+│  ✓ 趨勢：回踩年線 (240MA) 獲長線強支撐   (+18分)       │
+│  ✓ 情緒：VIX 飆升至 32.4 觸發恐慌溢價    (+15分)       │
+│                                                        │
+│ 💡 投資決策提示：                                      │
+│ 「四維共振齊備！目前大盤出現罕見的流動性錯殺，強烈建議  │
+│  調用交割戶停利資金執行單筆加碼 1 整張！」              │
+└────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -296,9 +343,10 @@
 | UI 視圖與組件 | 對應 GraphQL Resolver 契約 | 核心抓取欄位 |
 | :--- | :--- | :--- |
 | **頂部導讀 ＆ 宏觀利率儀表** | `MacroYieldSnapshotGraphQLResolver.getLatestMacroYieldSnapshot` | `recordDate`, `usCorporateBondEffectiveYield`, `us10YearTreasuryYield`, `yieldSpread10yMinus2y` |
-| **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice`, `adjustedClosePrice` |
+| **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice`, `adjustedClosePrice` (前端/GraphQL 即時計算 20/60/120/240MA 與 BB 20, 2σ) |
 | **合規標的天梯榜** | `GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `classRank`, `compositeScore`, `isQualified`, `totalExpenseRatio`, `fundSizeTwd` |
-| **天梯榜多天期績效** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (含息還原) |
+| **天梯榜多天期績效與收盤折溢價** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `discountPremiumPercentage`, `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (含息還原) |
+| **超跌加碼勝率指數卡片** | `MarketDailyQuoteGraphQLResolver.getDipBuyOpportunity` (純函數求解) | `score` ($S_{\text{dip}}$), `grade`, `winRateRange`, `bollingerScore`, `fibonacciScore`, `maSupportScore`, `panicScore`, `recommendation` |
 | **ETF 除息月曆** | `DividendAnnouncementGraphQLResolver.listDividendsByDateRange` | `ticker`, `exDate`, `paymentDate`, `dividendPerShare`, `taxTag` |
 | **股票分割事件** | `CorporateActionGraphQLResolver.listActionsByDateRange` | `ticker`, `effectiveDate`, `splitFromShares`, `splitToShares` |
 | **證交所定期定額 Top 20** | `DcaPopularityRankGraphQLResolver.getLatestRankings` | `rankingYear`, `rankingMonth`, `rankPosition`, `ticker`, `regularInvestorCount` |
@@ -309,7 +357,9 @@
 
 1. **零雜訊驗收**：天梯榜上絕不出現任何 `is_qualified == false` 的淘汰標的。
 2. **多天期績效驗收**：1M, 3M, 6M, 1Y, 2Y 績效必須嚴格依據 `adjusted_close_price` 計算，支援點擊表頭雙向排序；未達天期標的以 `--` 容錯展示。
-3. **月曆視圖驗收**：除息與分割事件月曆能精準標記除息日（綠）、發放日（藍）與股票分割（紫），點擊卡片能正確顯示 `76W` 稅務標籤。
-4. **黃金分割回撤驗收**：回撤圖能準確標記 -23.6%、-38.2%、-61.8% 警戒線，並能平滑切換整數閥值。
-5. **權限隔離驗收**：一般用戶無權瀏覽管線日誌與手動觸發按鈕，僅 Admin 使用者可存取 `/admin/system-health`。
+3. **四條均線與布林通道驗收**：5 大基準走勢圖與抽屜 K 線圖必須完整繪製 20MA、60MA、120MA、240MA，月線布林通道 ($20\text{MA} \pm 2\sigma$) 必須以半透明色塊完整填充，跌破下軌時能清晰變色提示。
+4. **超跌加碼勝率評分驗收**：加碼評分 $S_{\text{dip}}$ 必須嚴格由四維度（統計 30%、空間 25%、趨勢 25%、情緒 20%）純函數求解，總分落在 0~100 區間，並能準確映射至星級、歷史勝率與建議工單。
+5. **月曆視圖驗收**：除息與分割事件月曆能精準標記除息日（綠）、發放日（藍）與股票分割（紫），點擊卡片能正確顯示 `76W` 稅務標籤，並支援依配息週期快速篩選。
+6. **黃金分割回撤驗收**：回撤圖能準確標記 -23.6%、-38.2%、-61.8% 警戒線，並能平滑切換整數閥值與單一市場基準。
+7. **權限隔離驗收**：一般用戶無權瀏覽管線日誌與手動觸發按鈕，僅 Admin 使用者可存取 `/admin/system-health`。
 
