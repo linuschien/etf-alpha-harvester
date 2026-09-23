@@ -28,8 +28,8 @@
    - 內建「逢低超跌加碼雷達 (Dip-Buying Radar)」，在大盤出現黑天鵝暴跌時引導調用交割戶停利閒置資金進行整張精準撈底。
    - 提供「雙軌庫存與扣款校正機制」，精準克服台股無零碎股機制（以 1 股為單位）所產生的撮合價差。
 6. **Clean Code 意圖揭露與資料邏輯分離 (Clean Code & Pure Data Architecture)**：
-   - **杜絕晦澀黑話縮寫**：全領域實體欄位全面正名，採用自我意圖揭露（Intention-Revealing）之詞彙（如 `total_expense_ratio`、`fund_size_twd`、`volume_shares`、`trade_value_twd`、`adjusted_close_price`、`net_asset_value`、`discount_premium_percentage`、`split_from_shares`、`split_to_shares`）。
-   - **資料歸資料，邏輯歸邏輯**：資料庫嚴格只儲存客觀市場價格與利率事實（如每日行情、FRED 殖利率、分割整數比率），所有衍生狀態（`MacroState`、`CrisisLevel`）與建議股債比率均為記憶體中純函數（Pure Functions）運算，絕不在持久層殘留業務狀態。
+   - **杜絕晦澀黑話縮寫**：全領域實體欄位全面正名，採用自我意圖揭露（Intention-Revealing）之詞彙（如 `total_expense_ratio`、`fund_size_twd`、`volume_shares`、`trade_value_twd`、`close_price`、`net_asset_value`、`discount_premium_percentage`、`split_from_shares`、`split_to_shares`、`distribution_frequency`）。
+   - **資料歸資料，邏輯歸邏輯**：資料庫嚴格只儲存客觀市場價格與利率事實（如每日行情、FRED 殖利率、分割整數比率），所有衍生狀態（`MacroState`、`CrisisLevel`、`DipBuyingOpportunity`）與建議股債比率均為記憶體中純函數（Pure Functions）運算，絕不在持久層殘留業務狀態。
    - **候選池分組獨立爭鳴**：全域候選池（`CandidateAssetClass`）劃分為 `CORE`、`SATELLITE`、`DEFENSIVE`，各組依專屬多因子模型組內獨立排名（`class_rank`），徹底排除 `ORPHAN`（孤兒標的嚴格專屬於個人持倉層）。
 
 ### 1.2 系統邊界與 Anti-Goal 宣告
@@ -158,10 +158,26 @@
    - `us_20_year_treasury_yield`：美國 20 年期公債殖利率（FRED: `DGS20`，單位：%）。
    - `yield_spread_10y_minus_2y`：10 年期減 2 年期公債利差（倒掛預警雷達，單位：%）。
 6. **證交所定期定額排行榜**：每月 15 日前定時拉取證交所公告之「定期定額交易戶數 Top 20 ETF 標的與戶數」，嚴格拆解為 `ranking_year`、`ranking_month`、`rank_position` 與 `regular_investor_count`。
-7. **新上市 ETF 與基本面**：自動比對掛牌清單，維護掛牌日期 `listing_date`、總費用率 `total_expense_ratio` 與基金資產規模 `fund_size_twd`；每日拉取公開除息日程（`DividendAnnouncement`）。
-8. **標的分割與除權事件 (`CorporateAction`)**：
+7. **新上市 ETF 與基本面**：自動比對掛牌清單，維護掛牌日期 `listing_date`、總費用率 `total_expense_ratio`、基金資產規模 `fund_size_twd` 與法定配息週期 `distribution_frequency`（`MONTHLY`、`QUARTERLY`、`SEMI_ANNUAL`、`ANNUAL`、`NONE`）；每日拉取公開除息日程（`DividendAnnouncement`）。
+8. **標的分割與除權事件 (`CorporateAction`) ＆ 價位績效雙軌架構**：
    - 採整數除法結構：記錄 `split_from_shares`（分割前股數，如 1）與 `split_to_shares`（分割後股數，如 4），100% 杜絕浮點數除不盡產生 1 股帳差。
-9. **外部接口技術規格書 (External Specs)**：所有外部資料源端點契約請參見 [External Interface Specifications](../external-specs/README.md)。
+   - **【價位與績效雙軌決策原則 (Dual Price & Performance Principle)】**：
+     - **歷史日 K 線與均線計算**：嚴格採客觀成交市價 `close_price`，僅針對股票分割 (`CorporateAction`) 實施整數折算。均線點位與券商看盤軟體 100% 吻合，線圖平滑不跳空，杜絕因除息除權復權導致之假性破線。
+     - **多天期報酬率與移動停利高水位**：嚴格採用**「現金股利加回法 (Dividend Add-Back Method)」**：
+       $$\text{含息總報酬率} = \frac{(P_{\text{current}} - P_{\text{start}}) + \sum_{t_{\text{start}} \le t_d \le t_{\text{current}}} D(t_d)}{P_{\text{start}}}$$
+       徹底杜絕傳統向後復權產生之浮點數累積複合衰減誤差，防止除息日價格跳空引發之假性移動停利誤觸。
+9. **四條核心均線與月線布林通道 (4 MAs & Monthly Bollinger Bands)**：
+   - **四條均線生命線**：20MA（月線/短期生命線）、60MA（季線/法人波段分水嶺）、120MA（半年線/中期支撐折返線）、240MA（年線/長線牛熊生死線）。
+   - **月線布林通道**：$20\text{MA} \pm 2\sigma$（覆蓋 95.4% 常態分佈，帶狀陰影覆蓋；跌破下軌高亮提示超跌）。
+10. **🎯 超跌加碼勝率評分純函數 (Dip-Buying Opportunity Score, $S_{\text{dip}} \in [0, 100]$)**：
+    - 由記憶體純函數即時運算，以四維信號共振求解單筆加碼之歷史勝率與安全邊際：
+      $$S_{\text{dip}} = \underbrace{S_{\text{bollinger}}}_{\text{統計維度 (30%)}} + \underbrace{S_{\text{fibonacci}}}_{\text{空間維度 (25%)}} + \underbrace{S_{\text{ma\_support}}}_{\text{趨勢維度 (25%)}} + \underbrace{S_{\text{panic}}}_{\text{情緒維度 (20%)}}$$
+    - 得分評級映射至 4 階勝率：
+      - **$\ge 80$ 分【五星黃金坑】**：歷史 1 年持有正報酬率 $\ge 90\%$，發布單筆加碼工單，調用交割戶停利沉澱資金撈底。
+      - **$60 \sim 79$ 分【四星超跌區】**：勝率 $75\% \sim 85\%$，具備高安全邊際，可分批佈局。
+      - **$40 \sim 59$ 分【三星平穩區】**：勝率 $60\% \sim 70\%$，常態健康回檔，維持日常定額靜默扣款。
+      - **$< 40$ 分【低星觀望區】**：市場偏熱，嚴禁追高加碼。
+11. **外部接口技術規格書 (External Specs)**：所有外部資料源端點契約請參見 [External Interface Specifications](../external-specs/README.md)。
 
 #### 2. 數據齊備性守門員 (Data Completeness Gatekeeper)
 * 在每天盤後執行下游因子運算前，守門員自動執行檢核：
