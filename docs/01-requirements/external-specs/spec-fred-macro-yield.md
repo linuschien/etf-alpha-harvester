@@ -132,15 +132,15 @@ AlphaHarvester natively supports a **Dual-Mode architecture** so that the system
 
 ```mermaid
 flowchart TD
-    Trigger([Unified Macro Sync Job\n08:00 TST / 00:00 UTC]) --> CheckKey{FRED_API_KEY\nConfigured?}
+    Trigger(["Unified Macro Sync Job<br>08:00 TST / 00:00 UTC"]) --> CheckKey{"FRED_API_KEY Configured?"}
     
-    CheckKey -->|YES: Key Provided| TryFRED{Query FRED API\nBAMLC0A0CM}
-    TryFRED -->|Success 200| SaveFRED[(Store Exact Corp Yield\n& Treasury Rates)]
-    TryFRED -->|Failure / Quota Exceeded| FallbackUSTreasury
+    CheckKey -->|"YES: Key Provided"| TryFRED["Query FRED API<br>BAMLC0A0CM"]
+    TryFRED -->|"Success 200"| SaveFRED[("Store Exact Corp Yield<br>& Treasury Rates")]
+    TryFRED -->|"Failure / Quota Exceeded"| FallbackUSTreasury
     
-    CheckKey -->|NO: Zero-Key Default| FallbackUSTreasury[Query U.S. Treasury XML Feed\n+ Yahoo Finance ^TNX]
-    FallbackUSTreasury --> DeriveRates[Extract 10Y/20Y/30Y Treasury Rates\nCompute IG Corp Benchmark: 20Y + 1.25%]
-    DeriveRates --> SaveZeroKey[(Store in Cloud SQL\nglobal_macro_yields)]
+    CheckKey -->|"NO: Zero-Key Default"| FallbackUSTreasury["Query U.S. Treasury XML Feed<br>+ Yahoo Finance ^TNX"]
+    FallbackUSTreasury --> DeriveRates["Extract 10Y/20Y/30Y Treasury Rates<br>Compute IG Corp Benchmark: 20Y + 1.25%"]
+    DeriveRates --> SaveZeroKey[("Store in Cloud SQL<br>global_macro_yields")]
     SaveFRED --> SaveZeroKey
 ```
 

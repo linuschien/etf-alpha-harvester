@@ -112,6 +112,29 @@ flowchart TD
 | **日常自動更新 (Daily Incremental)** | 每日 08:00 TST (UTC 00:00) | **TWSE / TPEx OpenAPI** | 證交所 OpenAPI 具備「單次請求涵蓋全市場 1,380 檔」的壓倒性優勢。系統只用 2 個請求（上市 + 上櫃）即收齊全台最新收盤價，**以 Append-Only 方式每天僅寫入 1 筆新日 K**。 |
 | **斷線斷點自動補漏 (Gap Auto-Recovery)** | 伺服器維護、斷線或排程失敗重啟時 | **Yahoo Finance** (`period1`~`period2`) | 當系統啟動發現最後入庫日期與今日有差距 ($\text{Gap} > 1$ 交易日)，由於證交所無法回溯，系統**自動調用 Yahoo Finance 回溯補撈缺漏區間之日 K**，填滿空缺後再交由守門員放行。 |
 
+### 5.1 斷點缺漏天數精準判定演算法 (Benchmark Anchor Gap Detection)
+
+金融市場存在週末休市、國定連假（如農曆春節 7~10 天）與臨時颱風假，**絕不能使用簡單自然日相減 ($CurrentDate - LastDate$) 來判斷缺漏天數**，否則每個週一或連假後都會誤判為嚴重系統故障。
+
+AlphaHarvester 採用**「基準指數心跳錨定法 (Benchmark Heartbeat Anchor)」**判定真實遺失的交易日：
+
+```mermaid
+flowchart TD
+    Trigger(["系統啟動 / 每日 08:00 TST"]) --> Step1["1. 查 DB 最新已入庫日期<br>last_db_date = MAX trade_date"]
+    Step1 --> Step2["2. 向 Yahoo Finance 請求大盤 ^TWII 最新 1 個月日 K<br>取得真實市場已發生的交易日清單 market_trading_days"]
+    Step2 --> Step3["3. 集合差集比對<br>missing_days = d in market_trading_days where d > last_db_date"]
+    
+    Step3 --> Decision{"missing_days 數量?"}
+    Decision -->|"0 筆"| Normal0["今日為休市日 / 週末 / 颱風假<br>數據已是最新，無需動作 (PASS)"]
+    Decision -->|"1 筆"| Normal1["正常前一交易日增量<br>由 TWSE OpenAPI 抓取寫入"]
+    Decision -->|">= 2 筆"| AutoHeal["真實發生數據斷層！<br>啟動 Yahoo Finance period1~period2 回溯補齊"]
+```
+
+- **優勢**：
+  1. **零維護成本**：不需要在資料庫維護容易過期的國定假日或補班日行事曆。
+  2. **自動適應臨時休市**：若遇天災颱風假，大盤當天未開盤產出 K 線，系統自動識別非交易日，絕不發出假警報。
+  3. **精準修復**：精確輸出缺漏的日期陣列（如 `['2026-09-21', '2026-09-22']`），指引補撈引擎精準填補。
+
 ---
 
 ## 6. Cross-Source Field Discrepancy & Fusion Specification (欄位落差與融合規範)
