@@ -10,14 +10,14 @@
 
 ## US-G01-01：台股 ETF 與全球五大市場基準指數每日收盤行情採集
 
-**身份**：系統排程器 (System Scheduler)
+**身份**：GCP Cloud Scheduler 外部排程器 (攜帶 OIDC 服務身分憑證)
 
-> **As a** 系統排程器，  
-> **I want to** 於每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * *`) 自動向臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI 或 Yahoo Finance 拉取監控 ETF 以及全球五大市場基準指數的前一交易日官方定案收盤行情，  
-> **So that** 系統擁有最新且準確的收盤價、日 K 線與成交量以支援後續市值計算、回歸擬合 ($R^2$) 與跨週期波動度分析。
+> **As a** 外部系統排程器 (GCP Cloud Scheduler)，  
+> **I want to** 於每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * 1-5`) 攜帶合法 OIDC Token 發送 HTTP POST 請求至 `/api/v1/jobs/sync-market-data` 喚醒 Cloud Run，自動向臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI 或 Yahoo Finance 拉取監控 ETF 以及全球五大市場基準指數的前一交易日官方定案收盤行情，  
+> **So that** 系統在無伺服器架構（實例冷卻為 0）下仍能穩定準時觸發採集，擁有最新且準確的收盤價、日 K 線與成交量以支援後續市值計算、回歸擬合 ($R^2$) 與跨週期波動度分析。
 
 ### 驗收條件 (Acceptance Criteria)
-- **AC1 (Happy Path - ETF 與五大基準指數)**：每日台北時間 08:00 (UTC 00:00)，系統觸發統一排程任務，針對納入監控的台股 ETF 之外，**強制同步採集全球五大市場基準指數**：
+- **AC1 (Happy Path - ETF 與五大基準指數)**：每日台北時間 08:00 (UTC 00:00)，GCP Cloud Scheduler 攜帶專用 Service Account 簽署之 OIDC ID Token（其 Audience 匹配 IAP OAuth Client ID）發送 POST 請求喚醒 Cloud Run，觸發統一數據採集作業。針對納入監控的台股 ETF 之外，**強制同步採集全球五大市場基準指數**：
   1. `^TWII`：台灣發行量加權股價指數 (台股總體 Beta 基準、回撤監控線)
   2. `^GSPC`：美國標普 500 指數 (美股/全球廣基大盤基準)
   3. `^NDX`：美國那斯達克 100 指數 (全球科技巨頭與動能衛星基準)

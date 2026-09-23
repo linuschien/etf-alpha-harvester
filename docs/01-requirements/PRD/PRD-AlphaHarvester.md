@@ -2,8 +2,8 @@
 
 **專案名稱**：AlphaHarvester 跨週期自適應投資決策與資產再平衡系統 (Adaptive Portfolio & Rebalancing Engine)  
 **系統代號**：`etf-alpha-harvester`  
-**文件版本**：v3.0.0 (Cloud-Native Two-Tier Architecture)  
-**發布日期**：2026-09-22  
+**文件版本**：v3.1.0 (Cloud-Native Dual-Auth & Serverless Ingestion Architecture)  
+**發布日期**：2026-09-23  
 **文件狀態**：正式核准 (APPROVED - Source of Truth)  
 **系統定位**：以軟體工程與量化演算法固化「核心大盤 + 動能衛星 + 宏觀防禦債券」之資產配置哲學，消除人性情緒弱點，建立一套規模自適應、具備自我演進能力、針對小白投資人友善的雲端個人資產管理與再平衡決策系統。
 
@@ -16,7 +16,10 @@
 1. **去常數化（No Magic Numbers）**：所有檔數、門檻與金額皆由「每月投入資本」、「資產總規模」與「標的統計特徵」動態求解，拒絕黑箱與主觀臆測。
 2. **規模自適應（Scale-Adaptive）**：從小額資產（月投 1.5 萬 TWD）到高資產規模，系統依交易摩擦自動調節最佳分散程度，兼顧手續費效益與非系統性風險分散。
 3. **夏農波動收割（Shannon's Demon Harvesting）**：將市場隨機波動透過自適應移動停利與再平衡轉化為確定性的超額報酬（Alpha）。
-4. **雲端原生與免維運（Cloud-Native & Zero-Ops for User）**：部署於 Google Cloud Platform (GCP) Cloud Run，原生整合 Google Cloud IAP（Identity-Aware Proxy）身分認證，無需使用者管理資料庫或終端指令。
+4. **雲端原生、外部排程與雙軌零維運（Cloud-Native, Scheduler & Dual-Auth）**：
+   - 部署於 Google Cloud Platform (GCP) Cloud Run 無伺服器容器平台，徹底解除底層伺服器維護負擔。
+   - 系統時間狀態與排程與容器完全解耦，由 **GCP Cloud Scheduler** 於每日 08:00 TST 定時發起 HTTP 請求喚醒服務，徹底解決 Cloud Run 實例歸零（Instance = 0）冷啟動與多實例並行之競爭條件（Race Condition）。
+   - 安全邊界實施 **Google Cloud IAP (Identity-Aware Proxy) 與 IAM OIDC Token 雙軌認證共存機制**：人類瀏覽器免密碼登入與排程機器人程式化呼叫各司其職、和諧並存。
 5. **小白友善與日常工作流整合（Beginner-Centric & Habit Integration）**：
    - 全面取代使用者手動維護的 Excel 對帳單，提供自動化資產淨值月報與 MoM（月增減）分析。
    - 每日盤後自動比對「自適應停利條件」，主動亮燈告警，使用者無需每天登入券商 App 心算。
@@ -35,7 +38,7 @@
   6. 先賣後買工單求解器（整股張數 + 盤中零股拆解）、已實現資本利得流水帳。
   7. 除息發放日自動配息入帳（含 76W 海外所得標籤）與單一交割戶可用現金校準。
   8. 月度對帳月報（取代 Excel）、退休 Hurdle Rate、蒙地卡羅財富漏斗錐、雙重報酬（TWR/MWR）與三源歸因。
-  9. GCP Cloud Run 容器化部屬與 Google Cloud IAP 免密碼驗證。
+  9. GCP Cloud Run 容器化部屬、Google Cloud IAP 瀏覽器免密碼驗證與 Cloud Scheduler OIDC 外部排程觸發。
 * **OUT-OF-SCOPE / Anti-Goal（嚴格排除事項）**：
   1. 任何短期價格走勢預測、高低點擇時進出（Market Timing）。
   2. 盤中高頻交易、當沖、主觀當日沖銷輔助。
@@ -126,10 +129,10 @@
 
 ### 3.1 模組 G-01：市場數據與情報基石 (Market Data & Intelligence)
 
-本模組為整個系統的客觀基石，每日定時在 Cloud Run 背景排程執行。
+本模組為整個系統的客觀基石。由於 Cloud Run 為無狀態無伺服器環境，實例可能縮容至 0，本模組之日常資料採集嚴格由 **GCP Cloud Scheduler 外部排程器** 定時以 OIDC Token 觸發受保護之 HTTP 端點（POST `/api/v1/jobs/sync-market-data`）喚醒執行，消除容器內部定時器因實例冷卻休眠或多實例並行造成的競爭條件（Race Condition）。
 
 #### 1. 資料源整合
-* **台股 ETF 與全球五大市場基準指數日行情**：每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * *`) 自動從臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI、Yahoo Finance 與美國財政部統一拉取前一交易日全球收盤行情，強制同步拉取全球五大市場基準指數：
+* **台股 ETF 與全球五大市場基準指數日行情**：每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * *`) 由 Cloud Scheduler 觸發統一數據採集作業，自動從臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI、Yahoo Finance 與美國財政部統一拉取前一交易日全球收盤行情，強制同步拉取全球五大市場基準指數：
   1. `^TWII`：台灣發行量加權股價指數 (台股總體 Beta 基準、回撤監控線)
   2. `^GSPC`：美國標普 500 指數 (美股廣基 Beta 基準)
   3. `^NDX`：美國那斯達克 100 指數 (全球頂尖科技與動能衛星基準)
@@ -335,10 +338,80 @@ PersonalPosition:
 
 ## 5. 雲端平台、安全規範與非功能性需求 (Cloud Platform & NFR)
 
-### 5.1 GCP Cloud Run 架構規格
-* **容器化微服務**：前端採用 React + Vite 現代化 SPA 儀表板，後端採用高效能 API 服務，打包為單一極致輕量 Docker 映像檔。
-* **身分驗證**：接入 **Google Cloud Identity-Aware Proxy (IAP)**。系統自 Request Header 讀取 `X-Goog-Authenticated-User-Email` 識別合法使用者，非授權請求直接由 GCP 邊界阻擋。
-* **持久化儲存**：採用雲端託管關聯式資料庫 (Cloud SQL PostgreSQL / SQLite 雲端持久掛載)，資料表均以 `user_id / user_email` 進行分區隔離。
+### 5.1 GCP 雲端伺服器無狀態架構與安全規範 (Cloud Run, Scheduler & Dual-Ingress Security)
+
+#### 5.1.1 容器化微服務與無狀態部署 (Stateless Containerization)
+* **單一全功能映像檔**：前端採用 React + Vite 現代化 SPA 儀表板，後端採用高效能 API 服務 (Spring Boot 3.x / Java 25)，封裝為單一極致輕量 Docker 容器。
+* **無伺服器彈性縮放 (Serverless Auto-Scaling)**：
+  * 平常無連線訪問時，Cloud Run 自動將容器實例縮容至零（Scale to 0），達成真正的免維運與極致雲端節費。
+  * 任何外部請求進入時，自動觸發冷啟動（Cold Start）提供服務。
+
+#### 5.1.2 外部排程喚醒架構 (External Cloud Scheduler Orchestration)
+* **痛點消除（解決實例為 0 與多實例競爭）**：
+  * 在 Cloud Run 容器內部執行常駐定時器（如 `@Scheduled` 或 Linux Cron）存在兩大致命缺陷：(1) 實例縮容至 0 時定時器直接停擺；(2) 流量高峰觸發多實例並行擴展時，多個容器同時執行排程將造成嚴重的資料重複拉取與寫入競爭（Race Condition）。
+  * 系統採取「**排程邏輯與運算執行完全解耦**」原則：容器內部不維護常態性時間定時器，改由 **GCP Cloud Scheduler** 承擔外部統一排程器角色。
+* **觸發機制與排程配置**：
+  * 頻率：每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * 1-5`)。
+  * 目標端點：`POST https://<CLOUD_RUN_SERVICE_URL>/api/v1/jobs/sync-market-data`。
+  * 任務職責：喚醒 Cloud Run 單一實例，依序執行 G-01 市場資料拉取、守門員檢核、G-02 多因子評估與 G-03 宏觀利率狀態機更新。
+
+#### 5.1.3 雙軌身分認證閘門架構 (Dual-Ingress Authentication: IAP & OIDC Coexistence)
+打破傳統「IAP 網頁驗證與 IAM 服務叫用只能二選一」的迷思，系統建構業界標準的**雙軌身份共存架構**：
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        雙軌流量進入閘門 (IAP & OIDC Ingress Architecture)               │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│  【人類使用者通道：Web 瀏覽器】                                                         │
+│   使用者發起請求 (GET /)                                                               │
+│          │                                                                             │
+│          ▼                                                                             │
+│  ┌──────────────────────────────────────────────┐                                      │
+│  │ Google Cloud IAP (Identity-Aware Proxy) 邊界 │ ◄── 轉址 Google OAuth 網頁登入         │
+│  └──────────────────────┬───────────────────────┘     檢查 roles/iap.httpsResourceAccessor │
+│                         │ 通過驗證                                                      │
+│                         ▼ 注入 Header: X-Goog-Authenticated-User-Email                 │
+│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ Cloud Run 容器應用程式 (Spring Boot)                                              │  │
+│  │  - 個人投組層 (P-01 ~ P-04)：依 User Email 嚴格隔離多租戶個人資產帳本            │  │
+│  └──────────────────────────────────────────────────────────────────────────────────┘  │
+│                         ▲                                                              │
+│                         │ 通過驗證                                                      │
+│  ┌──────────────────────┴───────────────────────┐                                      │
+│  │ Google Cloud IAP (Identity-Aware Proxy) 邊界 │ ◄── 驗證 OIDC Bearer Token            │
+│  └──────────────────────────────────────────────┘     Audience = IAP OAuth Client ID   │
+│          ▲                                            檢查 roles/iap.httpsResourceAccessor │
+│          │ 攜帶 OIDC ID Token (由專屬 Service Account 簽署)                            │
+│  【自動排程通道：GCP Cloud Scheduler】                                                 │
+│   每日定時觸發 POST /api/v1/jobs/sync-market-data                                      │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+* **軌道一：人類 Web 使用者通道 (End-User Browser Channel)**：
+  1. 存取點：瀏覽器存取 Cloud Run 服務網址或綁定網域。
+  2. 認證流程：由 Google Cloud IAP 自動攔截未登入連線，導向 Google OAuth 登入介面，強制檢查使用者是否具備 `roles/iap.httpsResourceAccessor` 存取授權。
+  3. 帳本隔離：IAP 驗證放行後，自動向後端注入 `X-Goog-Authenticated-User-Email` 與 `X-Goog-IAP-JWT-Assertion` Header。後端個人投組層（P-01 ~ P-04）以此 Email 作為唯一租戶 Key，達成多租戶資產與庫存的物理級數據隔離。
+* **軌道二：自動化排程機器人通道 (Cloud Scheduler Service Account Channel)**：
+  1. 存取點：Cloud Scheduler HTTP Target，指向 `/api/v1/jobs/sync-market-data`。
+  2. 專屬身分：指派專用 Service Account（如 `alpha-harvester-scheduler@${PROJECT_ID}.iam.gserviceaccount.com`）。
+  3. **Audience 規格規範（防 401 關鍵約束）**：
+     * 啟動 IAP 後，Cloud Scheduler 的 `--oidc-token-audience` **必須嚴格填入該 IAP 背後綁定的「OAuth 2.0 Client ID」**（格式為 `*.apps.googleusercontent.com`），而非 Cloud Run 服務網址！
+  4. **IAM 雙重授權綁定**：該 Service Account 必須同時被授予：
+     * `roles/run.invoker`（Cloud Run 叫用權限）
+     * `roles/iap.httpsResourceAccessor`（穿越 IAP 閘道存取權限）
+
+#### 5.1.4 應用層深度防禦 (Application-Level Defense-in-Depth)
+* **維運排程端點防護**：
+  * 後端在 `/api/v1/jobs/**` 路由實施二次權限白名單過濾。
+  * 即使一般合法使用者登入 IAP，若其 Email 不在核准的 Scheduler Service Account 清單內，後端直接拒絕並回傳 `403 Forbidden`，防止一般終端使用者惡意或誤觸重度數據採集管線。
+
+#### 5.1.5 持久化儲存與資料分區 (Persistence & Tenant Isolation)
+* **雲端資料庫**：採用雲端託管關聯式資料庫 (Cloud SQL PostgreSQL / SQLite 雲端持久掛載)。
+* **全域 vs 個人分區**：
+  * 全域市場行情與宏觀狀態資料表為全系統共享，不帶租戶 ID。
+  * 所有個人持倉、扣款日曆、交易流水與對帳月報均以 `user_email` 進行嚴格外鍵約束與索引分區。
 
 ### 5.2 介面體驗與小白友善規格 (Beginner-Friendly UX)
 * **四步月度引導流程**：
@@ -360,5 +433,7 @@ PersonalPosition:
 | v2.5.0 | 2026-09-22 | 移除匯出功能、明確已實現資本利得與配息入帳規則 | Product Owner |
 | v2.8.0 | 2026-09-22 | 解耦定期定額與低頻再平衡、支援標的獨立扣款日排程、新增庫存校正機制 | Product Owner |
 | v2.9.0 | 2026-09-22 | 整合使用者日常習慣：停利告警、超跌加碼雷達、取代 Excel 月報、證交所排行 | Product Owner |
-| **v3.0.0** | **2026-09-22** | **正式發布：雙層領域驅動架構 (Global vs Personal)，全規格正式簽核批准** | **Product Owner (Approved)** |
+| v3.0.0 | 2026-09-22 | 正式發布：雙層領域驅動架構 (Global vs Personal)，全規格正式簽核批准 | Product Owner (Approved) |
+| **v3.1.0** | **2026-09-23** | **雲端架構補強：納入 GCP Cloud Scheduler 外部排程喚醒（解決實例歸零與並行競爭）、確立 IAP 與 IAM OIDC Token 雙軌認證共存規格與 Audience 規範** | **Product Owner (Approved)** |
+
 
