@@ -1,0 +1,180 @@
+@startuml
+skinparam style strictuml
+title Domain Model - Global Services Module (Clean Code Edition)
+
+package "Global Domain Entities (Persisted Data)" {
+    class GlobalAssetMetadata <<Entity>> {
+        +String id
+        +String ticker
+        +String name
+        +DateTime listing_date
+        +String underlying_index
+        +String issuer
+        +Decimal total_expense_ratio
+        +Decimal fund_size_twd
+        +CandidateAssetClass asset_class
+    }
+
+    class BenchmarkIndex <<Entity>> {
+        +String id
+        +String ticker
+        +String name
+        +String region
+        +String description
+    }
+
+    class MarketDailyQuote <<Entity>> {
+        +String id
+        +String ticker
+        +DateTime trade_date
+        +Decimal open_price
+        +Decimal high_price
+        +Decimal low_price
+        +Decimal close_price
+        +Decimal adjusted_close_price
+        +Integer volume_shares
+        +Decimal trade_value_twd
+        +Decimal net_asset_value
+        +Decimal discount_premium_percentage
+    }
+
+    class MacroYieldSnapshot <<Entity>> {
+        +String id
+        +DateTime record_date
+        +Decimal us_corporate_bond_effective_yield
+        +Decimal us_10_year_treasury_yield
+        +Decimal us_20_year_treasury_yield
+        +Decimal yield_spread_10y_minus_2y
+    }
+
+    class GlobalAssetScore <<Entity>> {
+        +String id
+        +String ticker
+        +DateTime evaluation_date
+        +CandidateAssetClass asset_class
+        +Integer class_rank
+        +Decimal composite_score
+        +Decimal total_expense_ratio
+        +Decimal fund_size_twd
+        +Boolean is_qualified
+        +String disqualification_reason
+    }
+
+    class DcaPopularityRank <<Entity>> {
+        +String id
+        +String ticker
+        +Integer ranking_year
+        +Integer ranking_month
+        +Integer rank_position
+        +Integer regular_investor_count
+    }
+
+    class DividendAnnouncement <<Entity>> {
+        +String id
+        +String ticker
+        +DateTime ex_date
+        +DateTime payment_date
+        +Decimal dividend_per_share
+        +TaxTag tax_tag
+    }
+
+    class CorporateAction <<Entity>> {
+        +String id
+        +String ticker
+        +CorporateActionType action_type
+        +DateTime effective_date
+        +Integer split_to_shares
+        +Integer split_from_shares
+    }
+}
+
+package "Persistence Contracts" {
+    interface GlobalAssetMetadataRepository <<Interface>> {
+        +Create(GlobalAssetMetadata data): GlobalAssetMetadata
+        +GetById(String id): GlobalAssetMetadata
+        +Update(String id, GlobalAssetMetadata delta): GlobalAssetMetadata
+        +Delete(String id): Boolean
+    }
+
+    interface BenchmarkIndexRepository <<Interface>> {
+        +Create(BenchmarkIndex data): BenchmarkIndex
+        +GetById(String id): BenchmarkIndex
+        +Update(String id, BenchmarkIndex delta): BenchmarkIndex
+        +Delete(String id): Boolean
+    }
+
+    interface MarketDailyQuoteRepository <<Interface>> {
+        +Create(MarketDailyQuote data): MarketDailyQuote
+        +GetById(String id): MarketDailyQuote
+        +Update(String id, MarketDailyQuote delta): MarketDailyQuote
+        +Delete(String id): Boolean
+    }
+
+    interface MacroYieldSnapshotRepository <<Interface>> {
+        +Create(MacroYieldSnapshot data): MacroYieldSnapshot
+        +GetById(String id): MacroYieldSnapshot
+        +Update(String id, MacroYieldSnapshot delta): MacroYieldSnapshot
+        +Delete(String id): Boolean
+    }
+
+    interface GlobalAssetScoreRepository <<Interface>> {
+        +Create(GlobalAssetScore data): GlobalAssetScore
+        +GetById(String id): GlobalAssetScore
+        +Update(String id, GlobalAssetScore delta): GlobalAssetScore
+        +Delete(String id): Boolean
+    }
+
+    interface DcaPopularityRankRepository <<Interface>> {
+        +Create(DcaPopularityRank data): DcaPopularityRank
+        +GetById(String id): DcaPopularityRank
+        +Update(String id, DcaPopularityRank delta): DcaPopularityRank
+        +Delete(String id): Boolean
+    }
+
+    interface DividendAnnouncementRepository <<Interface>> {
+        +Create(DividendAnnouncement data): DividendAnnouncement
+        +GetById(String id): DividendAnnouncement
+        +Update(String id, DividendAnnouncement delta): DividendAnnouncement
+        +Delete(String id): Boolean
+    }
+
+    interface CorporateActionRepository <<Interface>> {
+        +Create(CorporateAction data): CorporateAction
+        +GetById(String id): CorporateAction
+        +Update(String id, CorporateAction delta): CorporateAction
+        +Delete(String id): Boolean
+    }
+}
+
+' Relationships & Ownership
+GlobalAssetMetadata "1" o-- "*" MarketDailyQuote : "tracks historical quotes"
+GlobalAssetMetadata "1" o-- "*" GlobalAssetScore : "evaluated into"
+GlobalAssetMetadata "1" o-- "*" DcaPopularityRank : "ranked by"
+GlobalAssetMetadata "1" o-- "*" DividendAnnouncement : "declares"
+GlobalAssetMetadata "1" o-- "*" CorporateAction : "undergoes"
+BenchmarkIndex "1" o-- "*" MarketDailyQuote : "supplies benchmark quotes"
+
+' Domain Enumerations
+enum CandidateAssetClass {
+    CORE
+    SATELLITE
+    DEFENSIVE
+}
+
+enum CorporateActionType {
+    SPLIT
+    REVERSE_SPLIT
+}
+
+enum TaxTag {
+    OVERSEAS_76W
+    DOMESTIC_54C
+}
+
+note right of GlobalAssetMetadata : ID MUST be a UUID v4\nListing days computed dynamically from listing_date
+note right of GlobalAssetScore : Segmented Ranking within CandidateAssetClass\nCore, Satellite, and Defensive rank independently\nORPHAN is strictly a Personal Position state
+note right of DcaPopularityRank : Year and month explicitly separated (e.g. 2026, 8)
+note right of MacroYieldSnapshot : Pure market interest rate facts from FRED\nState logic (Accumulate/Neutral/Harvest) computed in memory
+note right of CorporateAction : 1 split into 4 is split_from_shares=1, split_to_shares=4\nGuarantees exact integer division without floating-point errors
+note right of MarketDailyQuote : adjusted_close_price smoothes splits and dividends\nnet_asset_value and discount_premium_percentage are NULL for BenchmarkIndex
+@enduml
