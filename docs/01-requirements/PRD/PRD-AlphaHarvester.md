@@ -2,7 +2,7 @@
 
 **專案名稱**：AlphaHarvester 跨週期自適應投資決策與資產再平衡系統 (Adaptive Portfolio & Rebalancing Engine)  
 **系統代號**：`etf-alpha-harvester`  
-**文件版本**：v3.2.0 (Whole-Lot Harvesting & Cash-Flow Rebalancing Architecture)  
+**文件版本**：v3.3.0 (Self-Balancing Ledger & Dip-Buying Closed-Loop Architecture)  
 **發布日期**：2026-09-23  
 **文件狀態**：正式核准 (APPROVED - Source of Truth)  
 **系統定位**：以軟體工程與量化演算法固化「核心大盤 + 動能衛星 + 宏觀防禦債券」之資產配置哲學，消除人性情緒弱點，建立一套規模自適應、具備自我演進能力、針對小白投資人友善的雲端個人資產管理與再平衡決策系統。
@@ -248,16 +248,22 @@ PersonalPosition:
  ├── asset_class: CORE | SATELLITE | DEFENSIVE | ORPHAN
  ├── total_shares: 當前持有總股數 (整數)
  ├── avg_cost_price: 買進加權平均成本 (TWD)
+ ├── holding_since_date: 標的持有起扣日 (YYYY-MM-DD，供既有庫存保守年化錨定與現金流對齊)
  └── current_market_price: 最新收盤價 (TWD)
 ```
 
-#### 2. 雙軌庫存與扣款校正機制 (Position Calibration)
-解決台股無零碎股（以 1 股為單位）與券商撮合價差問題：
+#### 2. 雙軌庫存與扣款校正機制 (Position Calibration & Self-Balancing Ledger)
+解決台股無零碎股（以 1 股為單位）與券商撮合價差問題，並保障歷史年化報酬率 (XIRR) 永不破帳：
 * **軌道一：定額扣款後 5 秒快速微調確認**：
   * 在約定扣款日盤後，系統根據當日收盤價帶出預估值：「*預估買進 0050 152 股，均價 65.40 元*」。
-  * 使用者查看券商 App 成交回報後，可「一鍵直接確認入帳」或「手動修改為實際成交股數與均價（如 151 股、65.80 元）」，5 秒內精準入帳。
-* **軌道二：持倉隨時直接校準 (Direct Calibration)**：
-  * 使用者隨時可在庫存介面點擊「校正庫存」，直接覆寫券商 App 當前顯示的真實「總股數」與「加權平均成本」，系統自動消除歷史累積誤差並寫入稽核日誌。
+  * 使用者查看券商 App 成交回報後，可「一鍵直接確認入帳」或「手動修改為實際成交股數與均價（如 151 股、65.80 元）」，5 秒內精準入帳並自動產生 `DCA_BUY` 現金流流水。
+* **軌道二：持倉隨時直接手動校準 ＆ 會計自平衡現金流 (Direct Calibration & Self-Balancing)**：
+  * 使用者隨時可在庫存介面點擊「校正庫存」，輸入券商 App 最新真實「總股數」、「加權平均成本」與選填「起扣年月 (holding_since_date)」。
+  * **會計自平衡現金流機制 (Accounting Self-Balancing Flow)**：
+    - 系統比對成本差額：$\Delta \text{Cost} = (\text{新股數} \times \text{新均價}) - (\text{舊股數} \times \text{舊均價})$。
+    - 若 $\Delta \text{Cost} \neq 0$，系統在寫入 `PositionAuditEvent` 審計日誌的同時，自動於 `TradeTransaction` 補登一筆 `action = CALIBRATION_ADJUSTMENT` 平衡現金流（金額 $-\Delta \text{Cost}$，日期為校正當日）。
+    - 徹底解決手動校正導致歷史現金流斷層與 XIRR 破帳痛點，確保 XIRR 100% 嚴格守恆！
+  * **冷啟動期初開帳 (Baseline Opening)**：首次匯入既有庫存時，直接以此起扣日作為期初開帳時間錨點，按首日單筆投入保守計算年化報酬率下界（Conservative Lower Bound CAGR），免除翻找補打過去繁瑣歷史流水之痛苦。
 
 #### 3. 每日盤後停利告警與超跌加碼雷達 (整合日常巡檢習慣)
 * **自適應波動度移動停利告警 (US-P02-03)**：
@@ -278,6 +284,9 @@ PersonalPosition:
 * **逢低超跌加碼雷達 (US-P02-04)**：
   * 每日比對核心大盤負乖離率（跌破 200 EMA 超過閥值）或波段回撤。
   * 偵測到超跌時主動提示：「*0050 自高點回撤達 -16.5%，建議單筆手動加碼 1 張，預估攤平成本至 168 元*」，引導動用交割戶停利沉澱現金手動撈底，兼顧紀律。
+  * **加碼入帳閉環 (Dip-Buying Rebalancing Closed Loop)**：
+    - 使用者於券商 App 下單成交後，回到戰情室點擊「確認加碼成交」，系統自動寫入 `action = DIP_BUY` 現金流流水、重新加權平均持倉成本、扣減交割戶可用現金，並自動帶入 XIRR 即時反映低檔重磅抄底對年化報酬率的拉升成效。
+    - 若使用者忘記走工單流程，日後透過「庫存校正」覆寫股數，系統亦能透過 $\Delta \text{Cost}$ 自平衡現金流自動兜底修復，確保雙軌記帳萬無一失。
 
 #### 4. 標的獨立扣款排程與現金流增量自動再平衡 (Decoupled DCA & Cash-Flow Rebalancing)
 * **標的獨立排程**：各標的支援設定獨立扣款日 `dca_days`（如 0050 設 6 號、00646 設 16 號、00720B 設 26 號）與約定扣款金額。
@@ -455,6 +464,8 @@ PersonalPosition:
 | v2.9.0 | 2026-09-22 | 整合使用者日常習慣：停利告警、超跌加碼雷達、取代 Excel 月報、證交所排行 | Product Owner |
 | v3.0.0 | 2026-09-22 | 正式發布：雙層領域驅動架構 (Global vs Personal)，全規格正式簽核批准 | Product Owner (Approved) |
 | v3.1.0 | 2026-09-23 | 雲端架構補強：納入 GCP Cloud Scheduler 外部排程喚醒（解決實例歸零與並行競爭）、確立 IAP 與 IAM OIDC Token 雙軌認證共存規格與 Audience 規範 | Product Owner (Approved) |
-| **v3.2.0** | **2026-09-23** | **量化交易與台股實務定錨：確立動能衛星「整張出清、零股留種」停利計算公式（避開零股折價）、核心大盤永久豁免停利、確立停利資金「現金流增量自然再平衡 (Cash-Flow DCA Rebalancing)」機制** | **Product Owner (Approved)** |
+| v3.2.0 | 2026-09-23 | 量化交易與台股實務定錨：確立動能衛星「整張出清、零股留種」停利計算公式（避開零股折價）、核心大盤永久豁免停利、確立停利資金「現金流增量自然再平衡 (Cash-Flow DCA Rebalancing)」機制 | Product Owner (Approved) |
+| **v3.3.0** | **2026-09-23** | **帳本架構定錨：納入持倉起扣日時間錨點（既有庫存保守年化計算）、庫存校正會計自平衡現金流（確保 XIRR 永不破帳）、整合逢低加碼雷達工單一鍵入帳與校正兜底閉環** | **Product Owner (Approved)** |
+
 
 

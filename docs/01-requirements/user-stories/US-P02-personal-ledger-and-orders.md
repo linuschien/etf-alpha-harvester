@@ -20,7 +20,7 @@
 
 ### 驗收條件 (Acceptance Criteria)
 - **AC1 (極簡模型屬性)**：持倉資料表 `PersonalPosition` 僅保留必要欄位：
-  `user_id`, `ticker`, `asset_class` (`CORE` | `SATELLITE` | `DEFENSIVE` | `ORPHAN`), `total_shares` (非負整數), `avg_cost_price` (兩位小數 TWD), `current_market_price` (取自模組 G-01)。
+  `user_id`, `ticker`, `asset_class` (`CORE` | `SATELLITE` | `DEFENSIVE` | `ORPHAN`), `total_shares` (非負整數), `avg_cost_price` (兩位小數 TWD), `holding_since_date` (起扣日/時間錨點，YYYY-MM-DD), `current_market_price` (取自模組 G-01)。
 - **AC2 (即時估值計算)**：
   $$\text{Market Value}_i = \text{total\_shares}_i \times \text{current\_market\_price}_i$$
   $$\text{Unrealized Gain}_i = \text{Market Value}_i - (\text{total\_shares}_i \times \text{avg\_cost\_price}_i)$$
@@ -29,25 +29,28 @@
 
 ---
 
-## US-P02-02：雙軌庫存與扣款快速校正機制 (Position Calibration)
+## US-P02-02：雙軌庫存與扣款快速校正機制 (Position Calibration & Self-Balancing Ledger)
 
 **身份**：投資人 (Investor)
 
 > **As a** 投資人，  
-> **I want to** 在扣款日後能 5 秒快速微調成交股數/價格，並能隨時直接手動覆寫券商真實庫存，  
-> **So that** 徹底消除台股以 1 股為單位及券商撮合價差造成的系統帳差，確保與券商真實庫存 100% 同步。
+> **I want to** 在扣款日後能 5 秒快速微調成交股數/價格，並能隨時直接手動覆寫券商真實庫存與起扣時間，  
+> **So that** 徹底消除台股以 1 股為單位及券商撮合價差造成的系統帳差，並透過會計自平衡現金流確保年化報酬率 (XIRR) 100% 準確且絕不破帳。
 
 ### 驗收條件 (Acceptance Criteria)
 - **AC1 (軌道一：扣款日後 5 秒快速確認/微調)**：
   - 在約定扣款日當天盤後，系統根據當日收盤價於儀表板生成「待確認扣款入帳卡片」：
     *顯示：預估買進代碼、預估股數 $\lfloor \text{dca\_amount} / P_{\text{close}} \rfloor$、預估成交單價與預計扣款金額。*
   - 使用者查看券商 App 後：
-    - 若數值一致：點擊「一鍵確認」，系統自動更新持倉股數與加權成本。
+    - 若數值一致：點擊「一鍵確認」，系統自動更新持倉股數與加權成本，並於 `TradeTransaction` 寫入 `action = DCA_BUY` 流水。
     - 若有價差或 1 股差距：使用者直接在該卡片修改「實際成交股數」與「實際單價」，點擊「確認入帳」，5 秒內完成校正。
-- **AC2 (軌道二：庫存隨時直接手動覆寫校準 - Direct Calibration)**：
+- **AC2 (軌道二：庫存隨時直接手動覆寫校準 ＆ 會計自平衡現金流)**：
   - 在持倉清單各標的右側提供「校正庫存」按鈕。
-  - 點擊彈出對話框，使用者直接填入券商 App 顯示的最新「真實總股數」與「加權平均成本」，點擊「強制校準」。
-  - 系統直接覆寫該筆持倉紀錄，並於背景新增一筆 `PositionCalibrationLog`（記錄校正前數值、校正後數值、時間戳記），保證歷史軌跡清晰。
+  - 點擊彈出對話框，使用者直接填入券商 App 顯示的最新「真實總股數」、「加權平均成本」與選填「持有起扣年月 (holding_since_date)」，點擊「確認校準」。
+  - **會計自平衡現金流 (Reconciled Cash Flow)**：
+    - 系統計算成本差額：$\Delta \text{Cost} = (\text{新總股數} \times \text{新均價}) - (\text{舊總股數} \times \text{舊均價})$。
+    - 若 $\Delta \text{Cost} \neq 0$，系統在寫入 `PositionAuditEvent` 審計日誌的同時，自動於 `TradeTransaction` 補登一筆 `action = CALIBRATION_ADJUSTMENT` 現金流（金額 $-\Delta \text{Cost}$，日期為當日），確保 XIRR 嚴格守恆不破帳。
+  - **既有庫存保守年化 (Holding-Since Conservative CAGR)**：初次建立舊持倉時，以使用者選取的起扣年月作為期初開帳時間錨點，按首日單筆投入保守計算年化報酬率下界，提供天然的安全邊際（Margin of Safety）。
 - **AC3 (標的分割與反分割自動折算 - Corporate Action Auto-Split)**：
   - 當系統於每日 08:00 TST 批次偵測到全域 `CorporateAction`（生效日為當日之分割或反分割事件）：
   - 系統自動掃描所有持有該標的之個人持倉，執行等比折算：
@@ -100,9 +103,11 @@
   每日盤後監控核心大盤標的（如 0050、006208、00646）：
   1. 當前收盤價較 200 EMA 負乖離達 $-10\%$ 以上；或
   2. 自近 52 週最高收盤價累計回撤達到 $-15\% \sim -20\%$ 區間。
-- **AC2 (加碼試算建議內容)**：
+- **AC2 (加碼試算建議內容與成交流水入帳)**：
   - 戰情室專屬「逢低加碼雷達」卡片亮起：
-    *顯示：超跌標的、目前回撤幅度、建議加碼檔次（如 1 張整股或 500 股）、預估花費金額、加碼後「預估平均成本攤平效果」（例如均價從 175 元下降至 168 元）。*
+    *顯示：超跌標的、目前回撤幅度、建議加碼檔次（如 1 張整股）、預估花費金額、加碼後「預估平均成本攤平效果」（例如均價從 175 元下降至 168 元）。*
+  - **加碼成交流水與 XIRR 即時連動**：使用者於券商下單完成後點擊「確認加碼成交」，系統自動在 `TradeTransaction` 寫入 `action = DIP_BUY` 流水、更新持倉均價與股數、扣減交割戶可用現金，並即時反映低檔重磅抄底對年化報酬率 (XIRR) 的拉升效果。
+  - **漏記帳自動兜底保護**：若使用者未經工單直接在券商加碼，後續透過「US-P02-02 庫存校正」覆寫股數，系統亦能透過自平衡現金流機制自動兜底對齊，確保雙軌記帳萬無一失。
 - **AC3 (非強迫操作宣告)**：加碼雷達純屬輔助建議，不阻擋常態排程，使用者可自由選擇是否採用。
 
 ---

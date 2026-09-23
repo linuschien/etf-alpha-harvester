@@ -33,12 +33,12 @@
 
 | 實體 / 物件 | 英文代碼 | 定義 | 關鍵屬性 |
 | --- | --- | --- | --- |
-| **個人持倉** | `PersonalPosition` | 使用者實際持有的單一標的現況（極簡模型）。 | `user_id`, `ticker`, `asset_class`, `total_shares`, `avg_cost_price`, `current_price` |
+| **個人持倉** | `PersonalPosition` | 使用者實際持有的單一標的現況（極簡模型）。 | `user_id`, `ticker`, `asset_class`, `total_shares`, `avg_cost_price`, `holding_since_date` (起扣日/時間錨點), `current_price` |
 | **定期定額扣款排程** | `DcaSchedule` | 單一標的之獨立自動扣款設定。 | `user_id`, `ticker`, `dca_days` (扣款日陣列), `dca_amount` (約定扣款額), `dca_status` |
-| **再平衡執行工單** | `RebalanceWorkOrder` | 工單求解器產出之單筆整股與盤中零股交易指令。 | `order_id`, `user_id`, `ticker`, `action` (BUY/SELL), `round_lots` (張), `odd_shares` (股), `priority` |
-| **交易成交流水帳** | `TradeTransaction` | 使用者確認成交之買賣記錄（記錄已實現資本利得）。 | `tx_id`, `user_id`, `ticker`, `action`, `shares`, `price`, `fees`, `tax`, `realized_gain` |
+| **再平衡執行工單** | `RebalanceWorkOrder` | 工單求解器產出之單筆整股交易指令（整張優先、避開零股）。 | `order_id`, `user_id`, `ticker`, `action` (BUY/SELL), `round_lots` (張), `odd_shares` (股), `priority` |
+| **交易成交流水帳** | `TradeTransaction` | 使用者確認成交之買賣記錄與期初開帳現金流（供 XIRR 精準計算）。 | `tx_id`, `user_id`, `ticker`, `action` (BASELINE / DCA_BUY / DIP_BUY / CALIBRATION_ADJUSTMENT / PROFIT_SELL / ORPHAN_SELL), `shares`, `price`, `amount` (現金流), `fees`, `tax`, `realized_gain` |
 | **已實現配息收益記錄** | `DividendTransaction` | 除息發放日自動結算入帳之配息流水帳。 | `div_id`, `user_id`, `ticker`, `payment_date`, `shares_held`, `dividend_per_share`, `total_dividend`, `tax_tag` |
-| **持倉審計事件流水** | `PositionAuditEvent` | 因標的分割、反分割或手動微調校正產生之持倉變更紀錄。 | `event_id`, `user_id`, `ticker`, `event_type` (SPLIT/CALIBRATION), `old_shares`, `new_shares`, `old_avg_cost`, `new_avg_cost`, `event_date` |
+| **持倉審計事件流水** | `PositionAuditEvent` | 因標的分割、反分割或手動微調校正產生之持倉變更紀錄。 | `event_id`, `user_id`, `ticker`, `event_type` (SPLIT/CALIBRATION), `old_shares`, `new_shares`, `old_avg_cost`, `new_avg_cost`, `cost_delta`, `event_date` |
 | **資產淨值月快照** | `MonthlyPortfolioSnapshot` | 每月總資產淨值與增減變動記錄（取代 Excel）。 | `snapshot_month`, `total_net_worth`, `equity_value`, `bond_value`, `free_cash`, `mom_change_amount`, `mom_change_pct` |
 
 ---
@@ -93,9 +93,10 @@
 | $N_{\text{satellite}}$ | $[0, 16]$ 檔 | 動能衛星配置檔數，由資本容量求解器動態計算。 |
 | $\sigma_{252}$ | 百分比 (%) | 標的近 252 個交易日滾動年化實現波動度。 |
 | $T_i$ | $[10\%, 30\%]$ | 標的 $i$ 自適應動態停利報酬率門檻 ($T_i = \text{Clamp}(0.75 \times \sigma_{252, i}, 10\%, 30\%)$)。 |
-| $\text{Trailing DD}$ | 8.0% | 移動停利自高點回撤門檻，達標後回撤達 8% 始下達賣單。 |
+| $D_i$ | $[5.0\%, 12.0\%]$ | 標的 $i$ 自適應動態高點回撤門檻 ($D_i = \text{Clamp}(0.30 \times \sigma_{252, i}, 5\%, 12\%)$)，取代固定 8.0% 常數。 |
+| $\text{XIRR}_{\text{hurdle}}$ | 10.0% | 標普 500 長線年化基準門檻，停利必須超越此基準方可收割純 Alpha。 |
 | $\theta_{\text{drift}}$ | 25.0% | 權重漂移容忍區間，實際權重偏離目標達 $\pm 25\%$ 時觸發再平衡工單。 |
-| $\text{MEAT}$ | 20,000 TWD | 最小有效交易金額約束 (Minimum Effective Action Threshold)，低於此金額抑制工單。 |
+| $\text{MEAT}$ | 30,000 TWD | 最小有效獲利金額約束 (Minimum Effective Action Threshold)，反推自月定額 1 萬、10 個月本金 10 萬大波段爆發，抑制瑣碎工單。 |
 | $1.4N$ | 乘數 1.4 | 半年度換倉安全緩衝倍率 (Buffer Zone Multiplier)。 |
 | $\text{TER}$ | 百分比 (%) | 基金總內扣費用率 (Total Expense Ratio)。 |
 | $\text{AUM}$ | TWD | 基金總資產管理規模 (Assets Under Management)。 |
