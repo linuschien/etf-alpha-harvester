@@ -163,7 +163,10 @@
   - `防禦債券 (Defensive)`：純現券型投資級公司債與長天期公債。
 
 #### 2. 多天期含息總報酬率表格欄位規格
-* 績效一律採 `adjusted_close_price`（還原除息與分割）計算，反映真實投資人含息總回報。
+* **績效計算原則（配息現金加回法 ＋ 股票分割整數還原）**：
+  - 歷史價位僅針對「股票分割 (`CorporateAction`)」做整數還原（保持線圖平滑不爆走）。
+  - 多天期績效採純函數零誤差計算：$$\text{含息總報酬率} = \frac{(\text{當前市價} - \text{過去市價}) + \sum \text{期間每股配息}}{\text{過去市價}}$$
+  - 徹底杜絕向後復權的浮點數累積誤差，真實反映投資人真金白銀收益。
 
 | 欄位名稱 | 資料屬性 | 排序支援 | 呈現規則與視覺反饋 |
 | :--- | :--- | :--- | :--- |
@@ -208,7 +211,7 @@
   1. **基本檔案與配息政策**：發行投信、追蹤指數、掛牌日期、累計掛牌天數、法定配息週期（月配/季配/半年配/不配息）。
   2. **多因子得分拆解雷達圖 (Spider Radar Chart)**：TER 得分、AUM 得分、追蹤誤差得分、折溢價得分、動能得分等組內排名因子分解。
   3. **歷史還原日 K 線與技術分析系統**：
-     - 展示近 6 個月 ~ 1 年之日 K 線（基於 `adjusted_close_price` 還原除息與分割）。
+     - 展示近 6 個月 ~ 1 年之日 K 線（基於客觀成交市價，僅做股票分割整數折算，均線點位與券商看盤 100% 吻合）。
      - **標配四條生命線**：🟡 20MA（月線）、🟣 60MA（季線）、🟠 120MA（半年線）、🔵 240MA（年線）。
      - **標配月線布林通道 (20MA $\pm 2\sigma$)**：上下軌間填充淺藍色半透明帶狀陰影 (Band Cloud)；收盤跌穿下軌時下軌轉為綠色高亮。
      - 工具列支援 `[ 均線 (MA) ✓ ]` `[ 布林通道 (BB) ✓ ]` 獨立開關。
@@ -343,9 +346,9 @@
 | UI 視圖與組件 | 對應 GraphQL Resolver 契約 | 核心抓取欄位 |
 | :--- | :--- | :--- |
 | **頂部導讀 ＆ 宏觀利率儀表** | `MacroYieldSnapshotGraphQLResolver.getLatestMacroYieldSnapshot` | `recordDate`, `usCorporateBondEffectiveYield`, `us10YearTreasuryYield`, `yieldSpread10yMinus2y` |
-| **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice`, `adjustedClosePrice` (前端/GraphQL 即時計算 20/60/120/240MA 與 BB 20, 2σ) |
+| **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice` (前端/GraphQL 即時計算 20/60/120/240MA 與 BB 20, 2σ，並由 corporateAction 做分割平滑) |
 | **合規標的天梯榜** | `GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `classRank`, `compositeScore`, `isQualified`, `totalExpenseRatio`, `fundSizeTwd` |
-| **天梯榜多天期績效與收盤折溢價** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `discountPremiumPercentage`, `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (含息還原) |
+| **天梯榜多天期績效與收盤折溢價** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `discountPremiumPercentage`, `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (採收盤價價差 + 期間配息現金加總零誤差計算) |
 | **超跌加碼勝率指數卡片** | `MarketDailyQuoteGraphQLResolver.getDipBuyOpportunity` (純函數求解) | `score` ($S_{\text{dip}}$), `grade`, `winRateRange`, `bollingerScore`, `fibonacciScore`, `maSupportScore`, `panicScore`, `recommendation` |
 | **ETF 除息月曆** | `DividendAnnouncementGraphQLResolver.listDividendsByDateRange` | `ticker`, `exDate`, `paymentDate`, `dividendPerShare`, `taxTag` |
 | **股票分割事件** | `CorporateActionGraphQLResolver.listActionsByDateRange` | `ticker`, `effectiveDate`, `splitFromShares`, `splitToShares` |
@@ -356,7 +359,7 @@
 ## 6. 驗收標準 (Acceptance Criteria)
 
 1. **零雜訊驗收**：天梯榜上絕不出現任何 `is_qualified == false` 的淘汰標的。
-2. **多天期績效驗收**：1M, 3M, 6M, 1Y, 2Y 績效必須嚴格依據 `adjusted_close_price` 計算，支援點擊表頭雙向排序；未達天期標的以 `--` 容錯展示。
+2. **多天期績效驗收**：1M, 3M, 6M, 1Y, 2Y 績效必須嚴格依據「收盤價價差 ＋ 期間累計配息現金」零誤差加總法計算，支援點擊表頭雙向排序；未達天期標的以 `--` 容錯展示。
 3. **四條均線與布林通道驗收**：5 大基準走勢圖與抽屜 K 線圖必須完整繪製 20MA、60MA、120MA、240MA，月線布林通道 ($20\text{MA} \pm 2\sigma$) 必須以半透明色塊完整填充，跌破下軌時能清晰變色提示。
 4. **超跌加碼勝率評分驗收**：加碼評分 $S_{\text{dip}}$ 必須嚴格由四維度（統計 30%、空間 25%、趨勢 25%、情緒 20%）純函數求解，總分落在 0~100 區間，並能準確映射至星級、歷史勝率與建議工單。
 5. **月曆視圖驗收**：除息與分割事件月曆能精準標記除息日（綠）、發放日（藍）與股票分割（紫），點擊卡片能正確顯示 `76W` 稅務標籤，並支援依配息週期快速篩選。

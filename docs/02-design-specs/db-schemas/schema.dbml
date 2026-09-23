@@ -72,7 +72,6 @@ Table market_daily_quote {
   high_price decimal(12,4)
   low_price decimal(12,4)
   close_price decimal(12,4) [not null, note: 'Unadjusted official settlement close price']
-  adjusted_close_price decimal(12,4) [not null, note: 'Backward-adjusted close price smoothing splits & dividends']
   volume_shares bigint [note: 'Total trading volume in shares']
   trade_value_twd decimal(18,2) [note: 'Total turnover amount in TWD (liquidity filter)']
   net_asset_value decimal(12,4) [note: 'Net Asset Value (NAV) per share. NULL for benchmark indices.']
@@ -85,7 +84,7 @@ Table market_daily_quote {
     benchmark_id
   }
 
-  Note: 'Immutable daily time-series quote engine for both ETFs and global benchmark indices (read-only facts).'
+  Note: 'Immutable daily time-series quote engine for both ETFs and global benchmark indices (read-only facts). Splits handled via corporate_action, dividends via dividend_announcement.'
 }
 
 Table macro_yield_snapshot {
