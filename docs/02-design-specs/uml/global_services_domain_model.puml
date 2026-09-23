@@ -13,6 +13,7 @@ package "Global Domain Entities (Persisted Data)" {
         +Decimal total_expense_ratio
         +Decimal fund_size_twd
         +CandidateAssetClass asset_class
+        +syncGlobalAssets(): OperationStatus
     }
 
     class BenchmarkIndex <<Entity>> {
@@ -108,43 +109,31 @@ package "Persistence Contracts" {
     interface MarketDailyQuoteRepository <<Interface>> {
         +Create(MarketDailyQuote data): MarketDailyQuote
         +GetById(String id): MarketDailyQuote
-        +Update(String id, MarketDailyQuote delta): MarketDailyQuote
-        +Delete(String id): Boolean
     }
 
     interface MacroYieldSnapshotRepository <<Interface>> {
         +Create(MacroYieldSnapshot data): MacroYieldSnapshot
         +GetById(String id): MacroYieldSnapshot
-        +Update(String id, MacroYieldSnapshot delta): MacroYieldSnapshot
-        +Delete(String id): Boolean
     }
 
     interface GlobalAssetScoreRepository <<Interface>> {
         +Create(GlobalAssetScore data): GlobalAssetScore
         +GetById(String id): GlobalAssetScore
-        +Update(String id, GlobalAssetScore delta): GlobalAssetScore
-        +Delete(String id): Boolean
     }
 
     interface DcaPopularityRankRepository <<Interface>> {
         +Create(DcaPopularityRank data): DcaPopularityRank
         +GetById(String id): DcaPopularityRank
-        +Update(String id, DcaPopularityRank delta): DcaPopularityRank
-        +Delete(String id): Boolean
     }
 
     interface DividendAnnouncementRepository <<Interface>> {
         +Create(DividendAnnouncement data): DividendAnnouncement
         +GetById(String id): DividendAnnouncement
-        +Update(String id, DividendAnnouncement delta): DividendAnnouncement
-        +Delete(String id): Boolean
     }
 
     interface CorporateActionRepository <<Interface>> {
         +Create(CorporateAction data): CorporateAction
         +GetById(String id): CorporateAction
-        +Update(String id, CorporateAction delta): CorporateAction
-        +Delete(String id): Boolean
     }
 }
 

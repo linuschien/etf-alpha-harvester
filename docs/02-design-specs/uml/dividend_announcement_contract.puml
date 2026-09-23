@@ -6,9 +6,8 @@ skinparam defaultFontName Inter
 
 package "adapter.in.web.rest" {
   interface "DividendAnnouncementRestController" <<RestController>> {
-    ' --- Ingest / Delete ---
+    ' --- Ingest ---
     + createDividendAnnouncement(req: DividendAnnouncementRequest): ResponseEntity<DividendAnnouncementResponse>
-    + deleteDividendAnnouncement(announcementId: UUID): ResponseEntity<Void>
     ' --- Single-resource Query ---
     + getDividendAnnouncementById(announcementId: UUID): ResponseEntity<DividendAnnouncementResponse>
   }
@@ -31,13 +30,12 @@ package "adapter.out.persistence" {
     + findByTickerAndExDate(ticker: String, exDate: LocalDate): Optional<DividendAnnouncement>
     + findByAssetId(assetId: UUID): List<DividendAnnouncement>
     + findByExample(example: Example<DividendAnnouncement>): List<DividendAnnouncement>
-    + deleteById(id: UUID): void
   }
 }
 
 note right of DividendAnnouncementRepository
   Immutable Dividend Announcement Ledger.
-  Distribution facts announced by asset managers; no version or audit timestamps required.
+  Distribution facts announced by asset managers; no deletes, version, or audit timestamps.
 end note
 
 ' === Dependency Arrows ===

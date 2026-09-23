@@ -6,9 +6,8 @@ skinparam defaultFontName Inter
 
 package "adapter.in.web.rest" {
   interface "DcaPopularityRankRestController" <<RestController>> {
-    ' --- Ingest / Delete ---
+    ' --- Ingest ---
     + createDcaPopularityRank(req: DcaPopularityRankRequest): ResponseEntity<DcaPopularityRankResponse>
-    + deleteDcaPopularityRank(rankId: UUID): ResponseEntity<Void>
     ' --- Single-resource Query ---
     + getDcaPopularityRankById(rankId: UUID): ResponseEntity<DcaPopularityRankResponse>
   }
@@ -30,13 +29,12 @@ package "adapter.out.persistence" {
     + findByRankingYearAndRankingMonth(year: Integer, month: Integer): List<DcaPopularityRank>
     + findByAssetId(assetId: UUID): List<DcaPopularityRank>
     + findByExample(example: Example<DcaPopularityRank>): List<DcaPopularityRank>
-    + deleteById(id: UUID): void
   }
 }
 
 note right of DcaPopularityRankRepository
   Immutable Monthly Ranking Snapshot Ledger.
-  Read-only TWSE monthly ranks; no version or audit timestamps required.
+  Read-only TWSE monthly ranks; no deletes, version, or audit timestamps.
 end note
 
 ' === Dependency Arrows ===

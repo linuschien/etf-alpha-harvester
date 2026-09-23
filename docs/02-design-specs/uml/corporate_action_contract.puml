@@ -6,9 +6,8 @@ skinparam defaultFontName Inter
 
 package "adapter.in.web.rest" {
   interface "CorporateActionRestController" <<RestController>> {
-    ' --- Ingest / Delete ---
+    ' --- Ingest ---
     + createCorporateAction(req: CorporateActionRequest): ResponseEntity<CorporateActionResponse>
-    + deleteCorporateAction(actionId: UUID): ResponseEntity<Void>
     ' --- Single-resource Query ---
     + getCorporateActionById(actionId: UUID): ResponseEntity<CorporateActionResponse>
   }
@@ -31,13 +30,12 @@ package "adapter.out.persistence" {
     + findByTickerAndEffectiveDate(ticker: String, effectiveDate: LocalDate): Optional<CorporateAction>
     + findByAssetId(assetId: UUID): List<CorporateAction>
     + findByExample(example: Example<CorporateAction>): List<CorporateAction>
-    + deleteById(id: UUID): void
   }
 }
 
 note right of CorporateActionRepository
   Immutable Corporate Action Ledger.
-  Stock split event records; no version or audit timestamps required.
+  Stock split event records; no deletes, version, or audit timestamps.
 end note
 
 ' === Dependency Arrows ===

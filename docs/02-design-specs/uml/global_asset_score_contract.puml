@@ -6,11 +6,10 @@ skinparam defaultFontName Inter
 
 package "adapter.in.web.rest" {
   interface "GlobalAssetScoreRestController" <<RestController>> {
-    ' --- Ingest / Delete ---
+    ' --- Ingest ---
     + createGlobalAssetScore(req: GlobalAssetScoreRequest): ResponseEntity<GlobalAssetScoreResponse>
-    + deleteGlobalAssetScore(scoreId: UUID): ResponseEntity<Void>
     ' --- Custom Actions (Batch Job Triggers) ---
-    + triggerEvaluateUniverseJob(): ResponseEntity<OperationStatus>
+    + evaluateGlobalAssetScores(): ResponseEntity<OperationStatus>
     ' --- Single-resource Query ---
     + getGlobalAssetScoreById(scoreId: UUID): ResponseEntity<GlobalAssetScoreResponse>
   }
@@ -28,8 +27,7 @@ package "adapter.in.web.graphql" {
 package "application.port.in" {
   interface "GlobalAssetScoreCommandService" <<Service>> {
     + recordAssetScore(req: GlobalAssetScoreRequest): GlobalAssetScoreResponse
-    + deleteScore(scoreId: UUID): void
-    + evaluateUniverse(): OperationStatus
+    + evaluateGlobalAssetScores(): OperationStatus
   }
 
   interface "GlobalAssetScoreQueryService" <<Service>> {
@@ -46,13 +44,12 @@ package "adapter.out.persistence" {
     + findByTickerAndEvaluationDate(ticker: String, evaluationDate: LocalDate): Optional<GlobalAssetScore>
     + findByAssetClassAndEvaluationDate(assetClass: CandidateAssetClass, evaluationDate: LocalDate): List<GlobalAssetScore>
     + findByExample(example: Example<GlobalAssetScore>): List<GlobalAssetScore>
-    + deleteById(id: UUID): void
   }
 }
 
 note right of GlobalAssetScoreRepository
   Immutable Evaluation Score Ledger.
-  Point-in-time calculation snapshots; no version or audit timestamps required.
+  Point-in-time calculation snapshots; no deletes, version, or audit timestamps.
 end note
 
 ' === Dependency Arrows (CQRS) ===

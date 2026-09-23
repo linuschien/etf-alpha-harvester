@@ -11,6 +11,8 @@ package "adapter.in.web.rest" {
     + updateGlobalAsset(assetId: UUID, req: GlobalAssetMetadataRequest): ResponseEntity<GlobalAssetMetadataResponse>
     + patchGlobalAsset(assetId: UUID, req: GlobalAssetMetadataPatchRequest): ResponseEntity<GlobalAssetMetadataResponse>
     + deleteGlobalAsset(assetId: UUID): ResponseEntity<Void>
+    ' --- Custom Actions (Batch Job Triggers) ---
+    + syncGlobalAssets(): ResponseEntity<OperationStatus>
     ' --- Single-resource Query ---
     + getGlobalAssetById(assetId: UUID): ResponseEntity<GlobalAssetMetadataResponse>
   }
@@ -21,6 +23,21 @@ package "adapter.in.web.graphql" {
     ' --- Collection / Filtered Queries ---
     + listGlobalAssets(filter: GlobalAssetFilterInput): List<GlobalAssetMetadata>
     + getGlobalAssetById(id: UUID): Optional<GlobalAssetMetadata>
+  }
+}
+
+package "application.port.in" {
+  interface "GlobalAssetMetadataCommandService" <<Service>> {
+    + createAsset(req: GlobalAssetMetadataRequest): GlobalAssetMetadataResponse
+    + updateAsset(assetId: UUID, req: GlobalAssetMetadataRequest): GlobalAssetMetadataResponse
+    + patchAsset(assetId: UUID, req: GlobalAssetMetadataPatchRequest): GlobalAssetMetadataResponse
+    + deleteAsset(assetId: UUID): void
+    + syncGlobalAssets(): OperationStatus
+  }
+
+  interface "GlobalAssetMetadataQueryService" <<Service>> {
+    + getAssetById(id: UUID): Optional<GlobalAssetMetadataResponse>
+    + listAssets(filter: GlobalAssetFilterInput): List<GlobalAssetMetadata>
   }
 }
 
@@ -39,9 +56,11 @@ note right of GlobalAssetMetadataRepository
   Repository MUST check version field before save.
 end note
 
-' === Dependency Arrows ===
-"GlobalAssetMetadataRestController"  ..> "GlobalAssetMetadataRepository" : uses
-"GlobalAssetMetadataGraphQLResolver" ..> "GlobalAssetMetadataRepository" : uses
+' === Dependency Arrows (CQRS) ===
+"GlobalAssetMetadataRestController"  ..> "GlobalAssetMetadataCommandService" : uses
+"GlobalAssetMetadataRestController"  ..> "GlobalAssetMetadataQueryService"   : uses (GET by ID)
+"GlobalAssetMetadataGraphQLResolver" ..> "GlobalAssetMetadataQueryService"   : uses
+"GlobalAssetMetadataCommandService"  ..> "GlobalAssetMetadataRepository"     : uses
+"GlobalAssetMetadataQueryService"    ..> "GlobalAssetMetadataRepository"     : uses
 
 @enduml
-

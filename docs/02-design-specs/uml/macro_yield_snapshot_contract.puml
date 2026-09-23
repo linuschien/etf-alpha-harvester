@@ -6,11 +6,10 @@ skinparam defaultFontName Inter
 
 package "adapter.in.web.rest" {
   interface "MacroYieldSnapshotRestController" <<RestController>> {
-    ' --- Ingest / Delete ---
+    ' --- Ingest ---
     + createMacroYieldSnapshot(req: MacroYieldSnapshotRequest): ResponseEntity<MacroYieldSnapshotResponse>
-    + deleteMacroYieldSnapshot(snapshotId: UUID): ResponseEntity<Void>
     ' --- Custom Actions (Batch Job Triggers) ---
-    + triggerSyncMacroYieldJob(): ResponseEntity<OperationStatus>
+    + syncMacroYieldSnapshots(): ResponseEntity<OperationStatus>
     ' --- Single-resource Query ---
     + getMacroYieldSnapshotById(snapshotId: UUID): ResponseEntity<MacroYieldSnapshotResponse>
   }
@@ -28,8 +27,7 @@ package "adapter.in.web.graphql" {
 package "application.port.in" {
   interface "MacroYieldSnapshotCommandService" <<Service>> {
     + recordYieldSnapshot(req: MacroYieldSnapshotRequest): MacroYieldSnapshotResponse
-    + deleteYieldSnapshot(snapshotId: UUID): void
-    + syncMacroYield(): OperationStatus
+    + syncMacroYieldSnapshots(): OperationStatus
   }
 
   interface "MacroYieldSnapshotQueryService" <<Service>> {
@@ -45,13 +43,12 @@ package "adapter.out.persistence" {
     + findById(id: UUID): Optional<MacroYieldSnapshot>
     + findByRecordDate(recordDate: LocalDate): Optional<MacroYieldSnapshot>
     + findByExample(example: Example<MacroYieldSnapshot>): List<MacroYieldSnapshot>
-    + deleteById(id: UUID): void
   }
 }
 
 note right of MacroYieldSnapshotRepository
   Immutable Macro Observation Ledger.
-  Append-only FRED market yields; no version or audit timestamps required.
+  Append-only FRED market yields; no deletes, version, or audit timestamps.
 end note
 
 ' === Dependency Arrows (CQRS) ===
