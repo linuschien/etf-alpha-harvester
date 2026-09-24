@@ -449,16 +449,12 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         boolean isQualified = true;
         String reason = null;
 
-        double ter = asset.getTotalExpenseRatio() != null ? asset.getTotalExpenseRatio().doubleValue() : 0.0050;
         double aum = asset.getFundSizeTwd() != null ? asset.getFundSizeTwd().doubleValue() : 5_000_000_000.0;
         String ticker = asset.getTicker() != null ? asset.getTicker().toUpperCase() : "";
 
         // Hard Constraints: Class-specific checks (unqualified assets are eliminated)
         if (asset.getAssetClass() == CandidateAssetClass.CORE) {
-            if (ter > 0.0045) {
-                isQualified = false;
-                reason = "總費用率 (" + String.format("%.2f%%", ter * 100) + ") 超過核心大盤上限 0.45%";
-            } else if (aum < 10_000_000_000.0) {
+            if (aum < 10_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 100 億 TWD 核心規模門檻";
             }
@@ -510,11 +506,10 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
         double score;
         if (asset.getAssetClass() == CandidateAssetClass.CORE) {
-            // S_core = 0.30 * TER_Score + 0.25 * AUM_Score + 0.25 * TrackingError + 0.20 * DCARank
-            double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
+            // S_core = 0.40 * TrackingError + 0.35 * AUM_Score + 0.25 * DCARank
             double aumScore = Math.min(100.0, Math.max(0.0, (aum / 50_000_000_000.0) * 100.0));
             double trackScore = (trackingR2 > 0.0) ? Math.min(100.0, trackingR2 * 100.0) : 0.0;
-            score = 0.30 * terScore + 0.25 * aumScore + 0.25 * trackScore + 0.20 * dcaRankScore;
+            score = 0.40 * trackScore + 0.35 * aumScore + 0.25 * dcaRankScore;
         } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
             // S_sat = 0.40 * MOM + 0.30 * (1 - rho_core) * 100 + 0.30 * DCARank
             double momScore = 50.0;
@@ -534,7 +529,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     + 0.30 * diversificationScore
                     + 0.30 * dcaRankScore;
         } else {
-            // S_defensive = 0.40 * Yield + 0.30 * TER + 0.30 * AUM
+            // S_defensive = 0.60 * Yield + 0.40 * AUM
             double yieldScore = 0.0;
             if (dividends != null && !dividends.isEmpty() && quotes != null && !quotes.isEmpty()) {
                 double closePrice = (quotes.get(0).getClosePrice() != null) ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
@@ -556,9 +551,8 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     yieldScore = Math.min(100.0, Math.max(0.0, annualYield * 1666.67));
                 }
             }
-            double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
             double aumScore = Math.min(100.0, Math.max(0.0, (aum / 30_000_000_000.0) * 100.0));
-            score = 0.40 * yieldScore + 0.30 * terScore + 0.30 * aumScore;
+            score = 0.60 * yieldScore + 0.40 * aumScore;
         }
 
         BigDecimal finalScore = BigDecimal.valueOf(Math.min(100.0, Math.max(0.0, score)))
@@ -570,7 +564,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         scoreEntity.setEvaluationDate(evaluationDate);
         scoreEntity.setAssetClass(asset.getAssetClass());
         scoreEntity.setCompositeScore(finalScore);
-        scoreEntity.setTotalExpenseRatio(asset.getTotalExpenseRatio());
         scoreEntity.setFundSizeTwd(asset.getFundSizeTwd());
 
         return scoreEntity;

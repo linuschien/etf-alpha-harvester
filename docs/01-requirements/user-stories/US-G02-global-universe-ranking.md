@@ -21,8 +21,7 @@
 - **AC1 (核心大盤 Core 判定基準與硬約束)**：
   - **判定基準**：近 30 交易日走勢回歸與三大市場指數 (TAIEX, S&P 500, NASDAQ) 之決定係數 $R^2 \ge 0.95$ 作為跟蹤大盤的分類判定依據（非硬約束）。
   - **硬約束條件**：
-    1. 費用率優勢：總費用率 $\text{TER} \le 0.45\%$；
-    2. 規模門檻：最新規模 $\text{AUM} \ge 100$ 億 TWD。
+    1. 規模門檻：最新規模 $\text{AUM} \ge 100$ 億 TWD。
   - **淘汰規則**：未通過硬約束即判定不合格淘汰，不進入多因子評分與組內排名，**絕不寫入 `global_asset_score` 資料表**。
 - **AC2 (動能衛星 Satellite 硬約束過濾)**：
   - 聚焦特定高成長產業、關鍵資源或特定利基主題。
@@ -33,7 +32,6 @@
 - **AC3 (防禦債券 Defensive 硬約束過濾)**：
   - 標的必須為**現券型**投資級公司債或中天期公債 ETF（如 00720B、00725B 等）。
   - **規模門檻**：最新規模 $\text{AUM} \ge 50$ 億 TWD。
-  - 信用評等必須 $\ge \text{BBB}$ 級，修正存續期間（Effective Duration）限制在 $8 \sim 14$ 年區間。
   - **嚴格無槓桿與反向約束**：槓桿倍數必須嚴格 $= 1.0\times$；標的代碼結尾為 `L` 或 `R` 者判定為槓桿或反向型標的直接淘汰。
   - **淘汰規則**：未通過硬約束即判定不合格淘汰，不進入評分排名，**絕不寫入 `global_asset_score` 資料表**。
 - **AC4 (核心標的永久豁免條款)**：符合核心大盤之標的，系統永久禁止生成主動全額清倉出清指令。
@@ -53,7 +51,7 @@
   - **月度狀態刷新 (Monthly Refresh)**：每月 15 日 18:00（配合證交所定期定額排行公告），系統自動重算全市場各標的之最新得分與分類標籤，更新戰情室全域看板，但**不發布個人投組換倉指示**。
   - **半年度決策鎖定 (Semi-Annual Rebalance Execution)**：每年 6 月 30 日 18:00 與 12 月 31 日 18:00，系統以當日最新評分正式鎖定最終名次，觸發個人模組 P-01 的 1.4N 緩衝換倉判定。
 - **AC2 (核心大盤評分公式計算 - 整合定期定額熱門排行)**：
-  $$S_{\text{core}} = 0.30 \times \text{TER\_Score} + 0.25 \times \text{AUM\_Score} + 0.25 \times \text{TrackingError\_Score} + 0.20 \times \text{DCARank\_Score}$$
+  $$S_{\text{core}} = 0.40 \times \text{TrackingError\_Score} + 0.35 \times \text{AUM\_Score} + 0.25 \times \text{DCARank\_Score}$$
   - $\text{TrackingError\_Score} = \max(R^2) \times 100$：與三大指數之最大決定係數貼合度得分。
   - $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分，反映長期投資人共識與穩定資金池。
 - **AC3 (動能衛星評分公式計算 - 整合定期定額熱門排行與低相關性分散加分)**：
@@ -64,7 +62,7 @@
     $$S_{\text{dca}} = \begin{cases} (21 - r) \times 5.0, & r \in [1, 20] \\ 0.0, & \text{未進榜} \end{cases}$$
     （Top 1 為 100 分，Top 2 為 95 分，...，Top 20 為 5 分，未進榜為 0.0 分）。
 - **AC4 (防禦債券評分公式計算 - 整合近 1 年現金殖利率)**：
-  $$S_{\text{defensive}} = 0.40 \times \text{Yield\_Score} + 0.30 \times \text{TER\_Score} + 0.30 \times \text{AUM\_Score}$$
-  - $\text{Yield\_Score}$：以近一年宣告現金配息總額除以最新收盤價換算殖利率，線性映射得分（$6.0\%$ 殖利率對應 100 分滿分）。
+  $$S_{\text{defensive}} = 0.60 \times \text{Yield\_Score} + 0.40 \times \text{AUM\_Score}$$
+  - $\text{Yield\_Score}$：以近一年宣告現金配息總額除以最新收盤價換算殖利率，線性映射得分（$6.0\%$ 殖利率對應 100 分滿分）。掛牌未滿一年者依掛牌天數等比年化。
 - **AC5 (排名存檔與純淨評分表原則)**：評分完成後，僅將**通過硬約束之合格標的**的細項得分與組內名次（`class_rank = 1, 2, 3...`）寫入 `GlobalAssetScore`。不合格標的直接淘汰，絕不寫入評分資料庫，標記計算月份與評審版本號。
 

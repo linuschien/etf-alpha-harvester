@@ -46,9 +46,6 @@ public class GlobalAssetScore {
     @Column("composite_score")
     private BigDecimal compositeScore;
 
-    @Column("total_expense_ratio")
-    private BigDecimal totalExpenseRatio;
-
     @Column("fund_size_twd")
     private BigDecimal fundSizeTwd;
 }

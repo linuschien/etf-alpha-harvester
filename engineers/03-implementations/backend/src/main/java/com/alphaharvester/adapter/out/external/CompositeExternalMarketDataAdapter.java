@@ -25,15 +25,18 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     private final TpexMarketDataClient tpexClient;
     private final YahooFinanceClient yahooFinanceClient;
     private final CnnSentimentClient cnnSentimentClient;
+    private final FredPublicMarketDataClient fredClient;
 
     public CompositeExternalMarketDataAdapter(TwseMarketDataClient twseClient,
                                               TpexMarketDataClient tpexClient,
                                               YahooFinanceClient yahooFinanceClient,
-                                              CnnSentimentClient cnnSentimentClient) {
+                                              CnnSentimentClient cnnSentimentClient,
+                                              FredPublicMarketDataClient fredClient) {
         this.twseClient = twseClient;
         this.tpexClient = tpexClient;
         this.yahooFinanceClient = yahooFinanceClient;
         this.cnnSentimentClient = cnnSentimentClient;
+        this.fredClient = fredClient;
     }
 
     @Override
@@ -129,8 +132,8 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
 
     @Override
     public Mono<MacroYieldSnapshot> fetchLatestMacroYield() {
-        log.info("Fetching real macroeconomic yields from Yahoo Finance (^TNX, ^TYX)...");
-        return yahooFinanceClient.fetchMacroYields();
+        log.info("Fetching real macroeconomic yields from St. Louis Fed FRED (BAMLC0A0CMEY, DGS10, DGS20, T10Y2Y)...");
+        return fredClient.fetchLatestMacroYield();
     }
 
     @Override

@@ -36,7 +36,6 @@ Table global_asset_metadata {
   name varchar [not null, note: 'Full Chinese/English Name of ETF']
   listing_date timestamp [not null, note: 'IPO Listing Date']
   underlying_index varchar [note: 'Tracked Benchmark Index Name']
-  total_expense_ratio decimal(6,4) [note: 'Total Expense Ratio (TER), e.g. 0.0024 for 0.24%']
   fund_size_twd decimal(18,2) [note: 'Assets Under Management in TWD']
   asset_class candidate_asset_class [not null, note: 'Candidate Asset Class (CORE, SATELLITE, DEFENSIVE)']
   version integer [not null, default: 1]
@@ -105,7 +104,6 @@ Table global_asset_score {
   asset_class candidate_asset_class [not null, note: 'Segmented candidate group']
   class_rank integer [not null, note: 'Independent rank within candidate asset class (Rank 1, 2, 3...)']
   composite_score decimal(6,2) [not null, note: 'Normalized total score [0, 100]']
-  total_expense_ratio decimal(6,4)
   fund_size_twd decimal(18,2)
 
   indexes {

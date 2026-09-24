@@ -80,9 +80,9 @@ class MarketDataSyncServiceTest {
         LocalDateTime now = LocalDateTime.now();
 
         GlobalAssetMetadata asset50 = new GlobalAssetMetadata(id50, "0050", "元大台灣50", now, null,
-                null, null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+                null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
         GlobalAssetMetadata asset720b = new GlobalAssetMetadata(id720b, "00720B", "元大投資級公司債", now, null,
-                null, null, CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null);
+                null, CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null);
 
         MarketDailyQuote quote50 = new MarketDailyQuote(null, id50, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
@@ -151,7 +151,7 @@ class MarketDataSyncServiceTest {
         LocalDateTime now = LocalDateTime.now();
         UUID id = UUID.randomUUID();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now.minusYears(5), null,
-                null, null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+                null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
 
         // Previous recorded date is 5 days ago (simulating shutdown/offline outage)
         MarketDailyQuote oldQuote = new MarketDailyQuote(null, id, null, "0050", now.minusDays(5),
@@ -198,7 +198,7 @@ class MarketDataSyncServiceTest {
         LocalDateTime now = LocalDateTime.now();
         UUID id = UUID.randomUUID();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null,
-                null, null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+                null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
 
         MarketDailyQuote etfQuote = new MarketDailyQuote(null, id, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),

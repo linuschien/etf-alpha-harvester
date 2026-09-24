@@ -41,30 +41,42 @@ public class TwseMarketDataClient {
      */
     public Flux<GlobalAssetMetadata> fetchEtfMasterUniverse() {
         LocalDateTime now = LocalDateTime.now();
-        return webClient.get()
-                .uri(TWSE_MASTER_URL)
-                .retrieve()
-                .bodyToFlux(JsonNode.class)
-                .map(node -> {
-                    String ticker = node.path("基金代號").asText("").trim();
-                    String shortName = node.path("基金簡稱").asText("").trim();
-                    String fullName = node.path("基金中文名稱").asText(shortName).trim();
-                    String underlyingIndex = node.path("標的指數/追蹤指數名稱").asText("").trim();
-                    String listingDateStr = node.path("上市日期").asText("");
-                    LocalDateTime listingDate = RocDateUtil.parseRocDate(listingDateStr, now.minusYears(1));
+        return fetchMisNavData()
+                .defaultIfEmpty(Map.of())
+                .flatMapMany(navMap -> webClient.get()
+                        .uri(TWSE_MASTER_URL)
+                        .retrieve()
+                        .bodyToFlux(JsonNode.class)
+                        .map(node -> {
+                            String ticker = node.path("基金代號").asText("").trim();
+                            String shortName = node.path("基金簡稱").asText("").trim();
+                            String fullName = node.path("基金中文名稱").asText(shortName).trim();
+                            String underlyingIndex = node.path("標的指數/追蹤指數名稱").asText("").trim();
+                            String listingDateStr = node.path("上市日期").asText("");
+                            LocalDateTime listingDate = RocDateUtil.parseRocDate(listingDateStr, now.minusYears(1));
 
-                    long shares = parseLongSafe(node.path("發行單位數/轉換數").asText("0"));
-                    BigDecimal fundSize = BigDecimal.valueOf(shares).multiply(BigDecimal.valueOf(20)); // baseline estimate
+                            long masterShares = parseLongSafe(node.path("發行單位數/轉換數").asText("0"));
+                            NavSnapshot navSnap = navMap.get(ticker);
+                            BigDecimal fundSize;
+                            if (navSnap != null && navSnap.nav() != null && navSnap.sharesOutstanding() > 0) {
+                                fundSize = navSnap.nav().multiply(BigDecimal.valueOf(navSnap.sharesOutstanding())).setScale(2, RoundingMode.HALF_UP);
+                            } else if (navSnap != null && navSnap.nav() != null && masterShares > 0) {
+                                fundSize = navSnap.nav().multiply(BigDecimal.valueOf(masterShares)).setScale(2, RoundingMode.HALF_UP);
+                            } else if (masterShares > 0) {
+                                fundSize = BigDecimal.valueOf(masterShares).multiply(BigDecimal.valueOf(20));
+                            } else {
+                                fundSize = BigDecimal.ZERO;
+                            }
 
-                    CandidateAssetClass assetClass = classifyAsset(ticker, shortName);
-                    DistributionFrequency frequency = DistributionFrequency.NONE;
+                            CandidateAssetClass assetClass = classifyAsset(ticker, shortName);
+                            DistributionFrequency frequency = DistributionFrequency.NONE;
 
-                    return new GlobalAssetMetadata(
-                            null, ticker, fullName, listingDate, underlyingIndex,
-                            new BigDecimal("0.0035"), fundSize, assetClass, frequency,
-                            1, now, now, null
-                    );
-                })
+                            return new GlobalAssetMetadata(
+                                    null, ticker, fullName, listingDate, underlyingIndex,
+                                    fundSize, assetClass, frequency,
+                                    1, now, now, null
+                            );
+                        }))
                 .filter(asset -> !asset.getTicker().isBlank())
                 .onErrorResume(e -> {
                     log.error("Failed to fetch TWSE ETF master universe: {}", e.getMessage(), e);

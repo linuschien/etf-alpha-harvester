@@ -68,7 +68,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata coreAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "006208", "富邦台50", now.minusYears(8), "臺灣50",
-                new BigDecimal("0.0024"), new BigDecimal("185000000000"),
+                new BigDecimal("185000000000"),
                 CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
@@ -85,7 +85,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata coreAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(20), "臺灣50",
-                new BigDecimal("0.0032"), new BigDecimal("400000000000"),
+                new BigDecimal("400000000000"),
                 CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
@@ -98,18 +98,18 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should disqualify Core asset when total expense ratio exceeds 0.45%")
-    void shouldDisqualifyCoreAssetOnHighExpenseRatio() {
+    @DisplayName("Should qualify Core asset meeting AUM threshold without TER constraint")
+    void shouldQualifyCoreAssetWithoutTerConstraint() {
         LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata expensiveCore = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00999", "昂貴大盤ETF", now.minusYears(3), "某大盤指數",
-                new BigDecimal("0.0065"), new BigDecimal("20000000000"),
+        GlobalAssetMetadata core = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00999", "大盤ETF", now.minusYears(3), "某大盤指數",
+                new BigDecimal("20000000000"), // 20B >= 10B
                 CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, now, now, null
         );
 
-        GlobalAssetScore score = service.evaluateAsset(expensiveCore, now);
+        GlobalAssetScore score = service.evaluateAsset(core, now);
 
-        assertThat(score).isNull();
+        assertThat(score).isNotNull();
     }
 
     @Test
@@ -118,7 +118,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata smallAumCore = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00998", "小規模大盤ETF", now.minusMonths(3), "某指數",
-                new BigDecimal("0.0030"), new BigDecimal("4000000000"), // 4B < 10B
+                new BigDecimal("4000000000"), // 4B < 10B
                 CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -199,15 +199,15 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata sp500 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00646", "元大S&P500", now, "標普500指數",
-                null, null, CandidateAssetClass.SATELLITE, null, 1, now, now, null
+                null, CandidateAssetClass.SATELLITE, null, 1, now, now, null
         );
         GlobalAssetMetadata ndx = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00662", "富邦NASDAQ", now, "那斯達克100",
-                null, null, CandidateAssetClass.SATELLITE, null, 1, now, now, null
+                null, CandidateAssetClass.SATELLITE, null, 1, now, now, null
         );
         GlobalAssetMetadata twii = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now, "臺灣50指數",
-                null, null, CandidateAssetClass.SATELLITE, null, 1, now, now, null
+                null, CandidateAssetClass.SATELLITE, null, 1, now, now, null
         );
 
         assertThat(service.resolveBenchmarkTicker(sp500)).isEqualTo("^GSPC");
@@ -223,28 +223,28 @@ class GlobalAssetScoreEvaluationServiceTest {
         // 0050: starts as SATELLITE, will achieve R^2 >= 0.95 and promote to CORE
         GlobalAssetMetadata asset1 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(15), "臺灣50",
-                new BigDecimal("0.0043"), new BigDecimal("420000000000"),
+                new BigDecimal("420000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
         // 006208: starts as SATELLITE, will achieve R^2 >= 0.95 and promote to CORE
         GlobalAssetMetadata asset2 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "006208", "富邦台50", now.minusYears(10), "臺灣50",
-                new BigDecimal("0.0024"), new BigDecimal("185000000000"),
+                new BigDecimal("185000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
         // 00757: FANG+ satellite, stays SATELLITE (uncorrelated or low R^2 with TWII)
         GlobalAssetMetadata asset3 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
-                new BigDecimal("0.0060"), new BigDecimal("35000000000"),
+                new BigDecimal("35000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
         // 00679B: bond, starts and stays DEFENSIVE
         GlobalAssetMetadata asset4 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00679B", "元大海美債20年", now.minusYears(7), "彭博20年期以上美國公債指數",
-                new BigDecimal("0.0014"), new BigDecimal("250000000000"),
+                new BigDecimal("250000000000"),
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
         );
 
@@ -308,7 +308,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         // 00646 tracking S&P500
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00646", "元大S&P500", now.minusYears(8), "標普500",
-                new BigDecimal("0.0035"), new BigDecimal("35000000000"),
+                new BigDecimal("35000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -348,7 +348,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00878", "國泰永續高股息", now.minusYears(4), "MSCI臺灣ESG",
-                new BigDecimal("0.0028"), new BigDecimal("300000000000"),
+                new BigDecimal("300000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.QUARTERLY, 1, now, now, null
         );
 
@@ -378,7 +378,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
-                new BigDecimal("0.0060"), new BigDecimal("35000000000"),
+                new BigDecimal("35000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -403,7 +403,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
-                new BigDecimal("0.0060"), new BigDecimal("35000000000"),
+                new BigDecimal("35000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -420,7 +420,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata smallSatellite = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00991", "超微型衛星", now.minusYears(1), "某主題指數",
-                new BigDecimal("0.0050"), new BigDecimal("1500000000"), // 1.5B < 2B
+                new BigDecimal("1500000000"), // 1.5B < 2B
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -435,7 +435,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata illiquidSatellite = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00992", "冷門衛星", now.minusYears(2), "冷門指數",
-                new BigDecimal("0.0040"), new BigDecimal("5000000000"), // 5B > 2B
+                new BigDecimal("5000000000"), // 5B > 2B
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -457,7 +457,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata smallBond = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00993B", "小微公債", now.minusYears(1), "公債指數",
-                new BigDecimal("0.0015"), new BigDecimal("3000000000"), // 3B < 5B
+                new BigDecimal("3000000000"), // 3B < 5B
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
         );
 
@@ -472,13 +472,13 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata leveragedBond = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00680L", "元大美債20正2", now.minusYears(5), "20年美債正2",
-                new BigDecimal("0.0030"), new BigDecimal("10000000000"), // 10B > 5B
+                new BigDecimal("10000000000"), // 10B > 5B
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.NONE, 1, now, now, null
         );
 
         GlobalAssetMetadata inverseBond = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00681R", "元大美債20反1", now.minusYears(5), "20年美債反1",
-                new BigDecimal("0.0030"), new BigDecimal("8000000000"), // 8B > 5B
+                new BigDecimal("8000000000"), // 8B > 5B
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -495,7 +495,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata bondAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00720B", "元大投資級公司債", now.minusYears(6), "投資級公司債",
-                new BigDecimal("0.0020"), new BigDecimal("120000000000"), // 120B > 5B
+                new BigDecimal("120000000000"), // 120B > 5B
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
         );
 
@@ -530,28 +530,28 @@ class GlobalAssetScoreEvaluationServiceTest {
         // Qualified Core: 0050
         GlobalAssetMetadata qualifiedCore = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(15), "臺灣50",
-                new BigDecimal("0.0043"), new BigDecimal("420000000000"),
+                new BigDecimal("420000000000"),
                 CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
-        // Disqualified Core: high TER
-        GlobalAssetMetadata expensiveCore = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00999", "昂貴核心", now.minusYears(3), "臺灣50",
-                new BigDecimal("0.0080"), new BigDecimal("20000000000"),
+        // Disqualified Core: low AUM (< 10B)
+        GlobalAssetMetadata smallCore = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00999", "微型核心", now.minusYears(3), "臺灣50",
+                new BigDecimal("5000000000"), // 5B < 10B
                 CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, now, now, null
         );
 
         // Disqualified Satellite: low AUM
         GlobalAssetMetadata smallSatellite = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00991", "微型衛星", now.minusYears(2), "主題指數",
-                new BigDecimal("0.0050"), new BigDecimal("1000000000"), // 1B < 2B
+                new BigDecimal("1000000000"), // 1B < 2B
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
         // Disqualified Defensive: Leveraged ETF
         GlobalAssetMetadata leveragedBond = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00680L", "槓桿美債正2", now.minusYears(3), "美債正2",
-                new BigDecimal("0.0030"), new BigDecimal("10000000000"),
+                new BigDecimal("10000000000"),
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.NONE, 1, now, now, null
         );
 
@@ -573,7 +573,7 @@ class GlobalAssetScoreEvaluationServiceTest {
             p00999 *= factor;
         }
 
-        when(metadataRepository.findAll()).thenReturn(Flux.just(qualifiedCore, expensiveCore, smallSatellite, leveragedBond));
+        when(metadataRepository.findAll()).thenReturn(Flux.just(qualifiedCore, smallCore, smallSatellite, leveragedBond));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^GSPC")).thenReturn(Flux.empty());
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^NDX")).thenReturn(Flux.empty());
@@ -618,7 +618,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata bondAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00679B", "元大美債20年", now.minusYears(7), "彭博20年美債",
-                new BigDecimal("0.0014"), new BigDecimal("250000000000"),
+                new BigDecimal("250000000000"),
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
         );
 
@@ -707,7 +707,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         LocalDateTime listingDate = now.minusDays(90);
         GlobalAssetMetadata youngBond = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00937B", "群益ESG投等債20+", listingDate, "ESG投等債20+",
-                new BigDecimal("0.0018"), new BigDecimal("200000000000"), // 200B
+                new BigDecimal("200000000000"), // 200B
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.MONTHLY, 1, now, now, null
         );
 
@@ -727,7 +727,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         GlobalAssetScore score = service.evaluateAsset(youngBond, now, quotes, 0.0, null, divs);
 
         assertThat(score).isNotNull();
-        // S_defensive = 0.40 * 100.0 (yield) + 0.30 * 82.0 (ter) + 0.30 * 100.0 (aum) = 40 + 24.6 + 30 = 94.60
+        // S_defensive = 0.60 * 100.0 (yield) + 0.40 * 100.0 (aum) = 60 + 40 = 100.00
         assertThat(score.getCompositeScore()).isGreaterThan(new BigDecimal("90.00"));
     }
 }

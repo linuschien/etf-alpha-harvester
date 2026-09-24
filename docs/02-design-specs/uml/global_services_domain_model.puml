@@ -9,7 +9,6 @@ package "Global Domain Entities (Persisted Data)" {
         +String name
         +DateTime listing_date
         +String underlying_index
-        +Decimal total_expense_ratio
         +Decimal fund_size_twd
         +CandidateAssetClass asset_class
         +DistributionFrequency distribution_frequency
@@ -56,7 +55,6 @@ package "Global Domain Entities (Persisted Data)" {
         +CandidateAssetClass asset_class
         +Integer class_rank
         +Decimal composite_score
-        +Decimal total_expense_ratio
         +Decimal fund_size_twd
     }
 

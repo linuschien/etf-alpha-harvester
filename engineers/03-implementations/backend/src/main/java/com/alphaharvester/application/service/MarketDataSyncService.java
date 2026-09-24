@@ -186,7 +186,6 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                         .flatMap(asset -> metadataRepository.findByTicker(asset.getTicker())
                                 .flatMap(existing -> {
                                     existing.setName(asset.getName());
-                                    existing.setTotalExpenseRatio(asset.getTotalExpenseRatio());
                                     existing.setFundSizeTwd(asset.getFundSizeTwd());
                                     existing.setAssetClass(asset.getAssetClass());
                                     if (asset.getDistributionFrequency() != null && asset.getDistributionFrequency() != DistributionFrequency.NONE) {

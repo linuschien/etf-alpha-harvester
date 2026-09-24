@@ -46,7 +46,7 @@ class GlobalServicesGraphQLResolverTest {
         LocalDateTime now = LocalDateTime.now();
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null,
-                null, null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+                null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
         BenchmarkIndex benchmark = new BenchmarkIndex(id, "^TWII", "加權指數", "TW", "台股大盤", 1, now, now, null);
         MarketDailyQuote quote = new MarketDailyQuote(id, id, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
@@ -54,7 +54,7 @@ class GlobalServicesGraphQLResolverTest {
         MacroYieldSnapshot snap = new MacroYieldSnapshot(id, now, new BigDecimal("5.25"),
                 new BigDecimal("4.20"), new BigDecimal("4.50"), new BigDecimal("-0.10"));
         GlobalAssetScore score = new GlobalAssetScore(id, id, "0050", now, CandidateAssetClass.CORE, 1,
-                new BigDecimal("94.5"), new BigDecimal("0.0043"), new BigDecimal("420000000000"));
+                new BigDecimal("94.5"), new BigDecimal("420000000000"));
         DcaPopularityRank dca = new DcaPopularityRank(id, id, "0050", 2026, 8, 1, 1280000);
         DividendAnnouncement div = new DividendAnnouncement(id, id, "0050", now, now.plusDays(30), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C);
         CorporateAction ca = new CorporateAction(id, id, "0050", CorporateActionType.SPLIT, now, 4, 1);
@@ -152,7 +152,7 @@ class GlobalServicesGraphQLResolverTest {
         LocalDateTime now = LocalDateTime.now();
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null,
-                null, null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+                null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
         BenchmarkIndex benchmark = new BenchmarkIndex(id, "^TWII", "加權指數", "TW", "台股大盤", 1, now, now, null);
         MarketDailyQuote quote = new MarketDailyQuote(id, id, id, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
@@ -160,7 +160,7 @@ class GlobalServicesGraphQLResolverTest {
         MacroYieldSnapshot snap = new MacroYieldSnapshot(id, now, new BigDecimal("5.25"),
                 new BigDecimal("4.20"), new BigDecimal("4.50"), new BigDecimal("-0.10"));
         GlobalAssetScore score = new GlobalAssetScore(id, id, "0050", now, CandidateAssetClass.CORE, 1,
-                new BigDecimal("94.5"), new BigDecimal("0.0043"), new BigDecimal("420000000000"));
+                new BigDecimal("94.5"), new BigDecimal("420000000000"));
         DcaPopularityRank dca = new DcaPopularityRank(id, id, "0050", 2026, 8, 1, 1280000);
         DividendAnnouncement div = new DividendAnnouncement(id, id, "0050", now, now.plusDays(30), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C);
         CorporateAction ca = new CorporateAction(id, id, "0050", CorporateActionType.SPLIT, now, 4, 1);

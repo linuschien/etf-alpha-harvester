@@ -28,7 +28,7 @@
    - 內建「逢低超跌加碼雷達 (Dip-Buying Radar)」，在大盤出現黑天鵝暴跌時引導調用交割戶停利閒置資金進行整張精準撈底。
    - 提供「雙軌庫存與扣款校正機制」，精準克服台股無零碎股機制（以 1 股為單位）所產生的撮合價差。
 6. **Clean Code 意圖揭露與資料邏輯分離 (Clean Code & Pure Data Architecture)**：
-   - **杜絕晦澀黑話縮寫**：全領域實體欄位全面正名，採用自我意圖揭露（Intention-Revealing）之詞彙（如 `total_expense_ratio`、`fund_size_twd`、`volume_shares`、`trade_value_twd`、`close_price`、`net_asset_value`、`discount_premium_percentage`、`split_from_shares`、`split_to_shares`、`distribution_frequency`）。
+   - **杜絕晦澀黑話縮寫**：全領域實體欄位全面正名，採用自我意圖揭露（Intention-Revealing）之詞彙（如 `fund_size_twd`、`volume_shares`、`trade_value_twd`、`close_price`、`net_asset_value`、`discount_premium_percentage`、`split_from_shares`、`split_to_shares`、`distribution_frequency`）。
    - **資料歸資料，邏輯歸邏輯**：資料庫嚴格只儲存客觀市場價格與利率事實（如每日行情、FRED 殖利率、分割整數比率），所有衍生狀態（`MacroState`、`CrisisLevel`、`DipBuyingOpportunity`）與建議股債比率均為記憶體中純函數（Pure Functions）運算，絕不在持久層殘留業務狀態。
    - **候選池分組獨立爭鳴**：全域候選池（`CandidateAssetClass`）劃分為 `CORE`、`SATELLITE`、`DEFENSIVE`，各組依專屬多因子模型組內獨立排名（`class_rank`），徹底排除 `ORPHAN`（孤兒標的嚴格專屬於個人持倉層）。
 
@@ -158,7 +158,7 @@
    - `us_20_year_treasury_yield`：美國 20 年期公債殖利率（FRED: `DGS20`，單位：%）。
    - `yield_spread_10y_minus_2y`：10 年期減 2 年期公債利差（倒掛預警雷達，單位：%）。
 6. **證交所定期定額排行榜**：每月 15 日前定時拉取證交所公告之「定期定額交易戶數 Top 20 ETF 標的與戶數」，嚴格拆解為 `ranking_year`、`ranking_month`、`rank_position` 與 `regular_investor_count`。
-7. **新上市 ETF 與基本面**：自動比對掛牌清單，維護掛牌日期 `listing_date`、總費用率 `total_expense_ratio`、基金資產規模 `fund_size_twd` 與法定配息週期 `distribution_frequency`（`MONTHLY`、`QUARTERLY`、`SEMI_ANNUAL`、`ANNUAL`、`NONE`）；每日拉取公開除息日程（`DividendAnnouncement`）。
+7. **新上市 ETF 與基本面**：自動比對掛牌清單，維護掛牌日期 `listing_date`、基金資產規模 `fund_size_twd` 與法定配息週期 `distribution_frequency`（`MONTHLY`、`QUARTERLY`、`SEMI_ANNUAL`、`ANNUAL`、`NONE`）；每日拉取公開除息日程（`DividendAnnouncement`）。
 8. **標的分割與除權事件 (`CorporateAction`) ＆ 價位績效雙軌架構**：
    - 採整數除法結構：記錄 `split_from_shares`（分割前股數，如 1）與 `split_to_shares`（分割後股數，如 4），100% 杜絕浮點數除不盡產生 1 股帳差。
    - **【價位與績效雙軌決策原則 (Dual Price & Performance Principle)】**：
@@ -204,9 +204,9 @@
 
 | 競賽組別 | 目標功能 | 判定基準 / 候選池硬約束條件（未通過硬約束即不合格淘汰） |
 | --- | --- | --- |
-| **核心大盤 (Core)** | 穩健 Beta 基石 | 1. **判定基準**：近 30 交易日走勢回歸與三大市場指數 (TAIEX, S&P 500, NASDAQ) 之決定係數 $R^2 \ge 0.95$ 作為跟蹤大盤的分類判定依據（非硬約束）。<br>2. **硬約束**：總費用率 $\text{total\_expense\_ratio} \le 0.45\%$。<br>3. **硬約束**：基金規模 $\text{fund\_size\_twd} \ge 100$ 億 TWD。<br>*所有標的一視同仁，無上市初期特殊特規，未通過硬約束即判定不合格淘汰。不合格標的直接淘汰，不計算多因子得分，不給予組內名次，絕不寫入 `global_asset_score` 資料表。* |
+| **核心大盤 (Core)** | 穩健 Beta 基石 | 1. **判定基準**：近 30 交易日走勢回歸與三大市場指數 (TAIEX, S&P 500, NASDAQ) 之決定係數 $R^2 \ge 0.95$ 作為跟蹤大盤的分類判定依據（非硬約束）。<br>2. **硬約束**：基金規模 $\text{fund\_size\_twd} \ge 100$ 億 TWD。<br>*所有標的一視同仁，無上市初期特殊特規，未通過硬約束即判定不合格淘汰。不合格標的直接淘汰，不計算多因子得分，不給予組內名次，絕不寫入 `global_asset_score` 資料表。* |
 | **動能衛星 (Satellite)** | 獲取超額動能與收割波動 | 1. 高成長科技/關鍵資源/特定主題。<br>2. **硬約束**：基金規模 $\text{fund\_size\_twd} \ge 20$ 億 TWD。<br>3. **硬約束**：滾動 30 個交易日平均成交金額 $\text{trade\_value\_twd} \ge 2,000$ 萬 TWD。<br>4. 滾動年化波動度 $\sigma \ge 18\%$。<br>*未通過硬約束即判定不合格淘汰，不進入評分排名，絕不寫入 `global_asset_score`。* |
-| **防禦債券 (Defensive)** | 鎖定現金流與安全墊 | 1. 現券型投資級公司債或中天期公債（如 00720B、00725B）。<br>2. **硬約束**：基金規模 $\text{fund\_size\_twd} \ge 50$ 億 TWD。<br>3. **硬約束**：**嚴禁任何每日重置槓桿倍數或反向型之產品（標的代碼結尾為 L 或 R 者直接淘汰，槓桿倍數嚴格 $= 1.0\times$）**。<br>4. 信用評等 $\ge \text{BBB}$ 級，存續期間在 $8 \sim 14$ 年區間。<br>*未通過硬約束即判定不合格淘汰，不進入評分排名，絕不寫入 `global_asset_score`。* |
+| **防禦債券 (Defensive)** | 鎖定現金流與安全墊 | 1. 現券型投資級公司債或中天期公債（如 00720B、00725B）。<br>2. **硬約束**：基金規模 $\text{fund\_size\_twd} \ge 50$ 億 TWD。<br>3. **硬約束**：**嚴禁任何每日重置槓桿倍數或反向型之產品（標的代碼結尾為 L 或 R 者直接淘汰，槓桿倍數嚴格 $= 1.0\times$）**。<br>*未通過硬約束即判定不合格淘汰，不進入評分排名，絕不寫入 `global_asset_score`。* |
 
 * **核心標的豁免條款**：核心大盤標的**永久禁止產生任何主動清倉指令**，僅接受資金流入與再平衡補償。
 * **評分表純淨原則**：`global_asset_score` 資料表僅儲存通過硬約束之合格候選標的，由高至低授予連續組內名次（`class_rank = 1, 2, 3...`）。不合格標的於治理日誌留痕，不計算綜合得分，不寫入評分表，確保個人投組模組（P-01, P-02）取得之候選清單 100% 合規可用。
@@ -214,7 +214,7 @@
 #### 2. 各組專屬多因子客觀評分公式
 
 * **核心大盤組評分 ($S_{\text{core}}$)**：
-  $$S_{\text{core}} = 0.30 \times \text{TER\_Score} + 0.25 \times \text{AUM\_Score} + 0.25 \times \text{TrackingError\_Score} + 0.20 \times \text{DCARank\_Score}$$
+  $$S_{\text{core}} = 0.40 \times \text{TrackingError\_Score} + 0.35 \times \text{AUM\_Score} + 0.25 \times \text{DCARank\_Score}$$
   * $\text{TrackingError\_Score} = \max(R^2) \times 100$：與三大指數之最大決定係數貼合度得分。
   * $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分：
     $$S_{\text{dca}} = \begin{cases} (21 - r) \times 5.0, & r \in [1, 20] \\ 0.0, & \text{未進榜} \end{cases}$$
@@ -225,8 +225,8 @@
   * $\rho_{\text{core}} = \sqrt{R^2}$：直接沿用近 30 交易日對大盤指數之決定係數計算結果，與大盤低相關性獲得更高分散性加分。
   * $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分（反映散戶追逐動能與人氣熱度）。
 * **防禦債券組評分 ($S_{\text{defensive}}$)**：
-  $$S_{\text{defensive}} = 0.40 \times \text{Yield\_Score} + 0.30 \times \text{TER\_Score} + 0.30 \times \text{AUM\_Score}$$
-  * $\text{Yield\_Score}$：採近一年現金殖利率（Trailing 1-Year Cash Dividend Yield = 過去 365 天宣告每股配息總額 / 最新收盤價）客觀計算，線性換算得分（$6.0\%$ 殖利率對應 100 分滿分）。
+  $$S_{\text{defensive}} = 0.60 \times \text{Yield\_Score} + 0.40 \times \text{AUM\_Score}$$
+  * $\text{Yield\_Score}$：採近一年現金殖利率（Trailing 1-Year Cash Dividend Yield = 過去 365 天宣告每股配息總額 / 最新收盤價）客觀計算，線性換算得分（$6.0\%$ 殖利率對應 100 分滿分）。掛牌未滿一年者依掛牌天數等比年化。
 
 ---
 

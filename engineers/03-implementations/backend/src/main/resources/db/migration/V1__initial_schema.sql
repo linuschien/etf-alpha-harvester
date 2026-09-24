@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS global_asset_metadata (
     name VARCHAR(255) NOT NULL,
     listing_date TIMESTAMP NOT NULL,
     underlying_index VARCHAR(255),
-    total_expense_ratio DECIMAL(6,4),
     fund_size_twd DECIMAL(18,2),
     asset_class VARCHAR(32) NOT NULL,
     distribution_frequency VARCHAR(32),
@@ -63,7 +62,6 @@ CREATE TABLE IF NOT EXISTS global_asset_score (
     asset_class VARCHAR(32) NOT NULL,
     class_rank INT NOT NULL,
     composite_score DECIMAL(6,2) NOT NULL,
-    total_expense_ratio DECIMAL(6,4),
     fund_size_twd DECIMAL(18,2),
     CONSTRAINT uq_global_asset_score UNIQUE (ticker, evaluation_date)
 );

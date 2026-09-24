@@ -24,9 +24,9 @@
 | **全域基準指數** | `BenchmarkIndex` | 全球 9 大市場行情、波動度恐慌與綜合情緒基準指標。 | `ticker` (^TWII, ^GSPC, ^NDX, ^SOX, ^N225, ^VIX, ^VXN, ^MOVE, FEAR_GREED), `name`, `region`, `description` |
 | **市場行情快照** | `MarketDailyQuote` | 單一標的或基準在特定交易日的市場成交價量、淨值與折溢價（純客觀成交事實，無除息還原價）。 | `ticker`, `trade_date`, `open_price`, `high_price`, `low_price`, `close_price`, `volume_shares`, `trade_value_twd`, `net_asset_value`, `discount_premium_percentage` |
 | **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率事實（資料庫純資料化，無狀態旗標）。 | `record_date`, `us_corporate_bond_effective_yield`, `us_10_year_treasury_yield`, `us_20_year_treasury_yield`, `yield_spread_10y_minus_2y` |
-| **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對各組候選標的進行客觀評分與組內獨立排名。 | `ticker`, `evaluation_date`, `asset_class` (`CandidateAssetClass`), `class_rank`, `composite_score`, `total_expense_ratio`, `fund_size_twd` |
+| **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對各組候選標的進行客觀評分與組內獨立排名。 | `ticker`, `evaluation_date`, `asset_class` (`CandidateAssetClass`), `class_rank`, `composite_score`, `fund_size_twd` |
 | **定期定額熱門排行** | `DcaPopularityRank` | 臺灣證交所每月公告之定期定額交易戶數排行（年份與月份獨立）。 | `ticker`, `ranking_year`, `ranking_month`, `rank_position`, `regular_investor_count` |
-| **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，收錄法定配息週期。 | `ticker`, `name`, `listing_date`, `underlying_index`, `total_expense_ratio`, `fund_size_twd`, `asset_class` (`CandidateAssetClass`), `distribution_frequency` (`DistributionFrequency`) |
+| **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，收錄法定配息週期。 | `ticker`, `name`, `listing_date`, `underlying_index`, `fund_size_twd`, `asset_class` (`CandidateAssetClass`), `distribution_frequency` (`DistributionFrequency`) |
 | **除息公告資訊** | `DividendAnnouncement` | 發行投信公開公告之 ETF 每期除權息日程。 | `ticker`, `ex_date` (除息日), `payment_date` (發放日), `dividend_per_share`, `tax_tag` (`OVERSEAS_76W` / `DOMESTIC_54C`) |
 | **標的分割與除權事件** | `CorporateAction` | 標的分割與反分割事件，採整數除法架構徹底消除浮點數 1 股帳差。 | `ticker`, `action_type` (SPLIT/REVERSE_SPLIT), `effective_date`, `split_from_shares`, `split_to_shares` |
 
@@ -99,7 +99,6 @@
 | $\theta_{\text{drift}}$ | 25.0% | 權重漂移容忍區間，實際權重偏離目標達 $\pm 25\%$ 時觸發再平衡工單。 |
 | $\text{MEAT}$ | 30,000 TWD | 最小有效獲利金額約束 (Minimum Effective Action Threshold)，反推自月定額 1 萬、10 個月本金 10 萬大波段爆發，抑制瑣碎工單。 |
 | $1.4N$ | 乘數 1.4 | 半年度換倉安全緩衝倍率 (Buffer Zone Multiplier)。 |
-| $\text{TER}$ | 百分比 (%) | 基金總內扣費用率 (Total Expense Ratio)。 |
 | $\text{AUM}$ | TWD | 基金總資產管理規模 (Assets Under Management)。 |
 | $\rho_{\text{core}}$ | 數值 $[-1, 1]$ | 動能衛星與核心大盤 252 日還原總報酬之皮爾森相關係數。 |
 | $76\text{W}$ | 稅務標籤 | 台灣稅法「海外利息所得」代碼（海外債券型 ETF 配息專屬免稅標籤）。 |

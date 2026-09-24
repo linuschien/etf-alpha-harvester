@@ -132,29 +132,6 @@ public class YahooFinanceClient {
                 });
     }
 
-    /**
-     * Fetches Treasury yields from Yahoo Finance (^TNX 10Y, ^TYX 30Y) with Zero API key.
-     */
-    public Mono<MacroYieldSnapshot> fetchMacroYields() {
-        LocalDateTime now = LocalDateTime.now();
-        return fetchBenchmarkQuote("^TNX")
-                .flatMap(tnx -> fetchBenchmarkQuote("^TYX")
-                        .map(tyx -> {
-                            BigDecimal y10 = tnx.getClosePrice();
-                            BigDecimal y30 = tyx.getClosePrice();
-                            BigDecimal y20 = y10.add(y30).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
-                            BigDecimal corpYield = y20.add(new BigDecimal("1.2500"));
-                            BigDecimal spread = y10.subtract(new BigDecimal("4.0000")); // estimated 10Y-2Y spread
-
-                            return new MacroYieldSnapshot(
-                                    null, now, corpYield, y10, y20, spread
-                            );
-                        }))
-                .onErrorResume(e -> {
-                    log.error("Error fetching macro yields from Yahoo Finance: {}", e.getMessage(), e);
-                    return Mono.empty();
-                });
-    }
 
     /**
      * Fetches historical splits for a ticker from Yahoo Finance events.

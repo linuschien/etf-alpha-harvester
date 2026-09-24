@@ -57,7 +57,7 @@ class DataCompletenessGatekeeperServiceTest {
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(10), "臺灣50",
-                new BigDecimal("0.0043"), new BigDecimal("400000000000"),
+                new BigDecimal("400000000000"),
                 CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
@@ -88,6 +88,11 @@ class DataCompletenessGatekeeperServiceTest {
         when(macroYieldRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(abnormalSnapshot));
         when(metadataRepository.findAll()).thenReturn(Flux.empty());
 
+        MarketDailyQuote quote = new MarketDailyQuote();
+        quote.setTicker("0050");
+        quote.setClosePrice(new BigDecimal("190.0"));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("0050")).thenReturn(Mono.just(quote));
+
         StepVerifier.create(gatekeeperService.checkCompleteness())
                 .assertNext(report -> {
                     assertThat(report.isPassed()).isFalse();
@@ -109,11 +114,12 @@ class DataCompletenessGatekeeperServiceTest {
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(10), "臺灣50",
-                new BigDecimal("0.0043"), new BigDecimal("400000000000"),
+                new BigDecimal("400000000000"),
                 CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("0050")).thenReturn(Mono.empty()); // Missing quote
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("0050")).thenReturn(Mono.empty()); // Missing 0050
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Mono.empty()); // Missing fallback ^TWII
 
         StepVerifier.create(gatekeeperService.checkCompleteness())
                 .assertNext(report -> {

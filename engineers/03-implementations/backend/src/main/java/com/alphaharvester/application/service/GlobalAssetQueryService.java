@@ -59,7 +59,7 @@ public class GlobalAssetQueryService {
 
         ExampleMatcher matcher = ExampleMatcher.matchingAll()
                 .withIgnoreNullValues()
-                .withIgnorePaths("version", "totalExpenseRatio", "fundSizeTwd");
+                .withIgnorePaths("version", "fundSizeTwd");
 
         return metadataRepository.findAll(Example.of(probe, matcher));
     }
@@ -146,7 +146,7 @@ public class GlobalAssetQueryService {
 
         ExampleMatcher matcher = ExampleMatcher.matchingAll()
                 .withIgnoreNullValues()
-                .withIgnorePaths("compositeScore", "totalExpenseRatio", "fundSizeTwd", "classRank");
+                .withIgnorePaths("compositeScore", "fundSizeTwd", "classRank");
 
         return scoreRepository.findAll(Example.of(probe, matcher));
     }

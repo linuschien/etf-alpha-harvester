@@ -33,12 +33,13 @@ class CompositeExternalMarketDataAdapterTest {
     @Mock private TpexMarketDataClient tpexClient;
     @Mock private YahooFinanceClient yahooFinanceClient;
     @Mock private CnnSentimentClient cnnSentimentClient;
+    @Mock private FredPublicMarketDataClient fredClient;
 
     private CompositeExternalMarketDataAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new CompositeExternalMarketDataAdapter(twseClient, tpexClient, yahooFinanceClient, cnnSentimentClient);
+        adapter = new CompositeExternalMarketDataAdapter(twseClient, tpexClient, yahooFinanceClient, cnnSentimentClient, fredClient);
     }
 
     @Test
@@ -46,7 +47,7 @@ class CompositeExternalMarketDataAdapterTest {
     void shouldDelegateFetchEtfMasterUniverse() {
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", LocalDateTime.now(),
-                "臺灣50指數", new BigDecimal("0.0035"),
+                "臺灣50指數",
                 new BigDecimal("420000000000"), CandidateAssetClass.CORE,
                 DistributionFrequency.SEMI_ANNUAL, 1, LocalDateTime.now(), LocalDateTime.now(), null
         );
@@ -122,16 +123,16 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
-    @DisplayName("Should delegate fetchLatestMacroYield to YahooFinanceClient")
+    @DisplayName("Should delegate fetchLatestMacroYield to FredPublicMarketDataClient")
     void shouldDelegateFetchLatestMacroYield() {
         MacroYieldSnapshot snap = new MacroYieldSnapshot(
-                UUID.randomUUID(), LocalDateTime.now(), new BigDecimal("5.25"),
-                new BigDecimal("4.28"), new BigDecimal("4.58"), new BigDecimal("-0.15")
+                UUID.randomUUID(), LocalDateTime.now(), new BigDecimal("5.69"),
+                new BigDecimal("4.96"), new BigDecimal("5.33"), new BigDecimal("0.25")
         );
-        when(yahooFinanceClient.fetchMacroYields()).thenReturn(Mono.just(snap));
+        when(fredClient.fetchLatestMacroYield()).thenReturn(Mono.just(snap));
 
         StepVerifier.create(adapter.fetchLatestMacroYield())
-                .assertNext(res -> assertThat(res.getUs10YearTreasuryYield()).isEqualTo(new BigDecimal("4.28")))
+                .assertNext(res -> assertThat(res.getUsCorporateBondEffectiveYield()).isEqualTo(new BigDecimal("5.69")))
                 .verifyComplete();
     }
 

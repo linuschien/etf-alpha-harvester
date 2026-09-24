@@ -52,7 +52,6 @@ class RepositoryIntegrationTest {
                 "元大台灣卓越50",
                 now,
                 "臺灣50指數",
-                new BigDecimal("0.0043"),
                 new BigDecimal("420000000000.00"),
                 CandidateAssetClass.CORE,
                 DistributionFrequency.SEMI_ANNUAL,

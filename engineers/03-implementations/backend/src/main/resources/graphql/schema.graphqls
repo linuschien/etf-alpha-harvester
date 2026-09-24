@@ -45,7 +45,6 @@ type GlobalAssetMetadata {
     name: String!
     listingDate: String!
     underlyingIndex: String
-    totalExpenseRatio: Float
     fundSizeTwd: Float
     assetClass: CandidateAssetClass!
     distributionFrequency: DistributionFrequency
@@ -98,7 +97,6 @@ type GlobalAssetScore {
     assetClass: CandidateAssetClass!
     classRank: Int!
     compositeScore: Float!
-    totalExpenseRatio: Float
     fundSizeTwd: Float
 }
 
