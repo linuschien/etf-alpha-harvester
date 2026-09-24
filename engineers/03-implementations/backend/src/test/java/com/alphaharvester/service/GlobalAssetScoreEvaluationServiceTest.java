@@ -264,7 +264,7 @@ class GlobalAssetScoreEvaluationServiceTest {
             twiiQuotes.add(new MarketDailyQuote(null, null, null, "^TWII", d, null, null, null, BigDecimal.valueOf(pTwii), null, null, null, null));
             highCorrQuotes1.add(new MarketDailyQuote(null, null, null, "0050", d, null, null, null, BigDecimal.valueOf(p0050), null, null, null, null));
             highCorrQuotes2.add(new MarketDailyQuote(null, null, null, "006208", d, null, null, null, BigDecimal.valueOf(p006208), null, null, null, null));
-            lowCorrQuotes.add(new MarketDailyQuote(null, null, null, "00757", d, null, null, null, BigDecimal.valueOf(p00757), null, null, null, null));
+            lowCorrQuotes.add(new MarketDailyQuote(null, null, null, "00757", d, null, null, null, BigDecimal.valueOf(p00757), 1_000_000L, BigDecimal.valueOf(50_000_000), null, null));
 
             double factor = (i % 2 == 0) ? 1.01 : 0.995;
             pTwii *= factor;
@@ -349,13 +349,13 @@ class GlobalAssetScoreEvaluationServiceTest {
         );
 
         List<MarketDailyQuote> upQuotes = List.of(
-                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("25.0"), null, null, null, null),
-                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), null, null, null, null)
+                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("25.0"), 1_000_000L, new BigDecimal("25000000"), null, null),
+                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), 1_000_000L, new BigDecimal("20000000"), null, null)
         ); // +25% return
 
         List<MarketDailyQuote> downQuotes = List.of(
-                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("18.0"), null, null, null, null),
-                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), null, null, null, null)
+                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("18.0"), 1_000_000L, new BigDecimal("25000000"), null, null),
+                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), 1_000_000L, new BigDecimal("20000000"), null, null)
         ); // -10% return
 
         GlobalAssetScore scoreRank1 = service.evaluateAsset(asset, now, upQuotes, 0.5, 1);
@@ -378,12 +378,36 @@ class GlobalAssetScoreEvaluationServiceTest {
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
+        List<MarketDailyQuote> quotes = List.of(
+                new MarketDailyQuote(null, null, null, "00757", now, null, null, null,
+                        new BigDecimal("80.0"), 1_000_000L, new BigDecimal("80000000"), null, null),
+                new MarketDailyQuote(null, null, null, "00757", now.minusDays(1), null, null, null,
+                        new BigDecimal("78.0"), 1_000_000L, new BigDecimal("78000000"), null, null)
+        );
+
         // Low correlation R^2 = 0.16 (rho = 0.40) vs High correlation R^2 = 0.81 (rho = 0.90)
-        GlobalAssetScore lowCorrScore = service.evaluateAsset(asset, now, null, 0.16, 5);
-        GlobalAssetScore highCorrScore = service.evaluateAsset(asset, now, null, 0.81, 5);
+        GlobalAssetScore lowCorrScore = service.evaluateAsset(asset, now, quotes, 0.16, 5);
+        GlobalAssetScore highCorrScore = service.evaluateAsset(asset, now, quotes, 0.81, 5);
 
         // Lower correlation means higher diversification score (1 - rho)*100
         assertThat(lowCorrScore.getCompositeScore()).isGreaterThan(highCorrScore.getCompositeScore());
+    }
+
+    @Test
+    @DisplayName("Should disqualify Satellite asset when quotes are missing (null or empty)")
+    void shouldDisqualifySatelliteAssetWhenQuotesAreMissing() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
+                new BigDecimal("0.0060"), new BigDecimal("35000000000"),
+                CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        GlobalAssetScore scoreNullQuotes = service.evaluateAsset(asset, now, null, 0.16, 5);
+        GlobalAssetScore scoreEmptyQuotes = service.evaluateAsset(asset, now, List.of(), 0.16, 5);
+
+        assertThat(scoreNullQuotes).isNull();
+        assertThat(scoreEmptyQuotes).isNull();
     }
 
     @Test

@@ -387,7 +387,10 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             if (aum < 2_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 20 億 TWD 衛星規模門檻";
-            } else if (quotes != null && !quotes.isEmpty()) {
+            } else if (quotes == null || quotes.isEmpty()) {
+                isQualified = false;
+                reason = "無市場成交報價資料，無法驗證 2,000 萬 TWD 衛星流動性門檻";
+            } else {
                 double totalTurnover = 0.0;
                 int quoteCount = 0;
                 for (MarketDailyQuote q : quotes) {
@@ -397,7 +400,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     }
                 }
                 double avgTurnover = quoteCount > 0 ? totalTurnover / quoteCount : 0.0;
-                if (quoteCount > 0 && avgTurnover < 20_000_000.0) {
+                if (quoteCount == 0 || avgTurnover < 20_000_000.0) {
                     isQualified = false;
                     reason = "滾動日均成交金額未達 2,000 萬 TWD 衛星流動性門檻 (當前: " + String.format("%.2f 萬", avgTurnover / 10000.0) + ")";
                 }
