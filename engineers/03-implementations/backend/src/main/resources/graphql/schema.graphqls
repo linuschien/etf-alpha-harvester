@@ -1,0 +1,255 @@
+# AlphaHarvester Global Market Intelligence GraphQL Schema
+
+enum CandidateAssetClass {
+    CORE
+    SATELLITE
+    DEFENSIVE
+}
+
+enum DistributionFrequency {
+    MONTHLY
+    QUARTERLY
+    SEMI_ANNUAL
+    ANNUAL
+    NONE
+}
+
+enum CorporateActionType {
+    SPLIT
+    REVERSE_SPLIT
+}
+
+enum TaxTag {
+    OVERSEAS_76W
+    DOMESTIC_54C
+}
+
+enum MacroState {
+    HIGH_YIELD_ACCUMULATION
+    NORMAL_BALANCED
+    LOW_YIELD_HARVEST
+}
+
+enum CrisisLevel {
+    NORMAL
+    CORRECTION
+    CRASH
+    LIQUIDITY_CRISIS
+}
+
+type GlobalAssetMetadata {
+    id: ID!
+    ticker: String!
+    name: String!
+    listingDate: String!
+    underlyingIndex: String
+    issuer: String
+    totalExpenseRatio: Float
+    fundSizeTwd: Float
+    assetClass: CandidateAssetClass!
+    distributionFrequency: DistributionFrequency
+    version: Int!
+    createdAt: String!
+    updatedAt: String!
+}
+
+type BenchmarkIndex {
+    id: ID!
+    ticker: String!
+    name: String!
+    region: String
+    description: String
+    version: Int!
+    createdAt: String!
+    updatedAt: String!
+}
+
+type MarketDailyQuote {
+    id: ID!
+    assetId: ID
+    benchmarkId: ID
+    ticker: String!
+    tradeDate: String!
+    openPrice: Float
+    highPrice: Float
+    lowPrice: Float
+    closePrice: Float!
+    volumeShares: Int
+    tradeValueTwd: Float
+    netAssetValue: Float
+    discountPremiumPercentage: Float
+}
+
+type MacroYieldSnapshot {
+    id: ID!
+    recordDate: String!
+    usCorporateBondEffectiveYield: Float!
+    us10YearTreasuryYield: Float!
+    us20YearTreasuryYield: Float!
+    yieldSpread10yMinus2y: Float!
+}
+
+type GlobalAssetScore {
+    id: ID!
+    assetId: ID!
+    ticker: String!
+    evaluationDate: String!
+    assetClass: CandidateAssetClass!
+    classRank: Int!
+    compositeScore: Float!
+    totalExpenseRatio: Float
+    fundSizeTwd: Float
+    isQualified: Boolean!
+    disqualificationReason: String
+}
+
+type DcaPopularityRank {
+    id: ID!
+    assetId: ID!
+    ticker: String!
+    rankingYear: Int!
+    rankingMonth: Int!
+    rankPosition: Int!
+    regularInvestorCount: Int!
+}
+
+type DividendAnnouncement {
+    id: ID!
+    assetId: ID!
+    ticker: String!
+    exDate: String!
+    paymentDate: String!
+    dividendPerShare: Float!
+    taxTag: TaxTag!
+}
+
+type CorporateAction {
+    id: ID!
+    assetId: ID!
+    ticker: String!
+    actionType: CorporateActionType!
+    effectiveDate: String!
+    splitToShares: Int!
+    splitFromShares: Int!
+}
+
+type DipBuyOpportunityScore {
+    ticker: String!
+    compositeScore: Float!
+    starRating: String!
+    winRateEstimate: String!
+    recommendation: String!
+    bollingerScore: Float!
+    fibonacciScore: Float!
+    maSupportScore: Float!
+    panicScore: Float!
+}
+
+type MacroRegimeAssessment {
+    macroState: MacroState!
+    recommendedEquityRatio: Float!
+    recommendedBondRatio: Float!
+    usCorporateBondYield: Float!
+    assessmentSummary: String!
+    crisisLevel: CrisisLevel!
+}
+
+# ----------------------------------------------------
+# Filter Inputs
+# ----------------------------------------------------
+
+input GlobalAssetFilterInput {
+    ticker: String
+    assetClass: CandidateAssetClass
+    distributionFrequency: DistributionFrequency
+}
+
+input MarketDailyQuoteFilterInput {
+    ticker: String
+    startDate: String
+    endDate: String
+}
+
+input MacroYieldFilterInput {
+    startDate: String
+    endDate: String
+}
+
+input GlobalAssetScoreFilterInput {
+    assetClass: CandidateAssetClass
+    evaluationDate: String
+    isQualified: Boolean
+}
+
+input DcaPopularityFilterInput {
+    rankingYear: Int
+    rankingMonth: Int
+}
+
+input DividendAnnouncementFilterInput {
+    ticker: String
+    startDate: String
+    endDate: String
+}
+
+input CorporateActionFilterInput {
+    ticker: String
+    actionType: CorporateActionType
+}
+
+# ----------------------------------------------------
+# Root Query
+# ----------------------------------------------------
+
+type Query {
+    # GlobalAssetMetadata Queries
+    listGlobalAssets(filter: GlobalAssetFilterInput): [GlobalAssetMetadata!]!
+    getGlobalAssetById(id: ID!): GlobalAssetMetadata
+    getGlobalAssetByTicker(ticker: String!): GlobalAssetMetadata
+
+    # BenchmarkIndex Queries
+    listBenchmarkIndices: [BenchmarkIndex!]!
+    getBenchmarkIndexById(id: ID!): BenchmarkIndex
+    getBenchmarkIndexByTicker(ticker: String!): BenchmarkIndex
+
+    # MarketDailyQuote Queries
+    listMarketDailyQuotes(filter: MarketDailyQuoteFilterInput): [MarketDailyQuote!]!
+    getMarketDailyQuoteById(id: ID!): MarketDailyQuote
+    getQuoteTimeSeries(ticker: String!, startDate: String!, endDate: String!): [MarketDailyQuote!]!
+    listQuotesByAssetId(assetId: ID!): [MarketDailyQuote!]!
+    listQuotesByBenchmarkId(benchmarkId: ID!): [MarketDailyQuote!]!
+
+    # MacroYieldSnapshot Queries
+    listMacroYieldSnapshots(filter: MacroYieldFilterInput): [MacroYieldSnapshot!]!
+    getMacroYieldSnapshotById(id: ID!): MacroYieldSnapshot
+    getLatestMacroYieldSnapshot: MacroYieldSnapshot
+
+    # GlobalAssetScore Queries
+    listGlobalAssetScores(filter: GlobalAssetScoreFilterInput): [GlobalAssetScore!]!
+    getGlobalAssetScoreById(id: ID!): GlobalAssetScore
+    getScoresByAssetClass(assetClass: CandidateAssetClass!, evaluationDate: String!): [GlobalAssetScore!]!
+    getScoreByTicker(ticker: String!, evaluationDate: String!): GlobalAssetScore
+
+    # DcaPopularityRank Queries
+    listDcaPopularityRanks(filter: DcaPopularityFilterInput): [DcaPopularityRank!]!
+    getDcaPopularityRankById(id: ID!): DcaPopularityRank
+    getTop20DcaRanks(year: Int!, month: Int!): [DcaPopularityRank!]!
+    listDcaRanksByAssetId(assetId: ID!): [DcaPopularityRank!]!
+
+    # DividendAnnouncement Queries
+    listDividendAnnouncements(filter: DividendAnnouncementFilterInput): [DividendAnnouncement!]!
+    getDividendAnnouncementById(id: ID!): DividendAnnouncement
+    getUpcomingDividends(startDate: String!, endDate: String!): [DividendAnnouncement!]!
+    listDividendsByAssetId(assetId: ID!): [DividendAnnouncement!]!
+
+    # CorporateAction Queries
+    listCorporateActions(filter: CorporateActionFilterInput): [CorporateAction!]!
+    getCorporateActionById(id: ID!): CorporateAction
+    getEffectiveSplits(ticker: String!, effectiveDate: String!): [CorporateAction!]!
+    listCorporateActionsByAssetId(assetId: ID!): [CorporateAction!]!
+
+    # Pure Quantitative Function Queries
+    getDipBuyOpportunity(ticker: String!): DipBuyOpportunityScore!
+    getMacroRegime: MacroRegimeAssessment!
+}
+

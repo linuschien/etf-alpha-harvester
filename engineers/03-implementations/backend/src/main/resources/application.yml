@@ -1,0 +1,36 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: etf-alpha-harvester-backend
+
+  r2dbc:
+    url: r2dbc:h2:mem:///alphaharvester;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    pool:
+      enabled: true
+      max-size: 10
+      initial-size: 2
+
+  flyway:
+    enabled: true
+    url: jdbc:h2:mem:alphaharvester;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    user: sa
+    password: ""
+    locations: classpath:db/migration
+
+  graphql:
+    path: /graphql
+    graphiql:
+      enabled: true
+      path: /graphiql
+
+logging:
+  level:
+    root: INFO
+    com.alphaharvester: DEBUG
+    org.springframework.r2dbc: INFO
+    org.springframework.graphql: INFO
+
