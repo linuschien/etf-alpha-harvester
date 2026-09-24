@@ -4,6 +4,7 @@ import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.dto.MarketDataSyncRequest;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
+import com.alphaharvester.application.service.DataCompletenessGatekeeperService;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
 import com.alphaharvester.application.service.MarketDataSyncService;
 import com.alphaharvester.domain.entity.*;
@@ -48,17 +49,24 @@ class MarketDataSyncServiceTest {
     @Mock private CorporateActionRepository corporateActionRepository;
     @Mock private GlobalAssetScoreEvaluationService scoreEvaluationService;
     @Mock private DataFeedSyncWatermarkRepository watermarkRepository;
+    @Mock private DataCompletenessGatekeeperService gatekeeperService;
 
     private MarketDataSyncService syncService;
 
     @BeforeEach
     void setUp() {
+        when(gatekeeperService.checkCompleteness()).thenReturn(
+                Mono.just(new com.alphaharvester.application.dto.GatekeeperReport(
+                        "PASS", "OK", LocalDateTime.now(), 1, true, java.util.List.of()
+                ))
+        );
         syncService = new MarketDataSyncService(
                 externalMarketDataPort,
                 metadataRepository, benchmarkRepository, quoteRepository,
                 macroYieldRepository, dcaRankRepository, dividendRepository,
                 corporateActionRepository, scoreEvaluationService,
-                watermarkRepository
+                watermarkRepository,
+                gatekeeperService
         );
         when(watermarkRepository.findByFeedName(anyString())).thenReturn(Mono.empty());
         when(watermarkRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -235,6 +243,28 @@ class MarketDataSyncServiceTest {
                     assertThat(res.syncedRecords().dailyQuotesCount()).isEqualTo(3);
                     assertThat(res.syncedRecords().macroYieldSnapshotsCount()).isEqualTo(1);
                     assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(1);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should HALT pipeline and block downstream evaluation when gatekeeper fails completeness check")
+    void shouldHaltPipelineWhenGatekeeperDetectsIncompleteness() {
+        when(gatekeeperService.checkCompleteness()).thenReturn(
+                Mono.just(new com.alphaharvester.application.dto.GatekeeperReport(
+                        "HALT", "市場數據採集未齊全", LocalDateTime.now(), 0, false, java.util.List.of("未找到最新宏觀殖利率快照")
+                ))
+        );
+        when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.empty());
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.METADATA, true);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("HALT");
+                    assertThat(res.message()).contains("安全暫停");
+                    assertThat(res.gatekeeperReport()).isNotNull();
+                    assertThat(res.gatekeeperReport().isPassed()).isFalse();
                 })
                 .verifyComplete();
     }

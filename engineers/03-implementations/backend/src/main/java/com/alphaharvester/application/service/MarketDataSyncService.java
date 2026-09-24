@@ -10,6 +10,7 @@ import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.model.SyncScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.alphaharvester.domain.entity.DataFeedSyncWatermark;
@@ -44,6 +45,32 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
     private final CorporateActionRepository corporateActionRepository;
     private final GlobalAssetScoreEvaluationService scoreEvaluationService;
     private final DataFeedSyncWatermarkRepository watermarkRepository;
+    private final DataCompletenessGatekeeperService gatekeeperService;
+
+    @Autowired
+    public MarketDataSyncService(ExternalMarketDataPort externalMarketDataPort,
+                                 GlobalAssetMetadataRepository metadataRepository,
+                                 BenchmarkIndexRepository benchmarkRepository,
+                                 MarketDailyQuoteRepository quoteRepository,
+                                 MacroYieldSnapshotRepository macroYieldRepository,
+                                 DcaPopularityRankRepository dcaRankRepository,
+                                 DividendAnnouncementRepository dividendRepository,
+                                 CorporateActionRepository corporateActionRepository,
+                                 GlobalAssetScoreEvaluationService scoreEvaluationService,
+                                 DataFeedSyncWatermarkRepository watermarkRepository,
+                                 DataCompletenessGatekeeperService gatekeeperService) {
+        this.externalMarketDataPort = externalMarketDataPort;
+        this.metadataRepository = metadataRepository;
+        this.benchmarkRepository = benchmarkRepository;
+        this.quoteRepository = quoteRepository;
+        this.macroYieldRepository = macroYieldRepository;
+        this.dcaRankRepository = dcaRankRepository;
+        this.dividendRepository = dividendRepository;
+        this.corporateActionRepository = corporateActionRepository;
+        this.scoreEvaluationService = scoreEvaluationService;
+        this.watermarkRepository = watermarkRepository;
+        this.gatekeeperService = gatekeeperService;
+    }
 
     public MarketDataSyncService(ExternalMarketDataPort externalMarketDataPort,
                                  GlobalAssetMetadataRepository metadataRepository,
@@ -55,16 +82,9 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                  CorporateActionRepository corporateActionRepository,
                                  GlobalAssetScoreEvaluationService scoreEvaluationService,
                                  DataFeedSyncWatermarkRepository watermarkRepository) {
-        this.externalMarketDataPort = externalMarketDataPort;
-        this.metadataRepository = metadataRepository;
-        this.benchmarkRepository = benchmarkRepository;
-        this.quoteRepository = quoteRepository;
-        this.macroYieldRepository = macroYieldRepository;
-        this.dcaRankRepository = dcaRankRepository;
-        this.dividendRepository = dividendRepository;
-        this.corporateActionRepository = corporateActionRepository;
-        this.scoreEvaluationService = scoreEvaluationService;
-        this.watermarkRepository = watermarkRepository;
+        this(externalMarketDataPort, metadataRepository, benchmarkRepository, quoteRepository,
+             macroYieldRepository, dcaRankRepository, dividendRepository, corporateActionRepository,
+             scoreEvaluationService, watermarkRepository, null);
     }
 
     @Override
@@ -76,19 +96,60 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
         return executeSync(scope, now, request.backfillDays())
                 .flatMap(counts -> {
+                    if (gatekeeperService != null) {
+                        return gatekeeperService.checkCompleteness()
+                                .flatMap(report -> {
+                                    if (!report.isPassed()) {
+                                        log.warn("Gatekeeper HALTED pipeline! Violations: {}", report.violations());
+                                        return Mono.just(new MarketDataSyncResponse(
+                                                "HALT",
+                                                "市場數據採集未齊全，量化引擎已安全暫停：" + String.join("; ", report.violations()),
+                                                now.toString(),
+                                                counts,
+                                                report
+                                        ));
+                                    }
+                                    log.info("Gatekeeper PASSED. All data completeness checks cleared.");
+                                    if (Boolean.TRUE.equals(request.evaluateAfterSync())) {
+                                        log.info("Triggering post-sync candidate multi-factor evaluation...");
+                                        return scoreEvaluationService.evaluateGlobalAssetScores()
+                                                .thenReturn(new MarketDataSyncResponse(
+                                                        "SUCCESS",
+                                                        "Market data synchronization and factor evaluation completed successfully.",
+                                                        now.toString(),
+                                                        counts,
+                                                        report
+                                                ));
+                                    }
+                                    return Mono.just(new MarketDataSyncResponse(
+                                            "SUCCESS",
+                                            "Market data synchronization completed successfully.",
+                                            now.toString(),
+                                            counts,
+                                            report
+                                    ));
+                                });
+                    }
+
                     if (Boolean.TRUE.equals(request.evaluateAfterSync())) {
                         log.info("Triggering post-sync candidate multi-factor evaluation...");
                         return scoreEvaluationService.evaluateGlobalAssetScores()
-                                .thenReturn(counts);
+                                .thenReturn(new MarketDataSyncResponse(
+                                        "SUCCESS",
+                                        "Market data synchronization completed successfully.",
+                                        now.toString(),
+                                        counts,
+                                        null
+                                ));
                     }
-                    return Mono.just(counts);
+                    return Mono.just(new MarketDataSyncResponse(
+                            "SUCCESS",
+                            "Market data synchronization completed successfully.",
+                            now.toString(),
+                            counts,
+                            null
+                    ));
                 })
-                .map(counts -> new MarketDataSyncResponse(
-                        "SUCCESS",
-                        "Market data synchronization completed successfully.",
-                        now.toString(),
-                        counts
-                ))
                 .doOnError(e -> log.error("Market data synchronization pipeline failed: {}", e.getMessage(), e));
     }
 

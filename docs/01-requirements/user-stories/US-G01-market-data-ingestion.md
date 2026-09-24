@@ -13,7 +13,7 @@
 **身份**：GCP Cloud Scheduler 外部排程器 (攜帶 OIDC 服務身分憑證)
 
 > **As a** 外部系統排程器 (GCP Cloud Scheduler)，  
-> **I want to** 於每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * 1-5`) 攜帶合法 OIDC Token 發送 HTTP POST 請求至 `/api/v1/jobs/sync-market-data` 喚醒 Cloud Run，自動向臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI 或 Yahoo Finance 拉取監控 ETF 以及全球五大市場基準指數的前一交易日官方定案收盤行情，  
+> **I want to** 於每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * 1-5`) 攜帶合法 OIDC Token 發送 HTTP POST 請求至 `/api/v1/marketData:sync` 喚醒 Cloud Run，自動向臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI 或 Yahoo Finance 拉取監控 ETF 以及全球五大市場基準指數的前一交易日官方定案收盤行情，  
 > **So that** 系統在無伺服器架構（實例冷卻為 0）下仍能穩定準時觸發採集，擁有最新且準確的收盤價、日 K 線與成交量以支援後續市值計算、回歸擬合 ($R^2$) 與跨週期波動度分析。
 
 ### 驗收條件 (Acceptance Criteria)

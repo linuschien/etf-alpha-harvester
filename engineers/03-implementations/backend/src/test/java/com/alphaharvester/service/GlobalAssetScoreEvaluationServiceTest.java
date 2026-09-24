@@ -1,5 +1,6 @@
 package com.alphaharvester.service;
 
+import com.alphaharvester.adapter.out.persistence.DcaPopularityRankRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
@@ -43,11 +44,15 @@ class GlobalAssetScoreEvaluationServiceTest {
     @Mock
     private MarketDailyQuoteRepository quoteRepository;
 
+    @Mock
+    private DcaPopularityRankRepository dcaRankRepository;
+
     private GlobalAssetScoreEvaluationService service;
 
     @BeforeEach
     void setUp() {
-        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository);
+        lenient().when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
+        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository);
     }
 
     @Test
@@ -267,5 +272,77 @@ class GlobalAssetScoreEvaluationServiceTest {
                     assertThat(res.defensiveCount()).isEqualTo(1); // 00679B remains DEFENSIVE
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should promote asset matching S&P500 benchmark to CORE")
+    void shouldPromoteAssetMatchingSP500ToCore() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // 00646 tracking S&P500
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00646", "元大S&P500", now.minusYears(8), "標普500",
+                new BigDecimal("0.0035"), new BigDecimal("35000000000"),
+                CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        List<MarketDailyQuote> gspcQuotes = new ArrayList<>();
+        List<MarketDailyQuote> etfQuotes = new ArrayList<>();
+        double pGspc = 5000.0;
+        double pEtf = 50.0;
+        for (int i = 0; i < 20; i++) {
+            LocalDateTime d = now.minusDays(20 - i);
+            gspcQuotes.add(new MarketDailyQuote(null, null, null, "^GSPC", d, null, null, null, BigDecimal.valueOf(pGspc), null, null, null, null));
+            etfQuotes.add(new MarketDailyQuote(null, null, null, "00646", d, null, null, null, BigDecimal.valueOf(pEtf), null, null, null, null));
+            double factor = (i % 2 == 0) ? 1.01 : 0.995;
+            pGspc *= factor;
+            pEtf *= factor;
+        }
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.empty());
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^GSPC")).thenReturn(Flux.fromIterable(gspcQuotes));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^NDX")).thenReturn(Flux.empty());
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("00646")).thenReturn(Flux.fromIterable(etfQuotes));
+
+        when(metadataRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
+        when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
+
+        StepVerifier.create(service.evaluateGlobalAssetScores())
+                .assertNext(res -> {
+                    assertThat(res.coreCount()).isEqualTo(1); // Promoted to CORE via ^GSPC match
+                    assertThat(res.satelliteCount()).isEqualTo(0);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should evaluate linear scores for DCA rank and momentum")
+    void shouldEvaluateLinearScoresForDcaRankAndMom() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00878", "國泰永續高股息", now.minusYears(4), "MSCI臺灣ESG",
+                new BigDecimal("0.0028"), new BigDecimal("300000000000"),
+                CandidateAssetClass.SATELLITE, DistributionFrequency.QUARTERLY, 1, now, now, null
+        );
+
+        List<MarketDailyQuote> upQuotes = List.of(
+                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("25.0"), null, null, null, null),
+                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), null, null, null, null)
+        ); // +25% return
+
+        List<MarketDailyQuote> downQuotes = List.of(
+                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("18.0"), null, null, null, null),
+                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), null, null, null, null)
+        ); // -10% return
+
+        GlobalAssetScore scoreRank1 = service.evaluateAsset(asset, now, upQuotes, 0.5, 1);
+        GlobalAssetScore scoreRank20 = service.evaluateAsset(asset, now, upQuotes, 0.5, 20);
+        GlobalAssetScore scoreUnranked = service.evaluateAsset(asset, now, upQuotes, 0.5, null);
+        GlobalAssetScore scoreDown = service.evaluateAsset(asset, now, downQuotes, 0.5, 1);
+
+        assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreRank20.getCompositeScore());
+        assertThat(scoreRank20.getCompositeScore()).isGreaterThan(scoreUnranked.getCompositeScore());
+        assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreDown.getCompositeScore());
     }
 }

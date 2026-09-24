@@ -134,7 +134,7 @@
 
 ### 3.1 模組 G-01：市場數據與情報基石 (Market Data & Intelligence)
 
-本模組為整個系統的客觀基石。由於 Cloud Run 為無狀態無伺服器環境，實例可能縮容至 0，本模組之日常資料採集嚴格由 **GCP Cloud Scheduler 外部排程器** 定時以 OIDC Token 觸發受保護之 HTTP 端點（POST `/api/v1/jobs/sync-market-data`）喚醒執行，消除容器內部定時器因實例冷卻休眠或多實例並行造成的競爭條件（Race Condition）。
+本模組為整個系統的客觀基石。由於 Cloud Run 為無狀態無伺服器環境，實例可能縮容至 0，本模組之日常資料採集嚴格由 **GCP Cloud Scheduler 外部排程器** 定時以 OIDC Token 觸發受保護之 HTTP 端點（POST `/api/v1/marketData:sync`）喚醒執行，消除容器內部定時器因實例冷卻休眠或多實例並行造成的競爭條件（Race Condition）。
 
 #### 1. 資料源整合與 9 大全球基準情報網
 每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * *`) 由 Cloud Scheduler 觸發統一數據採集作業，自動從臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI、Yahoo Finance 與 FRED 拉取前一交易日全球收盤行情，**強制同步採集 9 大全球市場基準與情緒雷達指標**：
@@ -230,7 +230,7 @@
  │                                 宏觀殖利率環境狀態機 (記憶體純函數)                     │
  ├─────────────────────────┬───────────────────────────────┬───────────────────────────────┤
  │ 【狀態一：高利蓄水期】  │ 【狀態二：常態平衡期】        │ 【狀態三：低利收割期】        │
- │ (公司債 YTM > 5.0%)     │ (4.0% ≤ 公司債 YTM ≤ 5.0%)    │ (公司債 YTM < 3.5%)           │
+ │ (公司債 YTM > 5.0%)     │ (3.5% ≤ 公司債 YTM ≤ 5.0%)    │ (公司債 YTM < 3.5%)           │
  ├─────────────────────────┼───────────────────────────────┼───────────────────────────────┤
  │ • 債券維持積極定期定額  │ • 債券停止續扣，躺平領息      │ • 債券觸發【停利不續扣】      │
  │ • 衛星利潤 30% 分流注水 │ • 債息全額回填股票核心        │ • 分批出清債券，賺取價差      │
@@ -424,7 +424,7 @@ PersonalPosition:
   * 系統採取「**排程邏輯與運算執行完全解耦**」原則：容器內部不維護常態性時間定時器，改由 **GCP Cloud Scheduler** 承擔外部統一排程器角色。
 * **觸發機制與排程配置**：
   * 頻率：每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * 1-5`)。
-  * 目標端點：`POST https://<CLOUD_RUN_SERVICE_URL>/api/v1/jobs/sync-market-data`。
+  * 目標端點：`POST https://<CLOUD_RUN_SERVICE_URL>/api/v1/marketData:sync`。
   * 任務職責：喚醒 Cloud Run 單一實例，依序執行 G-01 市場資料拉取、守門員檢核、G-02 多因子評估與 G-03 宏觀利率狀態機更新。
 
 #### 5.1.3 雙軌身分認證閘門架構 (Dual-Ingress Authentication: IAP & OIDC Coexistence)
@@ -456,7 +456,7 @@ PersonalPosition:
 │          ▲                                            檢查 roles/iap.httpsResourceAccessor │
 │          │ 攜帶 OIDC ID Token (由專屬 Service Account 簽署)                            │
 │  【自動排程通道：GCP Cloud Scheduler】                                                 │
-│   每日定時觸發 POST /api/v1/jobs/sync-market-data                                      │
+│   每日定時觸發 POST /api/v1/marketData:sync                                            │
 │                                                                                        │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -466,7 +466,7 @@ PersonalPosition:
   2. 認證流程：由 Google Cloud IAP 自動攔截未登入連線，導向 Google OAuth 登入介面，強制檢查使用者是否具備 `roles/iap.httpsResourceAccessor` 存取授權。
   3. 帳本隔離：IAP 驗證放行後，自動向後端注入 `X-Goog-Authenticated-User-Email` 與 `X-Goog-IAP-JWT-Assertion` Header。後端個人投組層（P-01 ~ P-04）以此 Email 作為唯一租戶 Key，達成多租戶資產與庫存的物理級數據隔離。
 * **軌道二：自動化排程機器人通道 (Cloud Scheduler Service Account Channel)**：
-  1. 存取點：Cloud Scheduler HTTP Target，指向 `/api/v1/jobs/sync-market-data`。
+  1. 存取點：Cloud Scheduler HTTP Target，指向 `/api/v1/marketData:sync`。
   2. 專屬身分：指派專用 Service Account（如 `alpha-harvester-scheduler@${PROJECT_ID}.iam.gserviceaccount.com`）。
   3. **Audience 規格規範（防 401 關鍵約束）**：
      * 啟動 IAP 後，Cloud Scheduler 的 `--oidc-token-audience` **必須嚴格填入該 IAP 背後綁定的「OAuth 2.0 Client ID」**（格式為 `*.apps.googleusercontent.com`），而非 Cloud Run 服務網址！

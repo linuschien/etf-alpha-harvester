@@ -4,6 +4,7 @@ import com.alphaharvester.adapter.out.persistence.MacroYieldSnapshotRepository;
 import com.alphaharvester.application.dto.MacroRegimeAssessment;
 import com.alphaharvester.application.service.MacroYieldEvaluationService;
 import com.alphaharvester.domain.entity.MacroYieldSnapshot;
+import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CrisisLevel;
 import com.alphaharvester.domain.model.MacroState;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,7 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -135,6 +137,69 @@ class MacroYieldEvaluationServiceTest {
                     assertThat(assessment.usCorporateBondYield()).isEqualTo(5.30);
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should detect CRISIS_LEVEL_2 when drawdown <= -30%")
+    void shouldDetectCrisisLevel2OnSevereDrawdown() {
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
+                null, LocalDateTime.now(), new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
+        );
+        MarketDailyQuote highQuote = new MarketDailyQuote();
+        highQuote.setClosePrice(new BigDecimal("100.0"));
+        MarketDailyQuote currentQuote = new MarketDailyQuote();
+        currentQuote.setClosePrice(new BigDecimal("68.0")); // -32% drawdown
+
+        MacroRegimeAssessment assessment = macroYieldEvaluationService.calculateAssessment(
+                snapshot, List.of(currentQuote, highQuote), null
+        );
+
+        assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.CRISIS_LEVEL_2);
+        assertThat(assessment.assessmentSummary()).contains("CRISIS_LEVEL_2");
+    }
+
+    @Test
+    @DisplayName("Should detect CRISIS_LEVEL_1 when drawdown <= -15% and VIX >= 30")
+    void shouldDetectCrisisLevel1OnPanicAndDrawdown() {
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
+                null, LocalDateTime.now(), new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
+        );
+        MarketDailyQuote highQuote = new MarketDailyQuote();
+        highQuote.setClosePrice(new BigDecimal("100.0"));
+        MarketDailyQuote currentQuote = new MarketDailyQuote();
+        currentQuote.setClosePrice(new BigDecimal("82.0")); // -18% drawdown
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote();
+        vixQuote.setClosePrice(new BigDecimal("32.5")); // VIX >= 30
+
+        MacroRegimeAssessment assessment = macroYieldEvaluationService.calculateAssessment(
+                snapshot, List.of(currentQuote, highQuote), vixQuote
+        );
+
+        assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.CRISIS_LEVEL_1);
+        assertThat(assessment.assessmentSummary()).contains("CRISIS_LEVEL_1");
+    }
+
+    @Test
+    @DisplayName("Should detect CORRECTION when drawdown <= -10% but not meeting Level 1")
+    void shouldDetectCorrectionOnModerateDrawdown() {
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
+                null, LocalDateTime.now(), new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
+        );
+        MarketDailyQuote highQuote = new MarketDailyQuote();
+        highQuote.setClosePrice(new BigDecimal("100.0"));
+        MarketDailyQuote currentQuote = new MarketDailyQuote();
+        currentQuote.setClosePrice(new BigDecimal("88.0")); // -12% drawdown
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote();
+        vixQuote.setClosePrice(new BigDecimal("22.0")); // VIX < 30
+
+        MacroRegimeAssessment assessment = macroYieldEvaluationService.calculateAssessment(
+                snapshot, List.of(currentQuote, highQuote), vixQuote
+        );
+
+        assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.CORRECTION);
+        assertThat(assessment.assessmentSummary()).contains("CORRECTION");
     }
 
     @Test

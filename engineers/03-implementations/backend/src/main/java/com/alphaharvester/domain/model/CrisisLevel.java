@@ -4,6 +4,8 @@ public enum CrisisLevel {
     NORMAL,
     CORRECTION,
     CRASH,
-    LIQUIDITY_CRISIS
+    LIQUIDITY_CRISIS,
+    CRISIS_LEVEL_1,
+    CRISIS_LEVEL_2
 }
 

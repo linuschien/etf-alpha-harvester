@@ -1,16 +1,19 @@
 package com.alphaharvester.application.service;
 
+import com.alphaharvester.adapter.out.persistence.DcaPopularityRankRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.port.in.GlobalAssetScoreEvaluationUseCase;
+import com.alphaharvester.domain.entity.DcaPopularityRank;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -32,13 +35,23 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     private final GlobalAssetMetadataRepository metadataRepository;
     private final GlobalAssetScoreRepository scoreRepository;
     private final MarketDailyQuoteRepository quoteRepository;
+    private final DcaPopularityRankRepository dcaRankRepository;
+
+    @Autowired
+    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
+                                             GlobalAssetScoreRepository scoreRepository,
+                                             MarketDailyQuoteRepository quoteRepository,
+                                             @Autowired(required = false) DcaPopularityRankRepository dcaRankRepository) {
+        this.metadataRepository = metadataRepository;
+        this.scoreRepository = scoreRepository;
+        this.quoteRepository = quoteRepository;
+        this.dcaRankRepository = dcaRankRepository;
+    }
 
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
                                              GlobalAssetScoreRepository scoreRepository,
                                              MarketDailyQuoteRepository quoteRepository) {
-        this.metadataRepository = metadataRepository;
-        this.scoreRepository = scoreRepository;
-        this.quoteRepository = quoteRepository;
+        this(metadataRepository, scoreRepository, quoteRepository, null);
     }
 
     @Override
@@ -60,9 +73,12 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                         ));
                     }
 
-                    return prefetchBenchmarkQuotes()
-                            .flatMap(benchmarkMap -> dynamicallyClassifyAssets(assets, benchmarkMap, evaluationDate))
-                            .flatMap(classifiedAssets -> scoreAndRankAssets(classifiedAssets, evaluationDate));
+                    return Mono.zip(prefetchBenchmarkQuotes(), prefetchDcaRanks())
+                            .flatMap(tuple -> {
+                                Map<String, List<MarketDailyQuote>> benchmarkMap = tuple.getT1();
+                                Map<String, Integer> dcaRankMap = tuple.getT2();
+                                return dynamicallyClassifyAndScore(assets, benchmarkMap, dcaRankMap, evaluationDate);
+                            });
                 })
                 .doOnError(e -> log.error("Failed during candidate multi-factor evaluation: {}", e.getMessage(), e));
     }
@@ -76,50 +92,126 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue);
     }
 
-    private Mono<List<GlobalAssetMetadata>> dynamicallyClassifyAssets(
+    private Mono<Map<String, Integer>> prefetchDcaRanks() {
+        if (dcaRankRepository == null) {
+            return Mono.just(Collections.emptyMap());
+        }
+        return dcaRankRepository.findAll()
+                .collectList()
+                .map(list -> {
+                    Map<String, Integer> map = new HashMap<>();
+                    for (DcaPopularityRank rank : list) {
+                        if (rank.getTicker() != null && rank.getRankPosition() != null) {
+                            map.putIfAbsent(rank.getTicker(), rank.getRankPosition());
+                        }
+                    }
+                    return map;
+                })
+                .defaultIfEmpty(Collections.emptyMap());
+    }
+
+    private Mono<GlobalAssetScoreEvaluationResponse> dynamicallyClassifyAndScore(
             List<GlobalAssetMetadata> assets,
             Map<String, List<MarketDailyQuote>> benchmarkMap,
+            Map<String, Integer> dcaRankMap,
             LocalDateTime evaluationDate) {
 
         List<GlobalAssetMetadata> changedAssets = Collections.synchronizedList(new ArrayList<>());
+        List<GlobalAssetScore> allScores = Collections.synchronizedList(new ArrayList<>());
 
         return Flux.fromIterable(assets)
                 .flatMap(asset -> {
-                    if (asset.getAssetClass() == CandidateAssetClass.DEFENSIVE) {
-                        return Mono.just(asset);
+                    Flux<MarketDailyQuote> quotesFlux = (quoteRepository != null)
+                            ? quoteRepository.findByTickerOrderByTradeDateDesc(asset.getTicker())
+                            : null;
+                    if (quotesFlux == null) {
+                        quotesFlux = Flux.empty();
                     }
-
-                    String bmTicker = resolveBenchmarkTicker(asset);
-                    List<MarketDailyQuote> bmQuotes = benchmarkMap.getOrDefault(bmTicker, List.of());
-
-                    return quoteRepository.findByTickerOrderByTradeDateDesc(asset.getTicker())
-                            .take(31)
+                    return quotesFlux.take(31)
                             .collectList()
                             .map(etfQuotes -> {
-                                double r2 = calculateR2(etfQuotes, bmQuotes);
-                                CandidateAssetClass resolvedClass = (r2 >= CORE_R2_THRESHOLD)
+                            double r2Twii = calculateR2(etfQuotes, benchmarkMap.getOrDefault("^TWII", List.of()));
+                            double r2Gspc = calculateR2(etfQuotes, benchmarkMap.getOrDefault("^GSPC", List.of()));
+                            double r2Ndx  = calculateR2(etfQuotes, benchmarkMap.getOrDefault("^NDX", List.of()));
+                            double maxR2  = Math.max(r2Twii, Math.max(r2Gspc, r2Ndx));
+
+                            if (asset.getAssetClass() != CandidateAssetClass.DEFENSIVE) {
+                                CandidateAssetClass resolvedClass = (maxR2 >= CORE_R2_THRESHOLD)
                                         ? CandidateAssetClass.CORE
                                         : CandidateAssetClass.SATELLITE;
 
                                 if (asset.getAssetClass() != resolvedClass) {
-                                    log.info("Dynamic classification for {}: R^2={}/bm={}, changed from {} to {}",
-                                            asset.getTicker(), String.format("%.4f", r2), bmTicker,
-                                            asset.getAssetClass(), resolvedClass);
+                                    log.info("Dynamic classification for {}: max(R^2)={} across 3 benchmarks, changed from {} to {}",
+                                            asset.getTicker(), String.format("%.4f", maxR2), asset.getAssetClass(), resolvedClass);
                                     asset.setAssetClass(resolvedClass);
                                     asset.setUpdatedAt(evaluationDate);
                                     changedAssets.add(asset);
                                 }
-                                return asset;
-                            });
+                            }
+
+                            Integer dcaRank = dcaRankMap.get(asset.getTicker());
+                            GlobalAssetScore score = evaluateAsset(asset, evaluationDate, etfQuotes, maxR2, dcaRank);
+                            allScores.add(score);
+                            return asset;
+                        });
                 })
                 .collectList()
                 .flatMap(resolvedAssets -> {
-                    if (changedAssets.isEmpty()) {
-                        return Mono.just(resolvedAssets);
-                    }
-                    return metadataRepository.saveAll(changedAssets)
-                            .then(Mono.just(resolvedAssets));
+                    Mono<Void> saveMetadata = changedAssets.isEmpty()
+                            ? Mono.empty()
+                            : metadataRepository.saveAll(changedAssets).then();
+
+                    return saveMetadata.then(rankAndSaveScores(allScores, evaluationDate));
                 });
+    }
+
+    private Mono<GlobalAssetScoreEvaluationResponse> rankAndSaveScores(
+            List<GlobalAssetScore> allScores,
+            LocalDateTime evaluationDate) {
+
+        int coreCount = 0;
+        int satelliteCount = 0;
+        int defensiveCount = 0;
+
+        Map<CandidateAssetClass, List<GlobalAssetScore>> grouped = new EnumMap<>(CandidateAssetClass.class);
+        for (CandidateAssetClass ac : CandidateAssetClass.values()) {
+            grouped.put(ac, new ArrayList<>());
+        }
+        for (GlobalAssetScore s : allScores) {
+            grouped.get(s.getAssetClass()).add(s);
+        }
+
+        List<GlobalAssetScore> finalRankedScores = new ArrayList<>();
+        for (Map.Entry<CandidateAssetClass, List<GlobalAssetScore>> entry : grouped.entrySet()) {
+            CandidateAssetClass ac = entry.getKey();
+            List<GlobalAssetScore> list = entry.getValue();
+
+            list.sort((a, b) -> b.getCompositeScore().compareTo(a.getCompositeScore()));
+            int rank = 1;
+            for (GlobalAssetScore s : list) {
+                s.setClassRank(rank++);
+            }
+            finalRankedScores.addAll(list);
+
+            if (ac == CandidateAssetClass.CORE) coreCount = list.size();
+            else if (ac == CandidateAssetClass.SATELLITE) satelliteCount = list.size();
+            else if (ac == CandidateAssetClass.DEFENSIVE) defensiveCount = list.size();
+        }
+
+        final int finalCore = coreCount;
+        final int finalSat = satelliteCount;
+        final int finalDef = defensiveCount;
+
+        return scoreRepository.saveAll(finalRankedScores)
+                .then(Mono.just(new GlobalAssetScoreEvaluationResponse(
+                        "SUCCESS",
+                        "Candidate asset scoring and class ranking completed successfully.",
+                        evaluationDate.toString(),
+                        finalRankedScores.size(),
+                        finalCore,
+                        finalSat,
+                        finalDef
+                )));
     }
 
     public String resolveBenchmarkTicker(GlobalAssetMetadata asset) {
@@ -221,67 +313,15 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         return (rho > 0.0) ? Math.min(1.0, rho * rho) : 0.0;
     }
 
-    private Mono<GlobalAssetScoreEvaluationResponse> scoreAndRankAssets(
-            List<GlobalAssetMetadata> assets,
-            LocalDateTime evaluationDate) {
-
-        List<GlobalAssetScore> allScores = new ArrayList<>();
-        int coreCount = 0;
-        int satelliteCount = 0;
-        int defensiveCount = 0;
-
-        // Group assets by CandidateAssetClass
-        Map<CandidateAssetClass, List<GlobalAssetMetadata>> grouped = new EnumMap<>(CandidateAssetClass.class);
-        for (CandidateAssetClass ac : CandidateAssetClass.values()) {
-            grouped.put(ac, new ArrayList<>());
-        }
-        for (GlobalAssetMetadata a : assets) {
-            grouped.get(a.getAssetClass()).add(a);
-        }
-
-        // Score and rank independently within each class
-        for (Map.Entry<CandidateAssetClass, List<GlobalAssetMetadata>> entry : grouped.entrySet()) {
-            CandidateAssetClass assetClass = entry.getKey();
-            List<GlobalAssetMetadata> classAssets = entry.getValue();
-
-            List<GlobalAssetScore> scoredList = new ArrayList<>();
-            for (GlobalAssetMetadata asset : classAssets) {
-                scoredList.add(evaluateAsset(asset, evaluationDate));
-            }
-
-            // Sort by composite score descending
-            scoredList.sort((a, b) -> b.getCompositeScore().compareTo(a.getCompositeScore()));
-
-            // Assign independent class rank (1, 2, 3...)
-            int rank = 1;
-            for (GlobalAssetScore s : scoredList) {
-                s.setClassRank(rank++);
-            }
-
-            allScores.addAll(scoredList);
-
-            if (assetClass == CandidateAssetClass.CORE) coreCount = scoredList.size();
-            else if (assetClass == CandidateAssetClass.SATELLITE) satelliteCount = scoredList.size();
-            else if (assetClass == CandidateAssetClass.DEFENSIVE) defensiveCount = scoredList.size();
-        }
-
-        final int finalCore = coreCount;
-        final int finalSat = satelliteCount;
-        final int finalDef = defensiveCount;
-
-        return scoreRepository.saveAll(allScores)
-                .then(Mono.just(new GlobalAssetScoreEvaluationResponse(
-                        "SUCCESS",
-                        "Candidate asset scoring and class ranking completed successfully.",
-                        evaluationDate.toString(),
-                        allScores.size(),
-                        finalCore,
-                        finalSat,
-                        finalDef
-                )));
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset, LocalDateTime evaluationDate) {
+        return evaluateAsset(asset, evaluationDate, null, 0.95, null);
     }
 
-    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset, LocalDateTime evaluationDate) {
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
+                                          LocalDateTime evaluationDate,
+                                          List<MarketDailyQuote> quotes,
+                                          double trackingR2,
+                                          Integer dcaRank) {
         long listingDays = (asset.getListingDate() != null)
                 ? ChronoUnit.DAYS.between(asset.getListingDate(), evaluationDate)
                 : 365;
@@ -309,27 +349,38 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             }
         }
 
-        // Multi-Factor Score Calculation [0, 100]
+        // Multi-Factor Score Calculation [0, 100] using smooth linear functions
         double score;
         if (asset.getAssetClass() == CandidateAssetClass.CORE) {
             // S_core = 0.35 * TER_Score + 0.25 * AUM_Score + 0.30 * TrackingError + 0.10 * Spread
-            double terScore = Math.max(0.0, 100.0 - (ter * 10000.0));
-            double aumScore = Math.min(100.0, (aum / 50_000_000_000.0) * 100.0);
-            double trackScore = 95.0; // Benchmark wide-market alignment
+            double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
+            double aumScore = Math.min(100.0, Math.max(0.0, (aum / 50_000_000_000.0) * 100.0));
+            double trackScore = (trackingR2 > 0.0) ? Math.min(100.0, trackingR2 * 100.0) : 95.0;
             double spreadScore = 90.0;
             score = 0.35 * terScore + 0.25 * aumScore + 0.30 * trackScore + 0.10 * spreadScore;
         } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
-            // S_sat = 0.30 * MOM + 0.20 * Sharpe + 0.20 * Hurst - 0.15 * rho + 0.15 * DCARank
+            // S_sat = 0.30 * MOM + 0.20 * Sharpe + 0.20 * Hurst + 0.15 * DCARank
             double momScore = 85.0;
+            if (quotes != null && quotes.size() >= 2) {
+                double pCurrent = quotes.get(0).getClosePrice() != null ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
+                double pOld = quotes.get(quotes.size() - 1).getClosePrice() != null ? quotes.get(quotes.size() - 1).getClosePrice().doubleValue() : 0.0;
+                if (pOld > 0.0 && pCurrent > 0.0) {
+                    double r30 = (pCurrent - pOld) / pOld;
+                    momScore = Math.min(100.0, Math.max(0.0, 50.0 + r30 * 200.0));
+                }
+            }
             double sharpeScore = 80.0;
             double hurstScore = 75.0;
-            double dcaRankScore = 80.0;
+            double dcaRankScore = (dcaRank != null && dcaRank >= 1 && dcaRank <= 20)
+                    ? (21 - dcaRank) * 5.0
+                    : 0.0;
+
             score = 0.30 * momScore + 0.20 * sharpeScore + 0.20 * hurstScore + 0.15 * dcaRankScore;
         } else {
             // S_defensive = 0.30 * Yield + 0.30 * TER + 0.25 * AUM + 0.15 * DurationFit
             double yieldScore = 88.0;
-            double terScore = Math.max(0.0, 100.0 - (ter * 10000.0));
-            double aumScore = Math.min(100.0, (aum / 30_000_000_000.0) * 100.0);
+            double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
+            double aumScore = Math.min(100.0, Math.max(0.0, (aum / 30_000_000_000.0) * 100.0));
             double durationScore = 90.0;
             score = 0.30 * yieldScore + 0.30 * terScore + 0.25 * aumScore + 0.15 * durationScore;
         }
@@ -355,4 +406,3 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         return scoreEntity;
     }
 }
-

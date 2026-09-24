@@ -35,6 +35,8 @@ enum CrisisLevel {
     CORRECTION
     CRASH
     LIQUIDITY_CRISIS
+    CRISIS_LEVEL_1
+    CRISIS_LEVEL_2
 }
 
 type GlobalAssetMetadata {
