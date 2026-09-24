@@ -18,6 +18,7 @@ import com.alphaharvester.domain.entity.MarketDailyQuote;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -340,17 +341,29 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
     private Mono<MarketDailyQuote> upsertDailyQuote(MarketDailyQuote q) {
         return quoteRepository.findByTickerAndTradeDate(q.getTicker(), q.getTradeDate())
                 .flatMap(existing -> {
-                    existing.setOpenPrice(q.getOpenPrice());
-                    existing.setHighPrice(q.getHighPrice());
-                    existing.setLowPrice(q.getLowPrice());
-                    existing.setClosePrice(q.getClosePrice());
+                    if (q.getOpenPrice() != null) existing.setOpenPrice(q.getOpenPrice());
+                    if (q.getHighPrice() != null) existing.setHighPrice(q.getHighPrice());
+                    if (q.getLowPrice() != null) existing.setLowPrice(q.getLowPrice());
+                    if (q.getClosePrice() != null && q.getClosePrice().compareTo(BigDecimal.ZERO) > 0) {
+                        existing.setClosePrice(q.getClosePrice());
+                    }
                     existing.setVolumeShares(q.getVolumeShares());
                     existing.setTradeValueTwd(q.getTradeValueTwd());
-                    existing.setNetAssetValue(q.getNetAssetValue());
-                    existing.setDiscountPremiumPercentage(q.getDiscountPremiumPercentage());
+                    if (q.getNetAssetValue() != null) existing.setNetAssetValue(q.getNetAssetValue());
+                    if (q.getDiscountPremiumPercentage() != null) existing.setDiscountPremiumPercentage(q.getDiscountPremiumPercentage());
                     return quoteRepository.save(existing);
                 })
-                .switchIfEmpty(quoteRepository.save(q));
+                .switchIfEmpty(Mono.defer(() -> {
+                    if (q.getClosePrice() == null || q.getClosePrice().compareTo(BigDecimal.ZERO) <= 0) {
+                        return quoteRepository.findFirstByTickerOrderByTradeDateDesc(q.getTicker())
+                                .flatMap(prev -> {
+                                    q.setClosePrice(prev.getClosePrice());
+                                    return quoteRepository.save(q);
+                                })
+                                .switchIfEmpty(quoteRepository.save(q));
+                    }
+                    return quoteRepository.save(q);
+                }));
     }
 
     private boolean isTradingGap(LocalDateTime latestTradeDate, LocalDateTime now) {
