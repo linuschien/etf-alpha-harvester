@@ -11,11 +11,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -47,6 +50,10 @@ public class YahooFinanceClient {
                 .uri(url)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
+                .retryWhen(Retry.backoff(3, Duration.ofMillis(500))
+                        .maxBackoff(Duration.ofSeconds(3))
+                        .filter(t -> t instanceof WebClientResponseException e &&
+                                (e.getStatusCode().value() == 429 || e.getStatusCode().is5xxServerError())))
                 .flatMapMany(root -> {
                     try {
                         JsonNode result = root.path("chart").path("result").get(0);

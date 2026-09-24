@@ -47,6 +47,7 @@ class MarketDataSyncServiceTest {
     @Mock private DividendAnnouncementRepository dividendRepository;
     @Mock private CorporateActionRepository corporateActionRepository;
     @Mock private GlobalAssetScoreEvaluationService scoreEvaluationService;
+    @Mock private DataFeedSyncWatermarkRepository watermarkRepository;
 
     private MarketDataSyncService syncService;
 
@@ -56,8 +57,11 @@ class MarketDataSyncServiceTest {
                 externalMarketDataPort,
                 metadataRepository, benchmarkRepository, quoteRepository,
                 macroYieldRepository, dcaRankRepository, dividendRepository,
-                corporateActionRepository, scoreEvaluationService
+                corporateActionRepository, scoreEvaluationService,
+                watermarkRepository
         );
+        when(watermarkRepository.findByFeedName(anyString())).thenReturn(Mono.empty());
+        when(watermarkRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
     }
 
     @Test
@@ -152,11 +156,15 @@ class MarketDataSyncServiceTest {
                 new BigDecimal("182.0"), new BigDecimal("184.0"), new BigDecimal("181.0"),
                 new BigDecimal("183.0"), 1100000L, BigDecimal.ZERO, null, null);
 
+        DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), "TWSE_TPEX_DAILY_QUOTES", now.minusDays(5), now.minusDays(5), 10, "SUCCESS", null, now.minusDays(5)
+        );
+        when(watermarkRepository.findByFeedName("TWSE_TPEX_DAILY_QUOTES")).thenReturn(Mono.just(watermark));
+
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
         when(externalMarketDataPort.fetchDailyQuotes(any())).thenReturn(Flux.just(todayQuote));
-        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("0050")).thenReturn(Mono.just(oldQuote));
 
-        // When gap is detected (> 1 or 3 days), Yahoo historical backfill is triggered
+        // When watermark gap is detected (> 1 or 3 days), Yahoo historical backfill is triggered for candidate ETFs
         when(externalMarketDataPort.fetchHistoricalQuotes(eq("0050"), anyString())).thenReturn(Flux.just(backfillQuote));
         when(quoteRepository.findByTickerAndTradeDate(any(), any())).thenReturn(Mono.empty());
         when(quoteRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));

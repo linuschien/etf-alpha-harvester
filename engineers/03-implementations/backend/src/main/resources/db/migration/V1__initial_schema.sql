@@ -104,9 +104,22 @@ CREATE TABLE IF NOT EXISTS corporate_action (
     CONSTRAINT uq_corporate_action UNIQUE (ticker, effective_date)
 );
 
+CREATE TABLE IF NOT EXISTS data_feed_sync_watermark (
+    id UUID PRIMARY KEY,
+    feed_name VARCHAR(64) NOT NULL UNIQUE,
+    last_successful_sync_at TIMESTAMP NOT NULL,
+    latest_record_date TIMESTAMP NOT NULL,
+    records_synced_count INT NOT NULL DEFAULT 0,
+    status VARCHAR(32) NOT NULL DEFAULT 'SUCCESS',
+    error_message TEXT,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_quote_trade_date ON market_daily_quote(trade_date);
 CREATE INDEX IF NOT EXISTS idx_quote_ticker ON market_daily_quote(ticker);
 CREATE INDEX IF NOT EXISTS idx_score_eval_class ON global_asset_score(asset_class, evaluation_date, class_rank);
 CREATE INDEX IF NOT EXISTS idx_dca_rank ON dca_popularity_rank(ranking_year, ranking_month, rank_position);
 CREATE INDEX IF NOT EXISTS idx_dividend_payment ON dividend_announcement(payment_date);
+CREATE INDEX IF NOT EXISTS idx_watermark_feed_name ON data_feed_sync_watermark(feed_name);
+
 

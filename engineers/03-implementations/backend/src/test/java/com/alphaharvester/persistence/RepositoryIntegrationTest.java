@@ -115,4 +115,26 @@ class RepositoryIntegrationTest {
                 })
                 .verifyComplete();
     }
+
+    @Autowired
+    private com.alphaharvester.adapter.out.persistence.DataFeedSyncWatermarkRepository watermarkRepository;
+
+    @Test
+    @DisplayName("Should verify Flyway seeded data feed watermarks and query by feed name")
+    void shouldVerifyFlywaySeededWatermarks() {
+        StepVerifier.create(watermarkRepository.findAll().collectList())
+                .assertNext(list -> {
+                    assertThat(list).hasSize(6);
+                    assertThat(list).extracting("feedName")
+                            .contains("TWSE_TPEX_DAILY_QUOTES", "TWSE_MIS_NAV", "YAHOO_BENCHMARKS", "CNN_FEAR_GREED");
+                })
+                .verifyComplete();
+
+        StepVerifier.create(watermarkRepository.findByFeedName("YAHOO_BENCHMARKS"))
+                .assertNext(wm -> {
+                    assertThat(wm.getFeedName()).isEqualTo("YAHOO_BENCHMARKS");
+                    assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
+                })
+                .verifyComplete();
+    }
 }

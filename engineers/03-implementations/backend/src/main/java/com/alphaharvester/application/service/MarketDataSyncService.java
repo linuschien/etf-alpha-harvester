@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.alphaharvester.domain.entity.DataFeedSyncWatermark;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -19,6 +20,7 @@ import reactor.core.publisher.Mono;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
 @Service
 public class MarketDataSyncService implements MarketDataSyncUseCase {
@@ -34,6 +36,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
     private final DividendAnnouncementRepository dividendRepository;
     private final CorporateActionRepository corporateActionRepository;
     private final GlobalAssetScoreEvaluationService scoreEvaluationService;
+    private final DataFeedSyncWatermarkRepository watermarkRepository;
 
     public MarketDataSyncService(ExternalMarketDataPort externalMarketDataPort,
                                  GlobalAssetMetadataRepository metadataRepository,
@@ -43,7 +46,8 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                  DcaPopularityRankRepository dcaRankRepository,
                                  DividendAnnouncementRepository dividendRepository,
                                  CorporateActionRepository corporateActionRepository,
-                                 GlobalAssetScoreEvaluationService scoreEvaluationService) {
+                                 GlobalAssetScoreEvaluationService scoreEvaluationService,
+                                 DataFeedSyncWatermarkRepository watermarkRepository) {
         this.externalMarketDataPort = externalMarketDataPort;
         this.metadataRepository = metadataRepository;
         this.benchmarkRepository = benchmarkRepository;
@@ -53,6 +57,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         this.dividendRepository = dividendRepository;
         this.corporateActionRepository = corporateActionRepository;
         this.scoreEvaluationService = scoreEvaluationService;
+        this.watermarkRepository = watermarkRepository;
     }
 
     @Override
@@ -123,35 +128,79 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         }
         log.info("Fetching and syncing daily market quotes from TWSE, TPEx, Yahoo Finance, and CNN Fear & Greed...");
 
-        Mono<Integer> primaryDailyCountMono = metadataRepository.findAll()
-                .map(GlobalAssetMetadata::getTicker)
-                .collectList()
-                .flatMapMany(externalMarketDataPort::fetchDailyQuotes)
-                .flatMap(this::upsertDailyQuote)
-                .count()
-                .map(Long::intValue);
+        // 1. Fetch Watermark to compare how many days were missed
+        return watermarkRepository.findByFeedName("TWSE_TPEX_DAILY_QUOTES")
+                .map(DataFeedSyncWatermark::getLatestRecordDate)
+                .defaultIfEmpty(now.minusDays(1))
+                .flatMap(latestRecordDate -> {
+                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
+                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
+                    boolean hasGap = daysMissed > allowedGap;
+                    boolean force = backfillDays != null && backfillDays > 0;
 
-        Mono<Integer> backfillCountMono = metadataRepository.findAll()
-                .flatMap(asset -> quoteRepository.findFirstByTickerOrderByTradeDateDesc(asset.getTicker())
-                        .map(latest -> isTradingGap(latest.getTradeDate(), now))
-                        .defaultIfEmpty(true)
-                        .flatMapMany(needsBackfill -> {
-                            boolean force = backfillDays != null && backfillDays > 0;
-                            if (needsBackfill || force) {
-                                String range = deriveRange(force ? backfillDays : 30);
-                                log.warn("Gap or backfill triggered for ETF '{}' (force: {}, range: {}). Backfilling history from Yahoo Finance...",
-                                        asset.getTicker(), force, range);
-                                return externalMarketDataPort.fetchHistoricalQuotes(asset.getTicker(), range)
-                                        .flatMap(this::upsertDailyQuote);
-                            }
-                            return Flux.empty();
-                        }))
-                .count()
-                .map(Long::intValue);
+                    log.info("Watermark comparison for 'TWSE_TPEX_DAILY_QUOTES': latestRecordDate={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
+                            latestRecordDate, now, daysMissed, allowedGap, hasGap, force);
 
-        return primaryDailyCountMono.flatMap(primaryCount ->
-                backfillCountMono.map(backfillCount -> primaryCount + backfillCount)
-        );
+                    // 2. Fetch today's primary daily quotes from TWSE, TPEx, MIS NAV, Yahoo benchmarks, CNN
+                    Mono<Integer> primaryDailyCountMono = metadataRepository.findAll()
+                            .map(GlobalAssetMetadata::getTicker)
+                            .collectList()
+                            .flatMapMany(externalMarketDataPort::fetchDailyQuotes)
+                            .flatMap(this::upsertDailyQuote)
+                            .count()
+                            .map(Long::intValue);
+
+                    // 3. If watermark indicates outage gap or force backfill: backfill ALL candidate ETFs from Yahoo Finance
+                    Mono<Integer> backfillCountMono;
+                    if (hasGap || force) {
+                        int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
+                        String range = deriveRange(effectiveDays);
+                        log.warn("Watermark confirmed trading gap! Missed {} days. Initiating full candidate ETF universe historical backfill from Yahoo Finance (range: '{}')...",
+                                daysMissed, range);
+
+                        // Backfill ALL ETFs in candidate universe with concurrency = 4 to avoid hitting Yahoo rate limits
+                        backfillCountMono = metadataRepository.findAll()
+                                .map(GlobalAssetMetadata::getTicker)
+                                .collectList()
+                                .flatMapMany(tickers -> Flux.fromIterable(tickers)
+                                        .flatMap(ticker -> externalMarketDataPort.fetchHistoricalQuotes(ticker, range), 4)
+                                        .flatMap(this::upsertDailyQuote))
+                                .count()
+                                .map(Long::intValue);
+                    } else {
+                        backfillCountMono = Mono.just(0);
+                    }
+
+                    return primaryDailyCountMono.flatMap(primaryCount ->
+                            backfillCountMono.flatMap(backfillCount ->
+                                    updateWatermark("TWSE_TPEX_DAILY_QUOTES", now, now, primaryCount)
+                                            .then(updateWatermark("YAHOO_BENCHMARKS", now, now, 8))
+                                            .then(updateWatermark("CNN_FEAR_GREED", now, now, 1))
+                                            .then(backfillCount > 0 ? updateWatermark("YAHOO_ETF_HISTORICAL", now, now, backfillCount) : Mono.empty())
+                                            .thenReturn(primaryCount + backfillCount)
+                            )
+                    );
+                });
+    }
+
+    private Mono<Void> updateWatermark(String feedName, LocalDateTime syncTime, LocalDateTime recordDate, int recordsCount) {
+        return watermarkRepository.findByFeedName(feedName)
+                .flatMap(wm -> {
+                    wm.setLastSuccessfulSyncAt(syncTime);
+                    wm.setLatestRecordDate(recordDate);
+                    wm.setRecordsSyncedCount(recordsCount);
+                    wm.setStatus("SUCCESS");
+                    wm.setErrorMessage(null);
+                    wm.setUpdatedAt(syncTime);
+                    return watermarkRepository.save(wm);
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    DataFeedSyncWatermark newWm = new DataFeedSyncWatermark(
+                            UUID.randomUUID(), feedName, syncTime, recordDate, recordsCount, "SUCCESS", null, syncTime
+                    );
+                    return watermarkRepository.save(newWm);
+                }))
+                .then();
     }
 
     private Mono<MarketDailyQuote> upsertDailyQuote(MarketDailyQuote q) {
