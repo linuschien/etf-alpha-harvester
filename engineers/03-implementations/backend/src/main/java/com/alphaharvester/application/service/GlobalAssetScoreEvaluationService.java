@@ -1,12 +1,14 @@
 package com.alphaharvester.application.service;
 
 import com.alphaharvester.adapter.out.persistence.DcaPopularityRankRepository;
+import com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.port.in.GlobalAssetScoreEvaluationUseCase;
 import com.alphaharvester.domain.entity.DcaPopularityRank;
+import com.alphaharvester.domain.entity.DividendAnnouncement;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
@@ -36,22 +38,32 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     private final GlobalAssetScoreRepository scoreRepository;
     private final MarketDailyQuoteRepository quoteRepository;
     private final DcaPopularityRankRepository dcaRankRepository;
+    private final DividendAnnouncementRepository dividendRepository;
 
     @Autowired
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
                                              GlobalAssetScoreRepository scoreRepository,
                                              MarketDailyQuoteRepository quoteRepository,
-                                             @Autowired(required = false) DcaPopularityRankRepository dcaRankRepository) {
+                                             @Autowired(required = false) DcaPopularityRankRepository dcaRankRepository,
+                                             @Autowired(required = false) DividendAnnouncementRepository dividendRepository) {
         this.metadataRepository = metadataRepository;
         this.scoreRepository = scoreRepository;
         this.quoteRepository = quoteRepository;
         this.dcaRankRepository = dcaRankRepository;
+        this.dividendRepository = dividendRepository;
+    }
+
+    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
+                                             GlobalAssetScoreRepository scoreRepository,
+                                             MarketDailyQuoteRepository quoteRepository,
+                                             DcaPopularityRankRepository dcaRankRepository) {
+        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, null);
     }
 
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
                                              GlobalAssetScoreRepository scoreRepository,
                                              MarketDailyQuoteRepository quoteRepository) {
-        this(metadataRepository, scoreRepository, quoteRepository, null);
+        this(metadataRepository, scoreRepository, quoteRepository, null, null);
     }
 
     @Override
@@ -73,11 +85,12 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                         ));
                     }
 
-                    return Mono.zip(prefetchBenchmarkQuotes(), prefetchDcaRanks())
+                    return Mono.zip(prefetchBenchmarkQuotes(), prefetchDcaRanks(), prefetchDividends(evaluationDate))
                             .flatMap(tuple -> {
                                 Map<String, List<MarketDailyQuote>> benchmarkMap = tuple.getT1();
                                 Map<String, Integer> dcaRankMap = tuple.getT2();
-                                return dynamicallyClassifyAndScore(assets, benchmarkMap, dcaRankMap, evaluationDate);
+                                Map<String, List<DividendAnnouncement>> dividendMap = tuple.getT3();
+                                return dynamicallyClassifyAndScore(assets, benchmarkMap, dcaRankMap, dividendMap, evaluationDate);
                             });
                 })
                 .doOnError(e -> log.error("Failed during candidate multi-factor evaluation: {}", e.getMessage(), e));
@@ -110,10 +123,30 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                 .defaultIfEmpty(Collections.emptyMap());
     }
 
+    private Mono<Map<String, List<DividendAnnouncement>>> prefetchDividends(LocalDateTime evaluationDate) {
+        if (dividendRepository == null) {
+            return Mono.just(Collections.emptyMap());
+        }
+        LocalDateTime oneYearAgo = evaluationDate.minusDays(365);
+        return dividendRepository.findByExDateBetweenOrderByExDateAsc(oneYearAgo, evaluationDate.plusDays(1))
+                .collectList()
+                .map(list -> {
+                    Map<String, List<DividendAnnouncement>> map = new HashMap<>();
+                    for (DividendAnnouncement div : list) {
+                        if (div.getTicker() != null) {
+                            map.computeIfAbsent(div.getTicker(), k -> new ArrayList<>()).add(div);
+                        }
+                    }
+                    return map;
+                })
+                .defaultIfEmpty(Collections.emptyMap());
+    }
+
     private Mono<GlobalAssetScoreEvaluationResponse> dynamicallyClassifyAndScore(
             List<GlobalAssetMetadata> assets,
             Map<String, List<MarketDailyQuote>> benchmarkMap,
             Map<String, Integer> dcaRankMap,
+            Map<String, List<DividendAnnouncement>> dividendMap,
             LocalDateTime evaluationDate) {
 
         List<GlobalAssetMetadata> changedAssets = Collections.synchronizedList(new ArrayList<>());
@@ -137,7 +170,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
                             if (asset.getAssetClass() != CandidateAssetClass.DEFENSIVE) {
                                 CandidateAssetClass resolvedClass = (maxR2 >= CORE_R2_THRESHOLD)
-                                        ? CandidateAssetClass.CORE
+                                         ? CandidateAssetClass.CORE
                                         : CandidateAssetClass.SATELLITE;
 
                                 if (asset.getAssetClass() != resolvedClass) {
@@ -150,8 +183,13 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                             }
 
                             Integer dcaRank = dcaRankMap.get(asset.getTicker());
-                            GlobalAssetScore score = evaluateAsset(asset, evaluationDate, etfQuotes, maxR2, dcaRank);
-                            allScores.add(score);
+                            List<DividendAnnouncement> divs = dividendMap.get(asset.getTicker());
+                            GlobalAssetScore score = evaluateAsset(asset, evaluationDate, etfQuotes, maxR2, dcaRank, divs);
+                            if (Boolean.TRUE.equals(score.getIsQualified())) {
+                                allScores.add(score);
+                            } else {
+                                log.info("Asset {} eliminated by hard constraints: {}", asset.getTicker(), score.getDisqualificationReason());
+                            }
                             return asset;
                         });
                 })
@@ -314,7 +352,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset, LocalDateTime evaluationDate) {
-        return evaluateAsset(asset, evaluationDate, null, 0.95, null);
+        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null);
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
@@ -322,17 +360,23 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                           List<MarketDailyQuote> quotes,
                                           double trackingR2,
                                           Integer dcaRank) {
-        long listingDays = (asset.getListingDate() != null)
-                ? ChronoUnit.DAYS.between(asset.getListingDate(), evaluationDate)
-                : 365;
+        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, null);
+    }
 
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
+                                          LocalDateTime evaluationDate,
+                                          List<MarketDailyQuote> quotes,
+                                          double trackingR2,
+                                          Integer dcaRank,
+                                          List<DividendAnnouncement> dividends) {
         boolean isQualified = true;
         String reason = null;
 
         double ter = asset.getTotalExpenseRatio() != null ? asset.getTotalExpenseRatio().doubleValue() : 0.0050;
         double aum = asset.getFundSizeTwd() != null ? asset.getFundSizeTwd().doubleValue() : 5_000_000_000.0;
+        String ticker = asset.getTicker() != null ? asset.getTicker().toUpperCase() : "";
 
-        // Hard Constraint: Class specific checks (unqualified assets are eliminated)
+        // Hard Constraints: Class-specific checks (unqualified assets are eliminated)
         if (asset.getAssetClass() == CandidateAssetClass.CORE) {
             if (ter > 0.0045) {
                 isQualified = false;
@@ -341,6 +385,48 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                 isQualified = false;
                 reason = "資產規模未達 100 億 TWD 核心規模門檻";
             }
+        } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
+            if (aum < 2_000_000_000.0) {
+                isQualified = false;
+                reason = "資產規模未達 20 億 TWD 衛星規模門檻";
+            } else if (quotes != null && !quotes.isEmpty()) {
+                double totalTurnover = 0.0;
+                int quoteCount = 0;
+                for (MarketDailyQuote q : quotes) {
+                    if (q != null && q.getTradeValueTwd() != null && q.getTradeValueTwd().compareTo(BigDecimal.ZERO) > 0) {
+                        totalTurnover += q.getTradeValueTwd().doubleValue();
+                        quoteCount++;
+                    }
+                }
+                double avgTurnover = quoteCount > 0 ? totalTurnover / quoteCount : 0.0;
+                if (quoteCount > 0 && avgTurnover < 20_000_000.0) {
+                    isQualified = false;
+                    reason = "滾動日均成交金額未達 2,000 萬 TWD 衛星流動性門檻 (當前: " + String.format("%.2f 萬", avgTurnover / 10000.0) + ")";
+                }
+            }
+        } else if (asset.getAssetClass() == CandidateAssetClass.DEFENSIVE) {
+            if (aum < 5_000_000_000.0) {
+                isQualified = false;
+                reason = "資產規模未達 50 億 TWD 防禦資產規模門檻";
+            } else if (ticker.endsWith("L") || ticker.endsWith("R")) {
+                isQualified = false;
+                reason = "防禦資產嚴禁槓桿或反向型標的 (" + ticker + ")";
+            }
+        }
+
+        // If disqualified, return immediately without multi-factor scoring calculation
+        if (!isQualified) {
+            GlobalAssetScore scoreEntity = new GlobalAssetScore();
+            scoreEntity.setAssetId(asset.getId());
+            scoreEntity.setTicker(asset.getTicker());
+            scoreEntity.setEvaluationDate(evaluationDate);
+            scoreEntity.setAssetClass(asset.getAssetClass());
+            scoreEntity.setCompositeScore(BigDecimal.ZERO);
+            scoreEntity.setTotalExpenseRatio(asset.getTotalExpenseRatio());
+            scoreEntity.setFundSizeTwd(asset.getFundSizeTwd());
+            scoreEntity.setIsQualified(false);
+            scoreEntity.setDisqualificationReason(reason);
+            return scoreEntity;
         }
 
         // Multi-Factor Score Calculation [0, 100] using smooth linear functions
@@ -379,15 +465,24 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     + 0.15 * dcaRankScore;
         } else {
             // S_defensive = 0.30 * Yield + 0.30 * TER + 0.25 * AUM + 0.15 * DurationFit
-            double yieldScore = 88.0;
+            double yieldScore = 75.0;
+            if (dividends != null && !dividends.isEmpty() && quotes != null && !quotes.isEmpty()) {
+                double closePrice = (quotes.get(0).getClosePrice() != null) ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
+                if (closePrice > 0.0) {
+                    LocalDateTime oneYearAgo = evaluationDate.minusDays(365);
+                    double trailingDividend = dividends.stream()
+                            .filter(d -> d.getExDate() != null && !d.getExDate().isBefore(oneYearAgo) && !d.getExDate().isAfter(evaluationDate))
+                            .filter(d -> d.getDividendPerShare() != null)
+                            .mapToDouble(d -> d.getDividendPerShare().doubleValue())
+                            .sum();
+                    double annualYield = trailingDividend / closePrice;
+                    yieldScore = Math.min(100.0, Math.max(0.0, annualYield * 1666.67));
+                }
+            }
             double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
             double aumScore = Math.min(100.0, Math.max(0.0, (aum / 30_000_000_000.0) * 100.0));
             double durationScore = 90.0;
             score = 0.30 * yieldScore + 0.30 * terScore + 0.25 * aumScore + 0.15 * durationScore;
-        }
-
-        if (!isQualified) {
-            score = score * 0.5; // Penalize disqualified candidates
         }
 
         BigDecimal finalScore = BigDecimal.valueOf(Math.min(100.0, Math.max(0.0, score)))
@@ -401,8 +496,8 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         scoreEntity.setCompositeScore(finalScore);
         scoreEntity.setTotalExpenseRatio(asset.getTotalExpenseRatio());
         scoreEntity.setFundSizeTwd(asset.getFundSizeTwd());
-        scoreEntity.setIsQualified(isQualified);
-        scoreEntity.setDisqualificationReason(reason);
+        scoreEntity.setIsQualified(true);
+        scoreEntity.setDisqualificationReason(null);
 
         return scoreEntity;
     }

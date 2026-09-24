@@ -339,6 +339,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
     }
 
     private Mono<MarketDailyQuote> upsertDailyQuote(MarketDailyQuote q) {
+        boolean isTaiwanEtf = q.getTicker() != null && !q.getTicker().startsWith("^") && !"FEAR_GREED".equalsIgnoreCase(q.getTicker());
         return quoteRepository.findByTickerAndTradeDate(q.getTicker(), q.getTradeDate())
                 .flatMap(existing -> {
                     if (q.getOpenPrice() != null) existing.setOpenPrice(q.getOpenPrice());
@@ -354,7 +355,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     return quoteRepository.save(existing);
                 })
                 .switchIfEmpty(Mono.defer(() -> {
-                    if (q.getClosePrice() == null || q.getClosePrice().compareTo(BigDecimal.ZERO) <= 0) {
+                    if (isTaiwanEtf && (q.getClosePrice() == null || q.getClosePrice().compareTo(BigDecimal.ZERO) <= 0)) {
                         return quoteRepository.findFirstByTickerOrderByTradeDateDesc(q.getTicker())
                                 .flatMap(prev -> {
                                     q.setClosePrice(prev.getClosePrice());

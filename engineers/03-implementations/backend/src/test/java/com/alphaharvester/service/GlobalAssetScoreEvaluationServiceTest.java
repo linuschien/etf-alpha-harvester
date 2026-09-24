@@ -1,19 +1,23 @@
 package com.alphaharvester.service;
 
 import com.alphaharvester.adapter.out.persistence.DcaPopularityRankRepository;
+import com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
+import com.alphaharvester.domain.entity.DividendAnnouncement;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import com.alphaharvester.domain.model.DistributionFrequency;
+import com.alphaharvester.domain.model.TaxTag;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
@@ -29,8 +33,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class GlobalAssetScoreEvaluationServiceTest {
@@ -47,12 +50,16 @@ class GlobalAssetScoreEvaluationServiceTest {
     @Mock
     private DcaPopularityRankRepository dcaRankRepository;
 
+    @Mock
+    private DividendAnnouncementRepository dividendRepository;
+
     private GlobalAssetScoreEvaluationService service;
 
     @BeforeEach
     void setUp() {
         lenient().when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
-        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository);
+        lenient().when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
+        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository);
     }
 
     @Test
@@ -362,5 +369,211 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         // Lower correlation means higher diversification score (1 - rho)*100
         assertThat(lowCorrScore.getCompositeScore()).isGreaterThan(highCorrScore.getCompositeScore());
+    }
+
+    @Test
+    @DisplayName("Should disqualify Satellite asset when AUM is below 2B TWD")
+    void shouldDisqualifySatelliteAssetOnLowAum() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata smallSatellite = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00991", "超微型衛星", now.minusYears(1), "某主題指數",
+                new BigDecimal("0.0050"), new BigDecimal("1500000000"), // 1.5B < 2B
+                CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        GlobalAssetScore score = service.evaluateAsset(smallSatellite, now);
+
+        assertThat(score.getIsQualified()).isFalse();
+        assertThat(score.getDisqualificationReason()).contains("資產規模未達 20 億 TWD 衛星規模門檻");
+        assertThat(score.getCompositeScore()).isEqualTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Should disqualify Satellite asset when rolling 30d turnover is below 20M TWD")
+    void shouldDisqualifySatelliteAssetOnLowTurnover() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata illiquidSatellite = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00992", "冷門衛星", now.minusYears(2), "冷門指數",
+                new BigDecimal("0.0040"), new BigDecimal("5000000000"), // 5B > 2B
+                CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        List<MarketDailyQuote> quotes = List.of(
+                new MarketDailyQuote(null, null, null, "00992", now, null, null, null,
+                        new BigDecimal("20.0"), 500_000L, new BigDecimal("10000000"), null, null), // 1,000萬 < 2,000萬
+                new MarketDailyQuote(null, null, null, "00992", now.minusDays(1), null, null, null,
+                        new BigDecimal("20.0"), 600_000L, new BigDecimal("12000000"), null, null)  // 1,200萬 < 2,000萬
+        );
+
+        GlobalAssetScore score = service.evaluateAsset(illiquidSatellite, now, quotes, 0.20, null);
+
+        assertThat(score.getIsQualified()).isFalse();
+        assertThat(score.getDisqualificationReason()).contains("滾動日均成交金額未達 2,000 萬 TWD 衛星流動性門檻");
+        assertThat(score.getCompositeScore()).isEqualTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Should disqualify Defensive asset when AUM is below 5B TWD")
+    void shouldDisqualifyDefensiveAssetOnLowAum() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata smallBond = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00993B", "小微公債", now.minusYears(1), "公債指數",
+                new BigDecimal("0.0015"), new BigDecimal("3000000000"), // 3B < 5B
+                CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
+        );
+
+        GlobalAssetScore score = service.evaluateAsset(smallBond, now);
+
+        assertThat(score.getIsQualified()).isFalse();
+        assertThat(score.getDisqualificationReason()).contains("資產規模未達 50 億 TWD 防禦資產規模門檻");
+        assertThat(score.getCompositeScore()).isEqualTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Should disqualify Defensive asset on leveraged or inverse ticker")
+    void shouldDisqualifyDefensiveAssetOnLeverageOrInverse() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata leveragedBond = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00680L", "元大美債20正2", now.minusYears(5), "20年美債正2",
+                new BigDecimal("0.0030"), new BigDecimal("10000000000"), // 10B > 5B
+                CandidateAssetClass.DEFENSIVE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        GlobalAssetMetadata inverseBond = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00681R", "元大美債20反1", now.minusYears(5), "20年美債反1",
+                new BigDecimal("0.0030"), new BigDecimal("8000000000"), // 8B > 5B
+                CandidateAssetClass.DEFENSIVE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        GlobalAssetScore scoreL = service.evaluateAsset(leveragedBond, now);
+        GlobalAssetScore scoreR = service.evaluateAsset(inverseBond, now);
+
+        assertThat(scoreL.getIsQualified()).isFalse();
+        assertThat(scoreL.getDisqualificationReason()).contains("防禦資產嚴禁槓桿或反向型標的 (00680L)");
+        assertThat(scoreR.getIsQualified()).isFalse();
+        assertThat(scoreR.getDisqualificationReason()).contains("防禦資產嚴禁槓桿或反向型標的 (00681R)");
+    }
+
+    @Test
+    @DisplayName("Should calculate Defensive yield score from dividend announcement history")
+    void shouldCalculateDefensiveYieldFromDividendHistory() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata bondAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00720B", "元大投資級公司債", now.minusYears(6), "投資級公司債",
+                new BigDecimal("0.0020"), new BigDecimal("120000000000"), // 120B > 5B
+                CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
+        );
+
+        List<MarketDailyQuote> quotes = List.of(
+                new MarketDailyQuote(null, null, null, "00720B", now, null, null, null,
+                        new BigDecimal("30.0"), 1000000L, new BigDecimal("30000000"), null, null)
+        );
+
+        // 4 quarters * 0.45 = 1.8 TWD / share. Annual yield = 1.8 / 30.0 = 6% -> yieldScore = 100.0
+        List<DividendAnnouncement> dividends = List.of(
+                new DividendAnnouncement(null, null, "00720B", now.minusMonths(2), now.minusMonths(1), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W),
+                new DividendAnnouncement(null, null, "00720B", now.minusMonths(5), now.minusMonths(4), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W),
+                new DividendAnnouncement(null, null, "00720B", now.minusMonths(8), now.minusMonths(7), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W),
+                new DividendAnnouncement(null, null, "00720B", now.minusMonths(11), now.minusMonths(10), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W)
+        );
+
+        GlobalAssetScore scoreWithDivs = service.evaluateAsset(bondAsset, now, quotes, 0.0, null, dividends);
+        GlobalAssetScore scoreNoDivs = service.evaluateAsset(bondAsset, now, quotes, 0.0, null, List.of());
+
+        assertThat(scoreWithDivs.getIsQualified()).isTrue();
+        // With 6% yield, yieldScore = 100, which is higher than default 75 when dividends are empty
+        assertThat(scoreWithDivs.getCompositeScore()).isGreaterThan(scoreNoDivs.getCompositeScore());
+    }
+
+    @Test
+    @DisplayName("Should eliminate disqualified assets so they are NOT ranked or saved to scoreRepository")
+    @SuppressWarnings("unchecked")
+    void shouldFilterDisqualifiedAssetsFromScoringPipelineAndNotPersistThem() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Qualified Core: 0050
+        GlobalAssetMetadata qualifiedCore = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(15), "臺灣50",
+                new BigDecimal("0.0043"), new BigDecimal("420000000000"),
+                CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
+        );
+
+        // Disqualified Core: high TER
+        GlobalAssetMetadata expensiveCore = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00999", "昂貴核心", now.minusYears(3), "臺灣50",
+                new BigDecimal("0.0080"), new BigDecimal("20000000000"),
+                CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        // Disqualified Satellite: low AUM
+        GlobalAssetMetadata smallSatellite = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00991", "微型衛星", now.minusYears(2), "主題指數",
+                new BigDecimal("0.0050"), new BigDecimal("1000000000"), // 1B < 2B
+                CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        // Disqualified Defensive: Leveraged ETF
+        GlobalAssetMetadata leveragedBond = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00680L", "槓桿美債正2", now.minusYears(3), "美債正2",
+                new BigDecimal("0.0030"), new BigDecimal("10000000000"),
+                CandidateAssetClass.DEFENSIVE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        // Mock quotes to achieve R^2 >= 0.95 for 0050 and 00999 against ^TWII
+        List<MarketDailyQuote> twiiQuotes = new ArrayList<>();
+        List<MarketDailyQuote> corrQuotes1 = new ArrayList<>();
+        List<MarketDailyQuote> corrQuotes2 = new ArrayList<>();
+        double pTwii = 20000.0;
+        double p0050 = 180.0;
+        double p00999 = 50.0;
+        for (int i = 0; i < 20; i++) {
+            LocalDateTime d = now.minusDays(20 - i);
+            twiiQuotes.add(new MarketDailyQuote(null, null, null, "^TWII", d, null, null, null, BigDecimal.valueOf(pTwii), null, null, null, null));
+            corrQuotes1.add(new MarketDailyQuote(null, null, null, "0050", d, null, null, null, BigDecimal.valueOf(p0050), null, null, null, null));
+            corrQuotes2.add(new MarketDailyQuote(null, null, null, "00999", d, null, null, null, BigDecimal.valueOf(p00999), null, null, null, null));
+            double factor = (i % 2 == 0) ? 1.01 : 0.995;
+            pTwii *= factor;
+            p0050 *= factor;
+            p00999 *= factor;
+        }
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(qualifiedCore, expensiveCore, smallSatellite, leveragedBond));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^GSPC")).thenReturn(Flux.empty());
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^NDX")).thenReturn(Flux.empty());
+
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(corrQuotes1));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("00999")).thenReturn(Flux.fromIterable(corrQuotes2));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("00991")).thenReturn(Flux.empty());
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("00680L")).thenReturn(Flux.empty());
+
+        lenient().when(metadataRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
+        when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
+
+        StepVerifier.create(service.evaluateGlobalAssetScores())
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    // Only 1 asset (0050) passed hard constraints
+                    assertThat(res.evaluatedCandidatesCount()).isEqualTo(1);
+                    assertThat(res.coreCount()).isEqualTo(1);
+                    assertThat(res.satelliteCount()).isEqualTo(0);
+                    assertThat(res.defensiveCount()).isEqualTo(0);
+                })
+                .verifyComplete();
+
+        ArgumentCaptor<List<GlobalAssetScore>> captor = ArgumentCaptor.forClass(List.class);
+        verify(scoreRepository).saveAll(captor.capture());
+        List<GlobalAssetScore> savedScores = captor.getValue();
+
+        // Exactly 1 score saved, and it's 0050
+        assertThat(savedScores).hasSize(1);
+        assertThat(savedScores.get(0).getTicker()).isEqualTo("0050");
+        assertThat(savedScores.get(0).getClassRank()).isEqualTo(1);
+        assertThat(savedScores.get(0).getIsQualified()).isTrue();
+
+        // Disqualified candidates 00999, 00991, 00680L MUST NOT be present in saved scores!
+        assertThat(savedScores).noneMatch(s -> "00999".equals(s.getTicker()));
+        assertThat(savedScores).noneMatch(s -> "00991".equals(s.getTicker()));
+        assertThat(savedScores).noneMatch(s -> "00680L".equals(s.getTicker()));
     }
 }
