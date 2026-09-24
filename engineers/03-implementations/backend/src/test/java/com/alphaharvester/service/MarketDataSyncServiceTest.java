@@ -3,12 +3,14 @@ package com.alphaharvester.service;
 import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.dto.MarketDataSyncRequest;
+import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
 import com.alphaharvester.application.service.MarketDataSyncService;
 import com.alphaharvester.domain.entity.*;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import com.alphaharvester.domain.model.DistributionFrequency;
 import com.alphaharvester.domain.model.SyncScope;
+import com.alphaharvester.domain.model.TaxTag;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,12 +29,14 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MarketDataSyncServiceTest {
 
+    @Mock private ExternalMarketDataPort externalMarketDataPort;
     @Mock private GlobalAssetMetadataRepository metadataRepository;
     @Mock private BenchmarkIndexRepository benchmarkRepository;
     @Mock private MarketDailyQuoteRepository quoteRepository;
@@ -47,6 +51,7 @@ class MarketDataSyncServiceTest {
     @BeforeEach
     void setUp() {
         syncService = new MarketDataSyncService(
+                externalMarketDataPort,
                 metadataRepository, benchmarkRepository, quoteRepository,
                 macroYieldRepository, dcaRankRepository, dividendRepository,
                 corporateActionRepository, scoreEvaluationService
@@ -54,7 +59,7 @@ class MarketDataSyncServiceTest {
     }
 
     @Test
-    @DisplayName("Should sync market data successfully with scope ALL")
+    @DisplayName("Should sync market data successfully with scope ALL via ExternalMarketDataPort")
     void shouldSyncMarketDataWithScopeAll() {
         UUID id50 = UUID.randomUUID();
         UUID id720b = UUID.randomUUID();
@@ -65,9 +70,29 @@ class MarketDataSyncServiceTest {
         GlobalAssetMetadata asset720b = new GlobalAssetMetadata(id720b, "00720B", "元大投資級公司債", now, null, null,
                 null, null, CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null);
 
+        MarketDailyQuote quote50 = new MarketDailyQuote(null, id50, null, "0050", now,
+                new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
+                new BigDecimal("188.0"), 2000000L, new BigDecimal("376000000"),
+                new BigDecimal("188.10"), new BigDecimal("-0.05"));
+
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(null, now, new BigDecimal("5.25"),
+                new BigDecimal("4.28"), new BigDecimal("4.58"), new BigDecimal("-0.15"));
+
+        DcaPopularityRank rank50 = new DcaPopularityRank(null, null, "0050", now.getYear(), now.getMonthValue(), 1, 1280000);
+        DividendAnnouncement div = new DividendAnnouncement(null, null, "00720B", now.plusDays(10), now.plusDays(30), new BigDecimal("0.48"), TaxTag.OVERSEAS_76W);
+
+        // Mock external port calls
+        when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset50, asset720b));
+        when(externalMarketDataPort.fetchDailyQuotes()).thenReturn(Flux.just(quote50));
+        when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(snapshot));
+        when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(rank50));
+        when(externalMarketDataPort.fetchDividendAnnouncements("00720B")).thenReturn(Flux.just(div));
+        when(externalMarketDataPort.fetchCorporateActions(any())).thenReturn(Flux.empty());
+
+        // Mock repository calls
         when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(asset50));
         when(metadataRepository.findByTicker("00720B")).thenReturn(Mono.just(asset720b));
-        when(metadataRepository.findByTicker(any())).thenReturn(Mono.empty());
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset720b));
         when(metadataRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         when(quoteRepository.findByTickerAndTradeDate(any(), any())).thenReturn(Mono.empty());
@@ -80,7 +105,7 @@ class MarketDataSyncServiceTest {
         when(dividendRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         when(scoreEvaluationService.evaluateGlobalAssetScores()).thenReturn(Mono.just(
-                new GlobalAssetScoreEvaluationResponse("SUCCESS", "Evaluated", now.toString(), 5, 2, 2, 1)
+                new GlobalAssetScoreEvaluationResponse("SUCCESS", "Evaluated", now.toString(), 2, 1, 0, 1)
         ));
 
         MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, true);
@@ -88,9 +113,11 @@ class MarketDataSyncServiceTest {
         StepVerifier.create(syncService.syncMarketData(req))
                 .assertNext(res -> {
                     assertThat(res.status()).isEqualTo("SUCCESS");
-                    assertThat(res.syncedRecords().etfAssetsCount()).isGreaterThan(0);
-                    assertThat(res.syncedRecords().dailyQuotesCount()).isGreaterThan(0);
+                    assertThat(res.syncedRecords().etfAssetsCount()).isEqualTo(2);
+                    assertThat(res.syncedRecords().dailyQuotesCount()).isEqualTo(1);
                     assertThat(res.syncedRecords().macroYieldSnapshotsCount()).isEqualTo(1);
+                    assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(1);
+                    assertThat(res.syncedRecords().dividendAnnouncementsCount()).isEqualTo(1);
                 })
                 .verifyComplete();
     }

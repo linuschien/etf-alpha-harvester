@@ -137,6 +137,8 @@
                         <exclude>com/alphaharvester/domain/entity/**</exclude>
                         <exclude>com/alphaharvester/domain/callback/**</exclude>
                         <exclude>com/alphaharvester/application/dto/**</exclude>
+                        <exclude>com/alphaharvester/adapter/out/external/*Client.*</exclude>
+                        <exclude>com/alphaharvester/infrastructure/config/**</exclude>
                     </excludes>
                 </configuration>
                 <executions>

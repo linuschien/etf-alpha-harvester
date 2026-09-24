@@ -1,0 +1,135 @@
+package com.alphaharvester.adapter.out.external;
+
+import com.alphaharvester.domain.entity.*;
+import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.domain.model.CorporateActionType;
+import com.alphaharvester.domain.model.DistributionFrequency;
+import com.alphaharvester.domain.model.TaxTag;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class CompositeExternalMarketDataAdapterTest {
+
+    @Mock private TwseMarketDataClient twseClient;
+    @Mock private TpexMarketDataClient tpexClient;
+    @Mock private YahooFinanceClient yahooFinanceClient;
+
+    private CompositeExternalMarketDataAdapter adapter;
+
+    @BeforeEach
+    void setUp() {
+        adapter = new CompositeExternalMarketDataAdapter(twseClient, tpexClient, yahooFinanceClient);
+    }
+
+    @Test
+    @DisplayName("Should delegate fetchEtfMasterUniverse to TwseMarketDataClient")
+    void shouldDelegateFetchEtfMasterUniverse() {
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0050", "元大台灣50", LocalDateTime.now(),
+                "臺灣50指數", "元大投信", new BigDecimal("0.0035"),
+                new BigDecimal("420000000000"), CandidateAssetClass.CORE,
+                DistributionFrequency.SEMI_ANNUAL, 1, LocalDateTime.now(), LocalDateTime.now(), null
+        );
+        when(twseClient.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset));
+
+        StepVerifier.create(adapter.fetchEtfMasterUniverse())
+                .assertNext(res -> assertThat(res.getTicker()).isEqualTo("0050"))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should combine quotes and enrich NAV from Twse MIS")
+    void shouldCombineQuotesAndEnrichNav() {
+        LocalDateTime now = LocalDateTime.now();
+        MarketDailyQuote twseQuote = new MarketDailyQuote(
+                null, null, null, "0050", now,
+                new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
+                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"), null, null
+        );
+        MarketDailyQuote tpexQuote = new MarketDailyQuote(
+                null, null, null, "00679B", now,
+                new BigDecimal("30.0"), new BigDecimal("31.0"), new BigDecimal("29.5"),
+                new BigDecimal("30.5"), 500000L, new BigDecimal("15250000"), null, null
+        );
+        MarketDailyQuote benchmarkQuote = new MarketDailyQuote(
+                null, null, null, "^TWII", now,
+                new BigDecimal("22500.0"), new BigDecimal("22800.0"), new BigDecimal("22450.0"),
+                new BigDecimal("22750.0"), 500000000L, BigDecimal.ZERO, null, null
+        );
+
+        when(twseClient.fetchTwseDailyQuotes()).thenReturn(Flux.just(twseQuote));
+        when(tpexClient.fetchTpexDailyQuotes()).thenReturn(Flux.just(tpexQuote));
+        when(yahooFinanceClient.fetchBenchmarkQuote(anyString())).thenReturn(Mono.empty());
+        when(yahooFinanceClient.fetchBenchmarkQuote("^TWII")).thenReturn(Mono.just(benchmarkQuote));
+
+        Map<String, TwseMarketDataClient.NavSnapshot> navMap = Map.of(
+                "0050", new TwseMarketDataClient.NavSnapshot(new BigDecimal("188.20"), new BigDecimal("-0.11"), 2200000000L)
+        );
+        when(twseClient.fetchMisNavData()).thenReturn(Mono.just(navMap));
+
+        StepVerifier.create(adapter.fetchDailyQuotes())
+                .assertNext(q -> {
+                    assertThat(q.getTicker()).isEqualTo("0050");
+                    assertThat(q.getNetAssetValue()).isEqualTo(new BigDecimal("188.20"));
+                    assertThat(q.getDiscountPremiumPercentage()).isEqualTo(new BigDecimal("-0.11"));
+                })
+                .assertNext(q -> assertThat(q.getTicker()).isEqualTo("00679B"))
+                .assertNext(q -> assertThat(q.getTicker()).isEqualTo("^TWII"))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should delegate fetchLatestMacroYield to YahooFinanceClient")
+    void shouldDelegateFetchLatestMacroYield() {
+        MacroYieldSnapshot snap = new MacroYieldSnapshot(
+                UUID.randomUUID(), LocalDateTime.now(), new BigDecimal("5.25"),
+                new BigDecimal("4.28"), new BigDecimal("4.58"), new BigDecimal("-0.15")
+        );
+        when(yahooFinanceClient.fetchMacroYields()).thenReturn(Mono.just(snap));
+
+        StepVerifier.create(adapter.fetchLatestMacroYield())
+                .assertNext(res -> assertThat(res.getUs10YearTreasuryYield()).isEqualTo(new BigDecimal("4.28")))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should delegate DCA rankings, dividends, and splits")
+    void shouldDelegateDcaAndCorporateActions() {
+        DcaPopularityRank rank = new DcaPopularityRank(null, null, "0050", 2026, 8, 1, 1280000);
+        DividendAnnouncement div = new DividendAnnouncement(null, null, "0050", LocalDateTime.now(), LocalDateTime.now().plusDays(30), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C);
+        CorporateAction split = new CorporateAction(null, null, "0050", CorporateActionType.SPLIT, LocalDateTime.now(), 4, 1);
+
+        when(twseClient.fetchDcaRankings(2026, 8)).thenReturn(Flux.just(rank));
+        when(yahooFinanceClient.fetchDividends("0050")).thenReturn(Flux.just(div));
+        when(yahooFinanceClient.fetchSplits("0050")).thenReturn(Flux.just(split));
+
+        StepVerifier.create(adapter.fetchDcaPopularityRanks(2026, 8))
+                .assertNext(r -> assertThat(r.getRankPosition()).isEqualTo(1))
+                .verifyComplete();
+
+        StepVerifier.create(adapter.fetchDividendAnnouncements("0050"))
+                .assertNext(d -> assertThat(d.getDividendPerShare()).isEqualTo(new BigDecimal("1.5")))
+                .verifyComplete();
+
+        StepVerifier.create(adapter.fetchCorporateActions("0050"))
+                .assertNext(s -> assertThat(s.getSplitToShares()).isEqualTo(4))
+                .verifyComplete();
+    }
+}
