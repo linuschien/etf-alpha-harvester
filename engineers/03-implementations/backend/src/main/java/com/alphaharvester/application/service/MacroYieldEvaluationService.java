@@ -65,7 +65,6 @@ public class MacroYieldEvaluationService {
                     return Mono.zip(coreQuotesMono, vixQuoteMono)
                             .map(tuple -> calculateAssessment(snapshot, tuple.getT1(), tuple.getT2().orElse(null)));
                 })
-                .defaultIfEmpty(fallbackAssessment())
                 .doOnError(e -> log.error("Failed to evaluate macro yield regime: {}", e.getMessage(), e));
     }
 
@@ -76,8 +75,11 @@ public class MacroYieldEvaluationService {
     public MacroRegimeAssessment calculateAssessment(MacroYieldSnapshot snapshot,
                                                      List<MarketDailyQuote> coreQuotes,
                                                      MarketDailyQuote vixQuote) {
+        if (snapshot == null || snapshot.getUsCorporateBondEffectiveYield() == null) {
+            return null;
+        }
         BigDecimal yield = snapshot.getUsCorporateBondEffectiveYield();
-        double yieldValue = yield != null ? yield.doubleValue() : 5.25;
+        double yieldValue = yield.doubleValue();
 
         MacroState state;
         double equityRatio;
@@ -142,17 +144,5 @@ public class MacroYieldEvaluationService {
         }
 
         return new MacroRegimeAssessment(state, equityRatio, bondRatio, yieldValue, summary, crisisLevel);
-    }
-
-    private MacroRegimeAssessment fallbackAssessment() {
-        log.warn("No MacroYieldSnapshot found in database. Using default baseline assessment.");
-        return new MacroRegimeAssessment(
-                MacroState.HIGH_YIELD_ACCUMULATION,
-                0.80,
-                0.20,
-                5.25,
-                "預設基準宏觀狀態【高利蓄水期】，建議配置為 80% 股票 / 20% 債券。",
-                CrisisLevel.NORMAL
-        );
     }
 }

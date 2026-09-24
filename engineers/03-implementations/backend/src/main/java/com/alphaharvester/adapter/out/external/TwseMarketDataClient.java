@@ -53,19 +53,15 @@ public class TwseMarketDataClient {
                             String fullName = node.path("基金中文名稱").asText(shortName).trim();
                             String underlyingIndex = node.path("標的指數/追蹤指數名稱").asText("").trim();
                             String listingDateStr = node.path("上市日期").asText("");
-                            LocalDateTime listingDate = RocDateUtil.parseRocDate(listingDateStr, now.minusYears(1));
+                            LocalDateTime listingDate = RocDateUtil.parseRocDate(listingDateStr);
 
                             long masterShares = parseLongSafe(node.path("發行單位數/轉換數").asText("0"));
                             NavSnapshot navSnap = navMap.get(ticker);
-                            BigDecimal fundSize;
+                            BigDecimal fundSize = null;
                             if (navSnap != null && navSnap.nav() != null && navSnap.sharesOutstanding() > 0) {
                                 fundSize = navSnap.nav().multiply(BigDecimal.valueOf(navSnap.sharesOutstanding())).setScale(2, RoundingMode.HALF_UP);
                             } else if (navSnap != null && navSnap.nav() != null && masterShares > 0) {
                                 fundSize = navSnap.nav().multiply(BigDecimal.valueOf(masterShares)).setScale(2, RoundingMode.HALF_UP);
-                            } else if (masterShares > 0) {
-                                fundSize = BigDecimal.valueOf(masterShares).multiply(BigDecimal.valueOf(20));
-                            } else {
-                                fundSize = BigDecimal.ZERO;
                             }
 
                             CandidateAssetClass assetClass = classifyAsset(ticker, shortName);

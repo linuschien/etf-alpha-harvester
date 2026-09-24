@@ -26,35 +26,21 @@ public class DipBuyOpportunityService {
         return quoteRepository.findByTickerOrderByTradeDateDesc(ticker)
                 .take(252)
                 .collectList()
+                .filter(quotes -> !quotes.isEmpty())
                 .zipWith(
                         quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")
                                 .take(1)
                                 .next()
-                                .map(q -> q.getClosePrice() != null ? q.getClosePrice().doubleValue() : 20.0)
-                                .defaultIfEmpty(20.0)
+                                .filter(q -> q.getClosePrice() != null && q.getClosePrice().compareTo(BigDecimal.ZERO) > 0)
+                                .map(q -> q.getClosePrice().doubleValue())
                 )
-                .map(tuple -> {
-                    List<MarketDailyQuote> quotes = tuple.getT1();
-                    double vix = tuple.getT2();
-                    return evaluatePure(ticker, quotes, vix);
-                })
+                .map(tuple -> evaluatePure(ticker, tuple.getT1(), tuple.getT2()))
                 .doOnError(e -> log.error("Error calculating dip-buying score for ticker {}: {}", ticker, e.getMessage(), e));
     }
 
     public DipBuyOpportunityScore evaluatePure(String ticker, List<MarketDailyQuote> quotes, double vix) {
         if (quotes == null || quotes.isEmpty()) {
-            log.debug("No historical quotes available for {}. Returning baseline score.", ticker);
-            return new DipBuyOpportunityScore(
-                    ticker,
-                    35.0,
-                    "⚪ 【低星觀望區】",
-                    "市場偏熱",
-                    "目前數據累積中或市場偏熱，嚴禁單筆追高加碼，維持定期定額紀律扣款。",
-                    10.0,
-                    0.0,
-                    15.0,
-                    10.0
-            );
+            return null;
         }
 
         double currentPrice = quotes.get(0).getClosePrice().doubleValue();

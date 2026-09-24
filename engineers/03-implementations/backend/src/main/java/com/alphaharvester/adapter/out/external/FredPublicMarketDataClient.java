@@ -64,10 +64,10 @@ public class FredPublicMarketDataClient {
     public Mono<MacroYieldSnapshot> fetchLatestMacroYield() {
         log.info("Fetching macroeconomic yields from FRED public CSV endpoints (Zero API Key)...");
         return Mono.zip(
-                fetchLatestObservation("BAMLC0A0CMEY").defaultIfEmpty(new Observation(LocalDate.now().minusDays(1), new BigDecimal("5.69"))),
-                fetchLatestObservation("DGS10").defaultIfEmpty(new Observation(LocalDate.now().minusDays(1), new BigDecimal("4.96"))),
-                fetchLatestObservation("DGS20").defaultIfEmpty(new Observation(LocalDate.now().minusDays(1), new BigDecimal("5.33"))),
-                fetchLatestObservation("T10Y2Y").defaultIfEmpty(new Observation(LocalDate.now().minusDays(1), new BigDecimal("0.25")))
+                fetchLatestObservation("BAMLC0A0CMEY"),
+                fetchLatestObservation("DGS10"),
+                fetchLatestObservation("DGS20"),
+                fetchLatestObservation("T10Y2Y")
         ).map(tuple -> {
             Observation corp = tuple.getT1();
             Observation y10 = tuple.getT2();

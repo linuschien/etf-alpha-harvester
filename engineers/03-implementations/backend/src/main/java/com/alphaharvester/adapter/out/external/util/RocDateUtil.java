@@ -10,6 +10,13 @@ public final class RocDateUtil {
     }
 
     /**
+     * Converts ROC date format to LocalDateTime at start of day, returning null if unparseable.
+     */
+    public static LocalDateTime parseRocDate(String rocStr) {
+        return parseRocDate(rocStr, null);
+    }
+
+    /**
      * Converts ROC date format (e.g. '1150921', '0920630', '115/09/21', '115-09-21') to LocalDateTime at start of day.
      * If date string is empty or cannot be parsed, returns fallback.
      */

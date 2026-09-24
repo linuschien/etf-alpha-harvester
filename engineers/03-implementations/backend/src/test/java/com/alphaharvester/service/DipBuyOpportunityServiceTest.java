@@ -35,13 +35,10 @@ class DipBuyOpportunityServiceTest {
     }
 
     @Test
-    @DisplayName("Should return baseline low-star score when quotes are empty")
-    void shouldReturnBaselineWhenQuotesEmpty() {
+    @DisplayName("Should return null when quotes are empty")
+    void shouldReturnNullWhenQuotesEmpty() {
         DipBuyOpportunityScore score = service.evaluatePure("0050", List.of(), 15.0);
-
-        assertThat(score.ticker()).isEqualTo("0050");
-        assertThat(score.compositeScore()).isEqualTo(35.0);
-        assertThat(score.starRating()).contains("低星觀望區");
+        assertThat(score).isNull();
     }
 
     @Test

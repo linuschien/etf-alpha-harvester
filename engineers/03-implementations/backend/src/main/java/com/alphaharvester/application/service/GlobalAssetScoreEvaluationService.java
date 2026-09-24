@@ -449,16 +449,21 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         boolean isQualified = true;
         String reason = null;
 
-        double aum = asset.getFundSizeTwd() != null ? asset.getFundSizeTwd().doubleValue() : 5_000_000_000.0;
+        double aum = asset.getFundSizeTwd() != null ? asset.getFundSizeTwd().doubleValue() : 0.0;
         String ticker = asset.getTicker() != null ? asset.getTicker().toUpperCase() : "";
 
+        if (asset.getFundSizeTwd() == null || asset.getFundSizeTwd().compareTo(BigDecimal.ZERO) <= 0) {
+            isQualified = false;
+            reason = "資產規模 (AUM) 缺失或為非正數，無法確認規模門檻";
+        }
+
         // Hard Constraints: Class-specific checks (unqualified assets are eliminated)
-        if (asset.getAssetClass() == CandidateAssetClass.CORE) {
+        if (isQualified && asset.getAssetClass() == CandidateAssetClass.CORE) {
             if (aum < 10_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 100 億 TWD 核心規模門檻";
             }
-        } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
+        } else if (isQualified && asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
             if (aum < 2_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 20 億 TWD 衛星規模門檻";

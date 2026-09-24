@@ -203,15 +203,11 @@ class MacroYieldEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should return fallback assessment when repository is empty")
-    void shouldReturnFallbackWhenRepositoryEmpty() {
+    @DisplayName("Should complete empty when repository is empty")
+    void shouldCompleteEmptyWhenRepositoryEmpty() {
         when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.empty());
 
         StepVerifier.create(macroYieldEvaluationService.evaluateCurrentRegime())
-                .assertNext(assessment -> {
-                    assertThat(assessment.macroState()).isEqualTo(MacroState.HIGH_YIELD_ACCUMULATION);
-                    assertThat(assessment.recommendedEquityRatio()).isEqualTo(0.80);
-                })
                 .verifyComplete();
     }
 }
