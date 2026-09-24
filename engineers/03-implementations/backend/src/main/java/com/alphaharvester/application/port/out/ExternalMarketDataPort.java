@@ -24,7 +24,29 @@ public interface ExternalMarketDataPort {
      * Fetches daily market closing quotes with automatic fallback to Yahoo Finance for any monitored tickers
      * missing from TWSE / TPEx daily reports.
      */
-    Flux<MarketDailyQuote> fetchDailyQuotes(List<String> monitoredTickers);
+    default Flux<MarketDailyQuote> fetchDailyQuotes(List<String> monitoredTickers) {
+        return Flux.concat(
+                fetchTaiwanEtfDailyQuotes(monitoredTickers),
+                fetchBenchmarkQuotes("1mo"),
+                fetchCnnSentimentQuote().flux()
+        );
+    }
+
+    /**
+     * Fetches daily market closing quotes for TWSE & TPEx ETFs, enriched with MIS NAV,
+     * with automatic fallback to Yahoo Finance for missing tickers.
+     */
+    Flux<MarketDailyQuote> fetchTaiwanEtfDailyQuotes(List<String> monitoredTickers);
+
+    /**
+     * Fetches quotes for 8 global benchmark indices from Yahoo Finance over a given range.
+     */
+    Flux<MarketDailyQuote> fetchBenchmarkQuotes(String range);
+
+    /**
+     * Fetches CNN Fear & Greed sentiment score.
+     */
+    Mono<MarketDailyQuote> fetchCnnSentimentQuote();
 
     /**
      * Fetches macroeconomic treasury yields from Yahoo Finance (Zero API key required).

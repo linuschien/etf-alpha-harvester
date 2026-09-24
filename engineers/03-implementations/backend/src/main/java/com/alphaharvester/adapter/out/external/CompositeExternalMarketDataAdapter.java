@@ -43,14 +43,12 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     }
 
     @Override
-    public Flux<MarketDailyQuote> fetchDailyQuotes(List<String> monitoredTickers) {
-        log.info("Fetching real daily quotes from TWSE, TPEx, Yahoo Finance, and CNN Fear & Greed...");
-
+    public Flux<MarketDailyQuote> fetchTaiwanEtfDailyQuotes(List<String> monitoredTickers) {
+        log.info("Fetching daily quotes for Taiwan ETFs from TWSE and TPEx with MIS NAV enrichment...");
         Flux<MarketDailyQuote> twseQuotes = twseClient.fetchTwseDailyQuotes();
         Flux<MarketDailyQuote> tpexQuotes = tpexClient.fetchTpexDailyQuotes();
         Flux<MarketDailyQuote> primaryQuotes = Flux.concat(twseQuotes, tpexQuotes);
 
-        // Collect primary quotes and check if any monitored ETF is missing
         Mono<List<MarketDailyQuote>> primaryListMono = primaryQuotes.collectList();
 
         Mono<List<MarketDailyQuote>> fallbackQuotesMono = primaryListMono.flatMap(primaryList -> {
@@ -59,9 +57,9 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
                 acquiredTickers.add(q.getTicker());
             }
 
-            List<String> missingTickers = monitoredTickers.stream()
+            List<String> missingTickers = monitoredTickers != null ? monitoredTickers.stream()
                     .filter(t -> !acquiredTickers.contains(t))
-                    .toList();
+                    .toList() : List.of();
 
             if (!missingTickers.isEmpty()) {
                 log.warn("Detected {} monitored ETF(s) missing from TWSE/TPEx daily reports: {}. Recovering from Yahoo Finance...",
@@ -73,24 +71,16 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
             return Mono.just(List.of());
         });
 
-        // 8 global benchmarks (past 1 month to catch up any missing days) + CNN Fear & Greed
-        Flux<MarketDailyQuote> benchmarkQuotes = Flux.fromIterable(BENCHMARK_SYMBOLS)
-                .flatMap(symbol -> yahooFinanceClient.fetchHistoricalQuotes(symbol, "1mo"));
-
-        Mono<MarketDailyQuote> fearGreedQuote = cnnSentimentClient.fetchFearAndGreedIndex();
-
-        Flux<MarketDailyQuote> allQuotes = primaryListMono
+        Flux<MarketDailyQuote> mergedQuotes = primaryListMono
                 .flatMapMany(primaryList -> fallbackQuotesMono.flatMapMany(fallbackList ->
                         Flux.concat(
                                 Flux.fromIterable(primaryList),
-                                Flux.fromIterable(fallbackList),
-                                benchmarkQuotes,
-                                fearGreedQuote
+                                Flux.fromIterable(fallbackList)
                         )
                 ));
 
         return twseClient.fetchMisNavData()
-                .flatMapMany(navMap -> allQuotes.map(quote -> {
+                .flatMapMany(navMap -> mergedQuotes.map(quote -> {
                     if (navMap.containsKey(quote.getTicker())) {
                         var nav = navMap.get(quote.getTicker());
                         quote.setNetAssetValue(nav.nav());
@@ -98,6 +88,31 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
                     }
                     return quote;
                 }));
+    }
+
+    @Override
+    public Flux<MarketDailyQuote> fetchBenchmarkQuotes(String range) {
+        String effectiveRange = (range != null && !range.isBlank()) ? range : "1mo";
+        log.info("Fetching quotes for {} global benchmark indices from Yahoo Finance (range: {})...",
+                BENCHMARK_SYMBOLS.size(), effectiveRange);
+        return Flux.fromIterable(BENCHMARK_SYMBOLS)
+                .flatMap(symbol -> yahooFinanceClient.fetchHistoricalQuotes(symbol, effectiveRange));
+    }
+
+    @Override
+    public Mono<MarketDailyQuote> fetchCnnSentimentQuote() {
+        log.info("Fetching CNN Fear & Greed sentiment index...");
+        return cnnSentimentClient.fetchFearAndGreedIndex();
+    }
+
+    @Override
+    public Flux<MarketDailyQuote> fetchDailyQuotes(List<String> monitoredTickers) {
+        log.info("Fetching composite daily quotes (ETFs, Benchmarks, CNN)...");
+        return Flux.concat(
+                fetchTaiwanEtfDailyQuotes(monitoredTickers),
+                fetchBenchmarkQuotes("1mo"),
+                fetchCnnSentimentQuote().flux()
+        );
     }
 
     @Override

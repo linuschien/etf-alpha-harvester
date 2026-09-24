@@ -89,7 +89,9 @@ class MarketDataSyncServiceTest {
 
         // Mock external port calls
         when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset50, asset720b));
-        when(externalMarketDataPort.fetchDailyQuotes(any())).thenReturn(Flux.just(quote50));
+        when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.just(quote50));
+        when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
         when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(snapshot));
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(rank50));
         when(externalMarketDataPort.fetchDividendAnnouncements("00720B")).thenReturn(Flux.just(div));
@@ -157,12 +159,14 @@ class MarketDataSyncServiceTest {
                 new BigDecimal("183.0"), 1100000L, BigDecimal.ZERO, null, null);
 
         DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
-                UUID.randomUUID(), "TWSE_TPEX_DAILY_QUOTES", now.minusDays(5), now.minusDays(5), 10, "SUCCESS", null, now.minusDays(5)
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES, now.minusDays(5), now.minusDays(5), 10, "SUCCESS", null, now.minusDays(5)
         );
-        when(watermarkRepository.findByFeedName("TWSE_TPEX_DAILY_QUOTES")).thenReturn(Mono.just(watermark));
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES)).thenReturn(Mono.just(watermark));
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(externalMarketDataPort.fetchDailyQuotes(any())).thenReturn(Flux.just(todayQuote));
+        when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.just(todayQuote));
+        when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
 
         // When watermark gap is detected (> 1 or 3 days), Yahoo historical backfill is triggered for candidate ETFs
         when(externalMarketDataPort.fetchHistoricalQuotes(eq("0050"), anyString())).thenReturn(Flux.just(backfillQuote));
@@ -176,6 +180,61 @@ class MarketDataSyncServiceTest {
                     assertThat(res.status()).isEqualTo("SUCCESS");
                     // 1 today quote + 1 backfill quote caught up = 2 quotes synced!
                     assertThat(res.syncedRecords().dailyQuotesCount()).isEqualTo(2);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should independently check and update watermarks for all 6 data feeds")
+    void shouldIndependentlyCheckAndUpdateAllSixWatermarks() {
+        LocalDateTime now = LocalDateTime.now();
+        UUID id = UUID.randomUUID();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null, null,
+                null, null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+
+        MarketDailyQuote etfQuote = new MarketDailyQuote(null, id, null, "0050", now,
+                new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
+                new BigDecimal("188.0"), 2000000L, new BigDecimal("376000000"), null, null);
+        MarketDailyQuote benchQuote = new MarketDailyQuote(null, null, null, "^TWII", now,
+                new BigDecimal("22000.0"), new BigDecimal("22100.0"), new BigDecimal("21950.0"),
+                new BigDecimal("22050.0"), 5000000000L, BigDecimal.ZERO, null, null);
+        MarketDailyQuote cnnQuote = new MarketDailyQuote(null, null, null, "FEAR_GREED", now,
+                new BigDecimal("55.0"), new BigDecimal("55.0"), new BigDecimal("55.0"),
+                new BigDecimal("55.0"), 0L, BigDecimal.ZERO, null, null);
+
+        MacroYieldSnapshot yieldSnapshot = new MacroYieldSnapshot(null, now, new BigDecimal("5.25"),
+                new BigDecimal("4.28"), new BigDecimal("4.58"), new BigDecimal("-0.15"));
+        DcaPopularityRank dcaRank = new DcaPopularityRank(null, null, "0050", now.getYear(), now.getMonthValue(), 1, 1000);
+
+        when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset));
+        when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.just(etfQuote));
+        when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.just(benchQuote));
+        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.just(cnnQuote));
+        when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(yieldSnapshot));
+        when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(dcaRank));
+        when(externalMarketDataPort.fetchDividendAnnouncements(anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchCorporateActions(anyString())).thenReturn(Flux.empty());
+
+        when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(asset));
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
+        when(metadataRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(quoteRepository.findByTickerAndTradeDate(any(), any())).thenReturn(Mono.empty());
+        when(quoteRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(macroYieldRepository.findByRecordDate(any())).thenReturn(Mono.empty());
+        when(macroYieldRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(any(), any(), any())).thenReturn(Mono.empty());
+        when(dcaRankRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().etfAssetsCount()).isEqualTo(1);
+                    // 1 ETF quote + 1 benchmark quote + 1 CNN quote = 3 daily quotes!
+                    assertThat(res.syncedRecords().dailyQuotesCount()).isEqualTo(3);
+                    assertThat(res.syncedRecords().macroYieldSnapshotsCount()).isEqualTo(1);
+                    assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(1);
                 })
                 .verifyComplete();
     }

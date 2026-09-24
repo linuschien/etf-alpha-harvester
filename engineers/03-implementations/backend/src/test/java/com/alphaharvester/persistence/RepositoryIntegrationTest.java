@@ -126,13 +126,14 @@ class RepositoryIntegrationTest {
                 .assertNext(list -> {
                     assertThat(list).hasSize(6);
                     assertThat(list).extracting("feedName")
-                            .contains("TWSE_TPEX_DAILY_QUOTES", "TWSE_MIS_NAV", "YAHOO_BENCHMARKS", "CNN_FEAR_GREED");
+                            .contains("TAIWAN_ETF_QUOTES", "GLOBAL_BENCHMARKS", "CNN_FEAR_GREED",
+                                    "MACRO_YIELD_SNAPSHOT", "TWSE_DCA_RANKINGS", "TWSE_ETF_METADATA");
                 })
                 .verifyComplete();
 
-        StepVerifier.create(watermarkRepository.findByFeedName("YAHOO_BENCHMARKS"))
+        StepVerifier.create(watermarkRepository.findByFeedName("GLOBAL_BENCHMARKS"))
                 .assertNext(wm -> {
-                    assertThat(wm.getFeedName()).isEqualTo("YAHOO_BENCHMARKS");
+                    assertThat(wm.getFeedName()).isEqualTo("GLOBAL_BENCHMARKS");
                     assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
                 })
                 .verifyComplete();

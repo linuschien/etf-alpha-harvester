@@ -27,6 +27,13 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(MarketDataSyncService.class);
 
+    public static final String WATERMARK_TAIWAN_ETF_QUOTES = "TAIWAN_ETF_QUOTES";
+    public static final String WATERMARK_GLOBAL_BENCHMARKS = "GLOBAL_BENCHMARKS";
+    public static final String WATERMARK_CNN_FEAR_GREED = "CNN_FEAR_GREED";
+    public static final String WATERMARK_MACRO_YIELD_SNAPSHOT = "MACRO_YIELD_SNAPSHOT";
+    public static final String WATERMARK_TWSE_DCA_RANKINGS = "TWSE_DCA_RANKINGS";
+    public static final String WATERMARK_TWSE_ETF_METADATA = "TWSE_ETF_METADATA";
+
     private final ExternalMarketDataPort externalMarketDataPort;
     private final GlobalAssetMetadataRepository metadataRepository;
     private final BenchmarkIndexRepository benchmarkRepository;
@@ -105,31 +112,46 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         if (scope != SyncScope.ALL && scope != SyncScope.METADATA) {
             return Mono.just(0);
         }
-        log.info("Fetching and syncing ETF metadata catalog from external data feed...");
-        return externalMarketDataPort.fetchEtfMasterUniverse()
-                .flatMap(asset -> metadataRepository.findByTicker(asset.getTicker())
-                        .flatMap(existing -> {
-                            existing.setName(asset.getName());
-                            existing.setTotalExpenseRatio(asset.getTotalExpenseRatio());
-                            existing.setFundSizeTwd(asset.getFundSizeTwd());
-                            existing.setAssetClass(asset.getAssetClass());
-                            existing.setDistributionFrequency(asset.getDistributionFrequency());
-                            existing.setUpdatedAt(now);
-                            return metadataRepository.save(existing);
-                        })
-                        .switchIfEmpty(metadataRepository.save(asset)))
-                .count()
-                .map(Long::intValue);
+        log.info("Fetching and syncing ETF metadata catalog from TWSE OpenAPI...");
+        return watermarkRepository.findByFeedName(WATERMARK_TWSE_ETF_METADATA)
+                .map(DataFeedSyncWatermark::getLatestRecordDate)
+                .defaultIfEmpty(now.minusDays(1))
+                .flatMap(latestRecordDate -> externalMarketDataPort.fetchEtfMasterUniverse()
+                        .flatMap(asset -> metadataRepository.findByTicker(asset.getTicker())
+                                .flatMap(existing -> {
+                                    existing.setName(asset.getName());
+                                    existing.setTotalExpenseRatio(asset.getTotalExpenseRatio());
+                                    existing.setFundSizeTwd(asset.getFundSizeTwd());
+                                    existing.setAssetClass(asset.getAssetClass());
+                                    existing.setDistributionFrequency(asset.getDistributionFrequency());
+                                    existing.setUpdatedAt(now);
+                                    return metadataRepository.save(existing);
+                                })
+                                .switchIfEmpty(metadataRepository.save(asset)))
+                        .count()
+                        .map(Long::intValue)
+                        .flatMap(metaCount -> updateWatermark(WATERMARK_TWSE_ETF_METADATA, now, now, metaCount)
+                                .thenReturn(metaCount)));
     }
 
     private Mono<Integer> syncQuotes(SyncScope scope, LocalDateTime now, Integer backfillDays) {
         if (scope != SyncScope.ALL && scope != SyncScope.QUOTES) {
             return Mono.just(0);
         }
-        log.info("Fetching and syncing daily market quotes from TWSE, TPEx, Yahoo Finance, and CNN Fear & Greed...");
+        log.info("Syncing 3 distinct market quote categories (Taiwan ETFs, Global Benchmarks, CNN Sentiment)...");
+        return syncTaiwanEtfQuotes(now, backfillDays)
+                .flatMap(etfCount -> syncBenchmarkQuotes(now, backfillDays)
+                        .flatMap(benchCount -> syncCnnSentiment(now, backfillDays)
+                                .map(cnnCount -> {
+                                    int total = etfCount + benchCount + cnnCount;
+                                    log.info("Completed market quote synchronization: {} ETFs, {} Benchmarks, {} CNN sentiment (Total: {})",
+                                            etfCount, benchCount, cnnCount, total);
+                                    return total;
+                                })));
+    }
 
-        // 1. Fetch Watermark to compare how many days were missed
-        return watermarkRepository.findByFeedName("TWSE_TPEX_DAILY_QUOTES")
+    private Mono<Integer> syncTaiwanEtfQuotes(LocalDateTime now, Integer backfillDays) {
+        return watermarkRepository.findByFeedName(WATERMARK_TAIWAN_ETF_QUOTES)
                 .map(DataFeedSyncWatermark::getLatestRecordDate)
                 .defaultIfEmpty(now.minusDays(1))
                 .flatMap(latestRecordDate -> {
@@ -138,27 +160,24 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     boolean hasGap = daysMissed > allowedGap;
                     boolean force = backfillDays != null && backfillDays > 0;
 
-                    log.info("Watermark comparison for 'TWSE_TPEX_DAILY_QUOTES': latestRecordDate={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
-                            latestRecordDate, now, daysMissed, allowedGap, hasGap, force);
+                    log.info("Watermark comparison for '{}': latestRecordDate={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
+                            WATERMARK_TAIWAN_ETF_QUOTES, latestRecordDate, now, daysMissed, allowedGap, hasGap, force);
 
-                    // 2. Fetch today's primary daily quotes from TWSE, TPEx, MIS NAV, Yahoo benchmarks, CNN
-                    Mono<Integer> primaryDailyCountMono = metadataRepository.findAll()
+                    Mono<Integer> primaryCountMono = metadataRepository.findAll()
                             .map(GlobalAssetMetadata::getTicker)
                             .collectList()
-                            .flatMapMany(externalMarketDataPort::fetchDailyQuotes)
+                            .flatMapMany(externalMarketDataPort::fetchTaiwanEtfDailyQuotes)
                             .flatMap(this::upsertDailyQuote)
                             .count()
                             .map(Long::intValue);
 
-                    // 3. If watermark indicates outage gap or force backfill: backfill ALL candidate ETFs from Yahoo Finance
                     Mono<Integer> backfillCountMono;
                     if (hasGap || force) {
                         int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
                         String range = deriveRange(effectiveDays);
-                        log.warn("Watermark confirmed trading gap! Missed {} days. Initiating full candidate ETF universe historical backfill from Yahoo Finance (range: '{}')...",
+                        log.warn("Watermark confirmed ETF trading gap! Missed {} days. Backfilling candidate ETF universe from Yahoo Finance (range: '{}')...",
                                 daysMissed, range);
 
-                        // Backfill ALL ETFs in candidate universe with concurrency = 4 to avoid hitting Yahoo rate limits
                         backfillCountMono = metadataRepository.findAll()
                                 .map(GlobalAssetMetadata::getTicker)
                                 .collectList()
@@ -171,15 +190,55 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                         backfillCountMono = Mono.just(0);
                     }
 
-                    return primaryDailyCountMono.flatMap(primaryCount ->
-                            backfillCountMono.flatMap(backfillCount ->
-                                    updateWatermark("TWSE_TPEX_DAILY_QUOTES", now, now, primaryCount)
-                                            .then(updateWatermark("YAHOO_BENCHMARKS", now, now, 8))
-                                            .then(updateWatermark("CNN_FEAR_GREED", now, now, 1))
-                                            .then(backfillCount > 0 ? updateWatermark("YAHOO_ETF_HISTORICAL", now, now, backfillCount) : Mono.empty())
-                                            .thenReturn(primaryCount + backfillCount)
-                            )
+                    return primaryCountMono.flatMap(primaryCount ->
+                            backfillCountMono.flatMap(backfillCount -> {
+                                int total = primaryCount + backfillCount;
+                                return updateWatermark(WATERMARK_TAIWAN_ETF_QUOTES, now, now, total)
+                                        .thenReturn(total);
+                            })
                     );
+                });
+    }
+
+    private Mono<Integer> syncBenchmarkQuotes(LocalDateTime now, Integer backfillDays) {
+        return watermarkRepository.findByFeedName(WATERMARK_GLOBAL_BENCHMARKS)
+                .map(DataFeedSyncWatermark::getLatestRecordDate)
+                .defaultIfEmpty(now.minusDays(1))
+                .flatMap(latestRecordDate -> {
+                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
+                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
+                    boolean hasGap = daysMissed > allowedGap;
+                    boolean force = backfillDays != null && backfillDays > 0;
+
+                    int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
+                    String range = (hasGap || force) ? deriveRange(effectiveDays) : "5d";
+
+                    log.info("Watermark comparison for '{}': latestRecordDate={}, today={}, daysMissed={}, range='{}'",
+                            WATERMARK_GLOBAL_BENCHMARKS, latestRecordDate, now, daysMissed, range);
+
+                    return externalMarketDataPort.fetchBenchmarkQuotes(range)
+                            .flatMap(this::upsertDailyQuote)
+                            .count()
+                            .map(Long::intValue)
+                            .flatMap(count -> updateWatermark(WATERMARK_GLOBAL_BENCHMARKS, now, now, count)
+                                    .thenReturn(count));
+                });
+    }
+
+    private Mono<Integer> syncCnnSentiment(LocalDateTime now, Integer backfillDays) {
+        return watermarkRepository.findByFeedName(WATERMARK_CNN_FEAR_GREED)
+                .map(DataFeedSyncWatermark::getLatestRecordDate)
+                .defaultIfEmpty(now.minusDays(1))
+                .flatMap(latestRecordDate -> {
+                    log.info("Syncing CNN Fear & Greed Sentiment (Watermark: '{}', latestRecordDate={})...",
+                            WATERMARK_CNN_FEAR_GREED, latestRecordDate);
+
+                    return externalMarketDataPort.fetchCnnSentimentQuote()
+                            .flatMap(this::upsertDailyQuote)
+                            .map(q -> 1)
+                            .defaultIfEmpty(0)
+                            .flatMap(count -> updateWatermark(WATERMARK_CNN_FEAR_GREED, now, now, count)
+                                    .thenReturn(count));
                 });
     }
 
@@ -241,18 +300,22 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
             return Mono.just(0);
         }
         log.info("Fetching and syncing macroeconomic treasury yields from Yahoo Finance...");
-        return externalMarketDataPort.fetchLatestMacroYield()
-                .flatMap(snapshot -> macroYieldRepository.findByRecordDate(snapshot.getRecordDate())
-                        .flatMap(existing -> {
-                            existing.setUsCorporateBondEffectiveYield(snapshot.getUsCorporateBondEffectiveYield());
-                            existing.setUs10YearTreasuryYield(snapshot.getUs10YearTreasuryYield());
-                            existing.setUs20YearTreasuryYield(snapshot.getUs20YearTreasuryYield());
-                            existing.setYieldSpread10yMinus2y(snapshot.getYieldSpread10yMinus2y());
-                            return macroYieldRepository.save(existing);
-                        })
-                        .switchIfEmpty(macroYieldRepository.save(snapshot))
-                        .thenReturn(1))
-                .defaultIfEmpty(0);
+        return watermarkRepository.findByFeedName(WATERMARK_MACRO_YIELD_SNAPSHOT)
+                .map(DataFeedSyncWatermark::getLatestRecordDate)
+                .defaultIfEmpty(now.minusDays(1))
+                .flatMap(latestRecordDate -> externalMarketDataPort.fetchLatestMacroYield()
+                        .flatMap(snapshot -> macroYieldRepository.findByRecordDate(snapshot.getRecordDate())
+                                .flatMap(existing -> {
+                                    existing.setUsCorporateBondEffectiveYield(snapshot.getUsCorporateBondEffectiveYield());
+                                    existing.setUs10YearTreasuryYield(snapshot.getUs10YearTreasuryYield());
+                                    existing.setUs20YearTreasuryYield(snapshot.getUs20YearTreasuryYield());
+                                    existing.setYieldSpread10yMinus2y(snapshot.getYieldSpread10yMinus2y());
+                                    return macroYieldRepository.save(existing);
+                                })
+                                .switchIfEmpty(macroYieldRepository.save(snapshot))
+                                .flatMap(saved -> updateWatermark(WATERMARK_MACRO_YIELD_SNAPSHOT, now, saved.getRecordDate(), 1)
+                                        .thenReturn(1)))
+                        .defaultIfEmpty(0));
     }
 
     private Mono<Integer> syncDcaRanks(SyncScope scope, LocalDateTime now) {
@@ -260,32 +323,37 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
             return Mono.just(0);
         }
         log.info("Fetching and syncing regular quota (DCA) Top 20 rankings from TWSE...");
-        return externalMarketDataPort.fetchDcaPopularityRanks(now.getYear(), now.getMonthValue())
-                .flatMap(rank -> metadataRepository.findByTicker(rank.getTicker())
-                        .flatMap(asset -> {
-                            rank.setAssetId(asset.getId());
-                            return dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
-                                            rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
-                                    .flatMap(existing -> {
-                                        existing.setRankPosition(rank.getRankPosition());
-                                        existing.setRegularInvestorCount(rank.getRegularInvestorCount());
-                                        existing.setAssetId(asset.getId());
-                                        return dcaRankRepository.save(existing);
-                                    })
-                                    .switchIfEmpty(dcaRankRepository.save(rank));
-                        })
-                        .switchIfEmpty(
-                                dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
-                                                rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
-                                        .flatMap(existing -> {
-                                            existing.setRankPosition(rank.getRankPosition());
-                                            existing.setRegularInvestorCount(rank.getRegularInvestorCount());
-                                            return dcaRankRepository.save(existing);
-                                        })
-                                        .switchIfEmpty(dcaRankRepository.save(rank))
-                        ))
-                .count()
-                .map(Long::intValue);
+        return watermarkRepository.findByFeedName(WATERMARK_TWSE_DCA_RANKINGS)
+                .map(DataFeedSyncWatermark::getLatestRecordDate)
+                .defaultIfEmpty(now.minusMonths(1))
+                .flatMap(latestRecordDate -> externalMarketDataPort.fetchDcaPopularityRanks(now.getYear(), now.getMonthValue())
+                        .flatMap(rank -> metadataRepository.findByTicker(rank.getTicker())
+                                .flatMap(asset -> {
+                                    rank.setAssetId(asset.getId());
+                                    return dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
+                                                    rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
+                                            .flatMap(existing -> {
+                                                existing.setRankPosition(rank.getRankPosition());
+                                                existing.setRegularInvestorCount(rank.getRegularInvestorCount());
+                                                existing.setAssetId(asset.getId());
+                                                return dcaRankRepository.save(existing);
+                                            })
+                                            .switchIfEmpty(dcaRankRepository.save(rank));
+                                })
+                                .switchIfEmpty(
+                                        dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
+                                                        rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
+                                                .flatMap(existing -> {
+                                                    existing.setRankPosition(rank.getRankPosition());
+                                                    existing.setRegularInvestorCount(rank.getRegularInvestorCount());
+                                                    return dcaRankRepository.save(existing);
+                                                })
+                                                .switchIfEmpty(dcaRankRepository.save(rank))
+                                ))
+                        .count()
+                        .map(Long::intValue)
+                        .flatMap(dcaCount -> updateWatermark(WATERMARK_TWSE_DCA_RANKINGS, now, now, dcaCount)
+                                .thenReturn(dcaCount)));
     }
 
     private Mono<int[]> syncDividendsAndSplits(SyncScope scope, LocalDateTime now) {
