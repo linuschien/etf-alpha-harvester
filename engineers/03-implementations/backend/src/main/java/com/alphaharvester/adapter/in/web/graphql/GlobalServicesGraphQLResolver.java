@@ -159,7 +159,7 @@ public class GlobalServicesGraphQLResolver {
     public Flux<GlobalAssetScore> getScoresByAssetClass(@Argument CandidateAssetClass assetClass,
                                                         @Argument String evaluationDate) {
         log.debug("GraphQL Query: getScoresByAssetClass({}, {})", assetClass, evaluationDate);
-        return queryService.listGlobalAssetScores(new GlobalAssetScoreFilterInput(assetClass, evaluationDate, true));
+        return queryService.listGlobalAssetScores(new GlobalAssetScoreFilterInput(assetClass, evaluationDate));
     }
 
     @QueryMapping

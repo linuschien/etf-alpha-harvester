@@ -51,10 +51,4 @@ public class GlobalAssetScore {
 
     @Column("fund_size_twd")
     private BigDecimal fundSizeTwd;
-
-    @Column("is_qualified")
-    private Boolean isQualified;
-
-    @Column("disqualification_reason")
-    private String disqualificationReason;
 }

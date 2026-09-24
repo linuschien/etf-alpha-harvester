@@ -140,7 +140,6 @@ public class GlobalAssetQueryService {
         }
         GlobalAssetScore probe = new GlobalAssetScore();
         probe.setAssetClass(filter.assetClass());
-        probe.setIsQualified(filter.isQualified());
         if (filter.evaluationDate() != null) {
             probe.setEvaluationDate(parseDate(filter.evaluationDate(), false));
         }

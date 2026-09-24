@@ -185,10 +185,8 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                             Integer dcaRank = dcaRankMap.get(asset.getTicker());
                             List<DividendAnnouncement> divs = dividendMap.get(asset.getTicker());
                             GlobalAssetScore score = evaluateAsset(asset, evaluationDate, etfQuotes, maxR2, dcaRank, divs);
-                            if (Boolean.TRUE.equals(score.getIsQualified())) {
+                            if (score != null) {
                                 allScores.add(score);
-                            } else {
-                                log.info("Asset {} eliminated by hard constraints: {}", asset.getTicker(), score.getDisqualificationReason());
                             }
                             return asset;
                         });
@@ -414,19 +412,10 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             }
         }
 
-        // If disqualified, return immediately without multi-factor scoring calculation
+        // If disqualified, return null (candidate eliminated from investable universe)
         if (!isQualified) {
-            GlobalAssetScore scoreEntity = new GlobalAssetScore();
-            scoreEntity.setAssetId(asset.getId());
-            scoreEntity.setTicker(asset.getTicker());
-            scoreEntity.setEvaluationDate(evaluationDate);
-            scoreEntity.setAssetClass(asset.getAssetClass());
-            scoreEntity.setCompositeScore(BigDecimal.ZERO);
-            scoreEntity.setTotalExpenseRatio(asset.getTotalExpenseRatio());
-            scoreEntity.setFundSizeTwd(asset.getFundSizeTwd());
-            scoreEntity.setIsQualified(false);
-            scoreEntity.setDisqualificationReason(reason);
-            return scoreEntity;
+            log.info("Asset {} eliminated by hard constraints: {}", asset.getTicker(), reason);
+            return null;
         }
 
         // Multi-Factor Score Calculation [0, 100] using smooth linear functions
@@ -496,8 +485,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         scoreEntity.setCompositeScore(finalScore);
         scoreEntity.setTotalExpenseRatio(asset.getTotalExpenseRatio());
         scoreEntity.setFundSizeTwd(asset.getFundSizeTwd());
-        scoreEntity.setIsQualified(true);
-        scoreEntity.setDisqualificationReason(null);
 
         return scoreEntity;
     }

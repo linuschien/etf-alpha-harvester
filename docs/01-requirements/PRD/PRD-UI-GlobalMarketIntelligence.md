@@ -156,7 +156,7 @@
 ### 3.3 Tab 2：合規標的天梯榜 (Qualified Asset Leaderboard)
 
 #### 1. 設計原則與純淨過濾
-* **100% 嚴格過濾**：`is_qualified == true`。徹底剔除未滿流動性門檻、TER 過高、規模低於 100 億或每日重置槓桿之投機標的。
+* **100% 嚴格過濾**：僅收錄通過硬約束之合格候選標的。徹底剔除未滿流動性門檻、TER 過高、規模過小或每日重置槓桿之投機標的。
 * **分組獨立頁籤**：
   - `核心大盤 (Core)`：永不觸發停利，終身穩健複利底座。
   - `動能衛星 (Satellite)`：夏農波動收割對象，高波動與高動能。
@@ -347,7 +347,7 @@
 | :--- | :--- | :--- |
 | **頂部導讀 ＆ 宏觀利率儀表** | `MacroYieldSnapshotGraphQLResolver.getLatestMacroYieldSnapshot` | `recordDate`, `usCorporateBondEffectiveYield`, `us10YearTreasuryYield`, `yieldSpread10yMinus2y` |
 | **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice` (前端/GraphQL 即時計算 20/60/120/240MA 與 BB 20, 2σ，並由 corporateAction 做分割平滑) |
-| **合規標的天梯榜** | `GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `classRank`, `compositeScore`, `isQualified`, `totalExpenseRatio`, `fundSizeTwd` |
+| **合規標的天梯榜** | `GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `classRank`, `compositeScore`, `totalExpenseRatio`, `fundSizeTwd` |
 | **天梯榜多天期績效與收盤折溢價** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `discountPremiumPercentage`, `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (採收盤價價差 + 期間配息現金加總零誤差計算) |
 | **超跌加碼勝率指數卡片** | `MarketDailyQuoteGraphQLResolver.getDipBuyOpportunity` (純函數求解) | `score` ($S_{\text{dip}}$), `grade`, `winRateRange`, `bollingerScore`, `fibonacciScore`, `maSupportScore`, `panicScore`, `recommendation` |
 | **ETF 除息月曆** | `DividendAnnouncementGraphQLResolver.listDividendsByDateRange` | `ticker`, `exDate`, `paymentDate`, `dividendPerShare`, `taxTag` |
@@ -358,7 +358,7 @@
 
 ## 6. 驗收標準 (Acceptance Criteria)
 
-1. **零雜訊驗收**：天梯榜上絕不出現任何 `is_qualified == false` 的淘汰標的。
+1. **零雜訊驗收**：天梯榜上所有標的皆為通過硬約束之合格標的，絕無淘汰標的。
 2. **多天期績效驗收**：1M, 3M, 6M, 1Y, 2Y 績效必須嚴格依據「收盤價價差 ＋ 期間累計配息現金」零誤差加總法計算，支援點擊表頭雙向排序；未達天期標的以 `--` 容錯展示。
 3. **四條均線與布林通道驗收**：5 大基準走勢圖與抽屜 K 線圖必須完整繪製 20MA、60MA、120MA、240MA，月線布林通道 ($20\text{MA} \pm 2\sigma$) 必須以半透明色塊完整填充，跌破下軌時能清晰變色提示。
 4. **超跌加碼勝率評分驗收**：加碼評分 $S_{\text{dip}}$ 必須嚴格由四維度（統計 30%、空間 25%、趨勢 25%、情緒 20%）純函數求解，總分落在 0~100 區間，並能準確映射至星級、歷史勝率與建議工單。

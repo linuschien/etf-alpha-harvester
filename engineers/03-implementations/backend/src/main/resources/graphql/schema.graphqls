@@ -100,8 +100,6 @@ type GlobalAssetScore {
     compositeScore: Float!
     totalExpenseRatio: Float
     fundSizeTwd: Float
-    isQualified: Boolean!
-    disqualificationReason: String
 }
 
 type DcaPopularityRank {
@@ -179,7 +177,6 @@ input MacroYieldFilterInput {
 input GlobalAssetScoreFilterInput {
     assetClass: CandidateAssetClass
     evaluationDate: String
-    isQualified: Boolean
 }
 
 input DcaPopularityFilterInput {

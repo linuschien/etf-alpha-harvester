@@ -107,8 +107,6 @@ Table global_asset_score {
   composite_score decimal(6,2) [not null, note: 'Normalized total score [0, 100]']
   total_expense_ratio decimal(6,4)
   fund_size_twd decimal(18,2)
-  is_qualified boolean [not null, default: true, note: 'Passed all hard constraints for this class']
-  disqualification_reason text [note: 'Detailed failure reason if disqualified']
 
   indexes {
     (asset_class, evaluation_date, class_rank)

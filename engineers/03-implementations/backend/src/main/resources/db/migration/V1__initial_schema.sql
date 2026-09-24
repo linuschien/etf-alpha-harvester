@@ -65,8 +65,6 @@ CREATE TABLE IF NOT EXISTS global_asset_score (
     composite_score DECIMAL(6,2) NOT NULL,
     total_expense_ratio DECIMAL(6,4),
     fund_size_twd DECIMAL(18,2),
-    is_qualified BOOLEAN NOT NULL DEFAULT TRUE,
-    disqualification_reason TEXT,
     CONSTRAINT uq_global_asset_score UNIQUE (ticker, evaluation_date)
 );
 

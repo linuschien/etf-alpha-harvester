@@ -74,9 +74,8 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         GlobalAssetScore score = service.evaluateAsset(coreAsset, now);
 
+        assertThat(score).isNotNull();
         assertThat(score.getTicker()).isEqualTo("006208");
-        assertThat(score.getIsQualified()).isTrue();
-        assertThat(score.getDisqualificationReason()).isNull();
         assertThat(score.getCompositeScore().doubleValue()).isGreaterThan(70.0);
     }
 
@@ -92,8 +91,7 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         GlobalAssetScore score = service.evaluateAsset(expensiveCore, now);
 
-        assertThat(score.getIsQualified()).isFalse();
-        assertThat(score.getDisqualificationReason()).contains("超過核心大盤上限 0.45%");
+        assertThat(score).isNull();
     }
 
     @Test
@@ -108,8 +106,7 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         GlobalAssetScore score = service.evaluateAsset(smallAumCore, now);
 
-        assertThat(score.getIsQualified()).isFalse();
-        assertThat(score.getDisqualificationReason()).contains("資產規模未達 100 億 TWD 核心規模門檻");
+        assertThat(score).isNull();
     }
 
     @Test
@@ -383,9 +380,7 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         GlobalAssetScore score = service.evaluateAsset(smallSatellite, now);
 
-        assertThat(score.getIsQualified()).isFalse();
-        assertThat(score.getDisqualificationReason()).contains("資產規模未達 20 億 TWD 衛星規模門檻");
-        assertThat(score.getCompositeScore()).isEqualTo(BigDecimal.ZERO);
+        assertThat(score).isNull();
     }
 
     @Test
@@ -407,9 +402,7 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         GlobalAssetScore score = service.evaluateAsset(illiquidSatellite, now, quotes, 0.20, null);
 
-        assertThat(score.getIsQualified()).isFalse();
-        assertThat(score.getDisqualificationReason()).contains("滾動日均成交金額未達 2,000 萬 TWD 衛星流動性門檻");
-        assertThat(score.getCompositeScore()).isEqualTo(BigDecimal.ZERO);
+        assertThat(score).isNull();
     }
 
     @Test
@@ -424,9 +417,7 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         GlobalAssetScore score = service.evaluateAsset(smallBond, now);
 
-        assertThat(score.getIsQualified()).isFalse();
-        assertThat(score.getDisqualificationReason()).contains("資產規模未達 50 億 TWD 防禦資產規模門檻");
-        assertThat(score.getCompositeScore()).isEqualTo(BigDecimal.ZERO);
+        assertThat(score).isNull();
     }
 
     @Test
@@ -448,10 +439,8 @@ class GlobalAssetScoreEvaluationServiceTest {
         GlobalAssetScore scoreL = service.evaluateAsset(leveragedBond, now);
         GlobalAssetScore scoreR = service.evaluateAsset(inverseBond, now);
 
-        assertThat(scoreL.getIsQualified()).isFalse();
-        assertThat(scoreL.getDisqualificationReason()).contains("防禦資產嚴禁槓桿或反向型標的 (00680L)");
-        assertThat(scoreR.getIsQualified()).isFalse();
-        assertThat(scoreR.getDisqualificationReason()).contains("防禦資產嚴禁槓桿或反向型標的 (00681R)");
+        assertThat(scoreL).isNull();
+        assertThat(scoreR).isNull();
     }
 
     @Test
@@ -480,7 +469,8 @@ class GlobalAssetScoreEvaluationServiceTest {
         GlobalAssetScore scoreWithDivs = service.evaluateAsset(bondAsset, now, quotes, 0.0, null, dividends);
         GlobalAssetScore scoreNoDivs = service.evaluateAsset(bondAsset, now, quotes, 0.0, null, List.of());
 
-        assertThat(scoreWithDivs.getIsQualified()).isTrue();
+        assertThat(scoreWithDivs).isNotNull();
+        assertThat(scoreNoDivs).isNotNull();
         // With 6% yield, yieldScore = 100, which is higher than default 75 when dividends are empty
         assertThat(scoreWithDivs.getCompositeScore()).isGreaterThan(scoreNoDivs.getCompositeScore());
     }
@@ -569,7 +559,6 @@ class GlobalAssetScoreEvaluationServiceTest {
         assertThat(savedScores).hasSize(1);
         assertThat(savedScores.get(0).getTicker()).isEqualTo("0050");
         assertThat(savedScores.get(0).getClassRank()).isEqualTo(1);
-        assertThat(savedScores.get(0).getIsQualified()).isTrue();
 
         // Disqualified candidates 00999, 00991, 00680L MUST NOT be present in saved scores!
         assertThat(savedScores).noneMatch(s -> "00999".equals(s.getTicker()));

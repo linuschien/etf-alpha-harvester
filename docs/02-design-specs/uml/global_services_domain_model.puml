@@ -58,8 +58,6 @@ package "Global Domain Entities (Persisted Data)" {
         +Decimal composite_score
         +Decimal total_expense_ratio
         +Decimal fund_size_twd
-        +Boolean is_qualified
-        +String disqualification_reason
     }
 
     class DcaPopularityRank <<Entity>> {
