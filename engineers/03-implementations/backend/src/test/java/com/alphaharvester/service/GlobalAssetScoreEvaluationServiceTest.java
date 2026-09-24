@@ -80,6 +80,24 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
+    @DisplayName("Should award higher score to Core asset with higher DCA rank")
+    void shouldAwardHigherScoreToCoreAssetWithHigherDcaRank() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata coreAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(20), "臺灣50",
+                new BigDecimal("0.0032"), new BigDecimal("400000000000"),
+                CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
+        );
+
+        GlobalAssetScore scoreRank1 = service.evaluateAsset(coreAsset, now, null, 0.98, 1);
+        GlobalAssetScore scoreRank20 = service.evaluateAsset(coreAsset, now, null, 0.98, 20);
+        GlobalAssetScore scoreUnranked = service.evaluateAsset(coreAsset, now, null, 0.98, null);
+
+        assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreRank20.getCompositeScore());
+        assertThat(scoreRank20.getCompositeScore()).isGreaterThan(scoreUnranked.getCompositeScore());
+    }
+
+    @Test
     @DisplayName("Should disqualify Core asset when total expense ratio exceeds 0.45%")
     void shouldDisqualifyCoreAssetOnHighExpenseRatio() {
         LocalDateTime now = LocalDateTime.now();

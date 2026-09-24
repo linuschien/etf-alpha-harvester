@@ -418,17 +418,20 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             return null;
         }
 
-        // Multi-Factor Score Calculation [0, 100] using smooth linear functions
+        // Multi-Factor Score Calculation [0, 100] using 100% objective real market data
+        double dcaRankScore = (dcaRank != null && dcaRank >= 1 && dcaRank <= 20)
+                ? (21 - dcaRank) * 5.0
+                : 0.0;
+
         double score;
         if (asset.getAssetClass() == CandidateAssetClass.CORE) {
-            // S_core = 0.35 * TER_Score + 0.25 * AUM_Score + 0.30 * TrackingError + 0.10 * Spread
+            // S_core = 0.30 * TER_Score + 0.25 * AUM_Score + 0.25 * TrackingError + 0.20 * DCARank
             double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
             double aumScore = Math.min(100.0, Math.max(0.0, (aum / 50_000_000_000.0) * 100.0));
             double trackScore = (trackingR2 > 0.0) ? Math.min(100.0, trackingR2 * 100.0) : 95.0;
-            double spreadScore = 90.0;
-            score = 0.35 * terScore + 0.25 * aumScore + 0.30 * trackScore + 0.10 * spreadScore;
+            score = 0.30 * terScore + 0.25 * aumScore + 0.25 * trackScore + 0.20 * dcaRankScore;
         } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
-            // S_sat = 0.30 * MOM + 0.20 * Sharpe + 0.20 * Hurst + 0.15 * (1 - rho_core) * 100 + 0.15 * DCARank
+            // S_sat = 0.40 * MOM + 0.30 * (1 - rho_core) * 100 + 0.30 * DCARank
             double momScore = 85.0;
             if (quotes != null && quotes.size() >= 2) {
                 double pCurrent = quotes.get(0).getClosePrice() != null ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
@@ -438,22 +441,15 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     momScore = Math.min(100.0, Math.max(0.0, 50.0 + r30 * 200.0));
                 }
             }
-            double sharpeScore = 80.0;
-            double hurstScore = 75.0;
             // Reuse R^2 to get correlation rho_core = sqrt(R^2). Low correlation earns higher diversification score.
             double rhoCore = (trackingR2 > 0.0) ? Math.sqrt(trackingR2) : 0.0;
             double diversificationScore = Math.min(100.0, Math.max(0.0, (1.0 - rhoCore) * 100.0));
-            double dcaRankScore = (dcaRank != null && dcaRank >= 1 && dcaRank <= 20)
-                    ? (21 - dcaRank) * 5.0
-                    : 0.0;
 
-            score = 0.30 * momScore
-                    + 0.20 * sharpeScore
-                    + 0.20 * hurstScore
-                    + 0.15 * diversificationScore
-                    + 0.15 * dcaRankScore;
+            score = 0.40 * momScore
+                    + 0.30 * diversificationScore
+                    + 0.30 * dcaRankScore;
         } else {
-            // S_defensive = 0.30 * Yield + 0.30 * TER + 0.25 * AUM + 0.15 * DurationFit
+            // S_defensive = 0.40 * Yield + 0.30 * TER + 0.30 * AUM
             double yieldScore = 75.0;
             if (dividends != null && !dividends.isEmpty() && quotes != null && !quotes.isEmpty()) {
                 double closePrice = (quotes.get(0).getClosePrice() != null) ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
@@ -470,8 +466,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             }
             double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
             double aumScore = Math.min(100.0, Math.max(0.0, (aum / 30_000_000_000.0) * 100.0));
-            double durationScore = 90.0;
-            score = 0.30 * yieldScore + 0.30 * terScore + 0.25 * aumScore + 0.15 * durationScore;
+            score = 0.40 * yieldScore + 0.30 * terScore + 0.30 * aumScore;
         }
 
         BigDecimal finalScore = BigDecimal.valueOf(Math.min(100.0, Math.max(0.0, score)))

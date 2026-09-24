@@ -75,9 +75,9 @@
 │                                           ▼                                            │
 │  ┌────────────────────────────────────────┴─────────────────────────────────────────┐  │
 │  │ 模組 G-02：全域標的治理與多因子排名 (Global Universe & Factor Ranking Engine)    │  │
-│  │  - 全市場三大資產層級硬約束過濾 (TER ≤ 0.45%、AUM > 100 億、流動性)               │  │
-│  │  - 半年度 (6/30, 12/31) 全市場多因子評分 (MOM, Sharpe, Hurst, 相關性, 定額排行)  │  │
-│  │  - 新上市 ETF 快速通道與月度動態標記 (Core Fast-Track & Monthly Universe Refresh)   │  │
+│  │  - 全市場三大資產層級硬約束過濾 (Core/Satellite/Defensive 規模、費用率與流動性)    │  │
+│  │  - 半年度 (6/30, 12/31) 全市場多因子評分 (TER, AUM, 追蹤R², MOM, 分散度, 定額排行) │  │
+│  │  - 一視同仁客觀治理與月度動態標記 (Dynamic Core Classification & Monthly Refresh) │  │
 │  │  ➜ 產出：【全域合規標的池與因子總排名清單 (Global Ranked Universe)】              │  │
 │  └────────────────────────────────────────┬─────────────────────────────────────────┘  │
 │                                           │ 提供客觀標的排名                           │
@@ -214,16 +214,18 @@
 #### 2. 各組專屬多因子客觀評分公式
 
 * **核心大盤組評分 ($S_{\text{core}}$)**：
-  $$S_{\text{core}} = 0.35 \times \text{TER\_Score} + 0.25 \times \text{AUM\_Score} + 0.30 \times \text{TrackingError\_Score} + 0.10 \times \text{Spread\_Score}$$
-* **動能衛星組評分 ($S_{\text{sat}}$)**：
-  $$S_{\text{sat}} = 0.30 \times \text{MOM} + 0.20 \times \text{Sharpe} + 0.20 \times \text{Hurst} + 0.15 \times (1 - \rho_{\text{core}}) \times 100 + 0.15 \times \text{DCARank\_Score}$$
-  * $\rho_{\text{core}} = \sqrt{R^2}$：直接沿用近 30 交易日對大盤指數之決定係數計算結果，與大盤低相關性獲得更高分散性加分。
-  * $\text{MOM}$：採過去 30 交易日動能報酬率換算得分。
+  $$S_{\text{core}} = 0.30 \times \text{TER\_Score} + 0.25 \times \text{AUM\_Score} + 0.25 \times \text{TrackingError\_Score} + 0.20 \times \text{DCARank\_Score}$$
+  * $\text{TrackingError\_Score} = \max(R^2) \times 100$：與三大指數之最大決定係數貼合度得分。
   * $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分：
     $$S_{\text{dca}} = \begin{cases} (21 - r) \times 5.0, & r \in [1, 20] \\ 0.0, & \text{未進榜} \end{cases}$$
-    （Top 1 為 100 分，Top 2 為 95 分，...，Top 20 為 5 分，未進榜為 0.0 分）。
+    （Top 1 為 100 分，Top 2 為 95 分，...，Top 20 為 5 分，未進榜為 0.0 分）。反映長期投資人共識與穩定資金池。
+* **動能衛星組評分 ($S_{\text{sat}}$)**：
+  $$S_{\text{sat}} = 0.40 \times \text{MOM} + 0.30 \times (1 - \rho_{\text{core}}) \times 100 + 0.30 \times \text{DCARank\_Score}$$
+  * $\text{MOM}$：採過去 30 交易日動能報酬率換算得分。
+  * $\rho_{\text{core}} = \sqrt{R^2}$：直接沿用近 30 交易日對大盤指數之決定係數計算結果，與大盤低相關性獲得更高分散性加分。
+  * $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分（反映散戶追逐動能與人氣熱度）。
 * **防禦債券組評分 ($S_{\text{defensive}}$)**：
-  $$S_{\text{defensive}} = 0.30 \times \text{Yield\_Score} + 0.30 \times \text{TER\_Score} + 0.25 \times \text{AUM\_Score} + 0.15 \times \text{DurationFit\_Score}$$
+  $$S_{\text{defensive}} = 0.40 \times \text{Yield\_Score} + 0.30 \times \text{TER\_Score} + 0.30 \times \text{AUM\_Score}$$
   * $\text{Yield\_Score}$：採近一年現金殖利率（Trailing 1-Year Cash Dividend Yield = 過去 365 天宣告每股配息總額 / 最新收盤價）客觀計算，線性換算得分（$6.0\%$ 殖利率對應 100 分滿分）。
 
 ---
