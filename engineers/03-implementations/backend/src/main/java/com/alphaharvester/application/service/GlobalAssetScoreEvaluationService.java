@@ -431,11 +431,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             // S_core = 0.30 * TER_Score + 0.25 * AUM_Score + 0.25 * TrackingError + 0.20 * DCARank
             double terScore = Math.min(100.0, Math.max(0.0, 100.0 - (ter * 10000.0)));
             double aumScore = Math.min(100.0, Math.max(0.0, (aum / 50_000_000_000.0) * 100.0));
-            double trackScore = (trackingR2 > 0.0) ? Math.min(100.0, trackingR2 * 100.0) : 95.0;
+            double trackScore = (trackingR2 > 0.0) ? Math.min(100.0, trackingR2 * 100.0) : 0.0;
             score = 0.30 * terScore + 0.25 * aumScore + 0.25 * trackScore + 0.20 * dcaRankScore;
         } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
             // S_sat = 0.40 * MOM + 0.30 * (1 - rho_core) * 100 + 0.30 * DCARank
-            double momScore = 85.0;
+            double momScore = 50.0;
             if (quotes != null && quotes.size() >= 2) {
                 double pCurrent = quotes.get(0).getClosePrice() != null ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
                 double pOld = quotes.get(quotes.size() - 1).getClosePrice() != null ? quotes.get(quotes.size() - 1).getClosePrice().doubleValue() : 0.0;
@@ -453,7 +453,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     + 0.30 * dcaRankScore;
         } else {
             // S_defensive = 0.40 * Yield + 0.30 * TER + 0.30 * AUM
-            double yieldScore = 75.0;
+            double yieldScore = 0.0;
             if (dividends != null && !dividends.isEmpty() && quotes != null && !quotes.isEmpty()) {
                 double closePrice = (quotes.get(0).getClosePrice() != null) ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
                 if (closePrice > 0.0) {
