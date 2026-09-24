@@ -19,7 +19,6 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 @Component
 public class TwseMarketDataClient {
@@ -30,8 +29,6 @@ public class TwseMarketDataClient {
     private static final String TWSE_QUOTES_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL";
     private static final String TWSE_MIS_NAV_URL = "https://mis.twse.com.tw/stock/data/all_etf.txt";
     private static final String TWSE_DCA_URL = "https://openapi.twse.com.tw/v1/ETFReport/ETFRank";
-
-    private static final Set<String> CORE_TICKERS = Set.of("0050", "006208", "00646", "00662", "00692", "00850");
 
     private final WebClient webClient;
 
@@ -173,9 +170,6 @@ public class TwseMarketDataClient {
     private CandidateAssetClass classifyAsset(String ticker, String shortName) {
         if (ticker.endsWith("B") || shortName.contains("債")) {
             return CandidateAssetClass.DEFENSIVE;
-        }
-        if (CORE_TICKERS.contains(ticker) || shortName.contains("台灣50") || shortName.contains("50") || shortName.contains("S&P500")) {
-            return CandidateAssetClass.CORE;
         }
         return CandidateAssetClass.SATELLITE;
     }
