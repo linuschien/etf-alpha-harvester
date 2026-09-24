@@ -7,6 +7,7 @@ import com.alphaharvester.application.dto.SyncedRecordsCount;
 import com.alphaharvester.application.port.in.MarketDataSyncUseCase;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
+import com.alphaharvester.domain.model.DistributionFrequency;
 import com.alphaharvester.domain.model.SyncScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.alphaharvester.domain.entity.DataFeedSyncWatermark;
+import com.alphaharvester.domain.entity.DividendAnnouncement;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -22,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -186,7 +189,9 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                     existing.setTotalExpenseRatio(asset.getTotalExpenseRatio());
                                     existing.setFundSizeTwd(asset.getFundSizeTwd());
                                     existing.setAssetClass(asset.getAssetClass());
-                                    existing.setDistributionFrequency(asset.getDistributionFrequency());
+                                    if (asset.getDistributionFrequency() != null && asset.getDistributionFrequency() != DistributionFrequency.NONE) {
+                                        existing.setDistributionFrequency(asset.getDistributionFrequency());
+                                    }
                                     existing.setUpdatedAt(now);
                                     return metadataRepository.save(existing);
                                 })
@@ -465,8 +470,22 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                         })
                                         .switchIfEmpty(dividendRepository.save(div));
                             })
-                            .count()
-                            .map(Long::intValue);
+                            .collectList()
+                            .flatMap(savedList -> {
+                                LocalDateTime oneYearAgo = now.minusDays(365);
+                                List<DividendAnnouncement> validPastYear = savedList.stream()
+                                        .filter(d -> d.getExDate() != null && !d.getExDate().isBefore(oneYearAgo))
+                                        .toList();
+                                DistributionFrequency freq = GlobalAssetScoreEvaluationService.deriveDistributionFrequency(validPastYear);
+                                if (freq != DistributionFrequency.NONE && asset.getDistributionFrequency() != freq) {
+                                    log.info("Dynamic distribution frequency for {}: derived {} from {} dividend announcements in past year",
+                                            asset.getTicker(), freq, validPastYear.size());
+                                    asset.setDistributionFrequency(freq);
+                                    asset.setUpdatedAt(now);
+                                    return metadataRepository.save(asset).thenReturn(savedList.size());
+                                }
+                                return Mono.just(savedList.size());
+                            });
 
                     Mono<Integer> splitCount = externalMarketDataPort.fetchCorporateActions(asset.getTicker())
                             .flatMap(split -> {

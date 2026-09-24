@@ -57,7 +57,7 @@ public class TwseMarketDataClient {
                     BigDecimal fundSize = BigDecimal.valueOf(shares).multiply(BigDecimal.valueOf(20)); // baseline estimate
 
                     CandidateAssetClass assetClass = classifyAsset(ticker, shortName);
-                    DistributionFrequency frequency = ticker.endsWith("B") ? DistributionFrequency.QUARTERLY : DistributionFrequency.SEMI_ANNUAL;
+                    DistributionFrequency frequency = DistributionFrequency.NONE;
 
                     return new GlobalAssetMetadata(
                             null, ticker, fullName, listingDate, underlyingIndex,

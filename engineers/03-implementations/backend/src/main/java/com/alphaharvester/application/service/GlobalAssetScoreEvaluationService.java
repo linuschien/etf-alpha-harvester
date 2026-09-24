@@ -13,6 +13,7 @@ import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.domain.model.DistributionFrequency;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -184,6 +185,18 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
                             Integer dcaRank = dcaRankMap.get(asset.getTicker());
                             List<DividendAnnouncement> divs = dividendMap.get(asset.getTicker());
+
+                            DistributionFrequency dynamicFreq = deriveDistributionFrequency(divs);
+                            if (asset.getDistributionFrequency() != dynamicFreq) {
+                                log.info("Dynamic distribution frequency for {}: derived {} from {} dividend announcements in past year (was {})",
+                                        asset.getTicker(), dynamicFreq, divs != null ? divs.size() : 0, asset.getDistributionFrequency());
+                                asset.setDistributionFrequency(dynamicFreq);
+                                asset.setUpdatedAt(evaluationDate);
+                                if (!changedAssets.contains(asset)) {
+                                    changedAssets.add(asset);
+                                }
+                            }
+
                             GlobalAssetScore score = evaluateAsset(asset, evaluationDate, etfQuotes, maxR2, dcaRank, divs);
                             if (score != null) {
                                 allScores.add(score);
@@ -349,6 +362,27 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         return (rho > 0.0) ? Math.min(1.0, rho * rho) : 0.0;
     }
 
+    public static DistributionFrequency deriveDistributionFrequency(List<DividendAnnouncement> dividendsPastYear) {
+        if (dividendsPastYear == null || dividendsPastYear.isEmpty()) {
+            return DistributionFrequency.NONE;
+        }
+        long count = dividendsPastYear.stream()
+                .filter(d -> d != null && d.getDividendPerShare() != null && d.getDividendPerShare().compareTo(BigDecimal.ZERO) > 0)
+                .count();
+
+        if (count >= 10) {
+            return DistributionFrequency.MONTHLY;
+        } else if (count >= 3) {
+            return DistributionFrequency.QUARTERLY;
+        } else if (count == 2) {
+            return DistributionFrequency.SEMI_ANNUAL;
+        } else if (count == 1) {
+            return DistributionFrequency.ANNUAL;
+        } else {
+            return DistributionFrequency.NONE;
+        }
+    }
+
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset, LocalDateTime evaluationDate) {
         return evaluateAsset(asset, evaluationDate, null, 0.95, null, null);
     }
@@ -412,6 +446,9 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             } else if (ticker.endsWith("L") || ticker.endsWith("R")) {
                 isQualified = false;
                 reason = "防禦資產嚴禁槓桿或反向型標的 (" + ticker + ")";
+            } else if (quotes == null || quotes.isEmpty()) {
+                isQualified = false;
+                reason = "無市場成交報價資料，無法取得最新收盤市價與計算實質殖利率";
             }
         }
 

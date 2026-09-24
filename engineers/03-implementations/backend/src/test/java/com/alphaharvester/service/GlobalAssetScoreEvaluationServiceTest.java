@@ -281,6 +281,10 @@ class GlobalAssetScoreEvaluationServiceTest {
         when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(highCorrQuotes1));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("006208")).thenReturn(Flux.fromIterable(highCorrQuotes2));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("00757")).thenReturn(Flux.fromIterable(lowCorrQuotes));
+        List<MarketDailyQuote> bondQuotes = List.of(
+                new MarketDailyQuote(null, null, null, "00679B", now, null, null, null, BigDecimal.valueOf(30.0), 10_000_000L, BigDecimal.valueOf(300_000_000), null, null)
+        );
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("00679B")).thenReturn(Flux.fromIterable(bondQuotes));
 
         when(metadataRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
@@ -606,5 +610,59 @@ class GlobalAssetScoreEvaluationServiceTest {
         assertThat(savedScores).noneMatch(s -> "00999".equals(s.getTicker()));
         assertThat(savedScores).noneMatch(s -> "00991".equals(s.getTicker()));
         assertThat(savedScores).noneMatch(s -> "00680L".equals(s.getTicker()));
+    }
+
+    @Test
+    @DisplayName("Should disqualify Defensive asset when market quotes are null or empty")
+    void shouldDisqualifyDefensiveAssetWhenQuotesAreMissing() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata bondAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00679B", "元大美債20年", now.minusYears(7), "彭博20年美債",
+                new BigDecimal("0.0014"), new BigDecimal("250000000000"),
+                CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
+        );
+
+        GlobalAssetScore scoreNullQuotes = service.evaluateAsset(bondAsset, now, null, 0.0, null);
+        GlobalAssetScore scoreEmptyQuotes = service.evaluateAsset(bondAsset, now, List.of(), 0.0, null);
+
+        assertThat(scoreNullQuotes).isNull();
+        assertThat(scoreEmptyQuotes).isNull();
+    }
+
+    @Test
+    @DisplayName("Should dynamically derive distribution frequency from 1-year dividend announcement count")
+    void shouldDeriveDistributionFrequencyFromDividendCount() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // 12 monthly divs (>= 10)
+        List<DividendAnnouncement> monthlyDivs = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            monthlyDivs.add(new DividendAnnouncement(null, null, "00929", now.minusMonths(i), now.minusMonths(i), new BigDecimal("0.18"), TaxTag.DOMESTIC_54C));
+        }
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(monthlyDivs)).isEqualTo(DistributionFrequency.MONTHLY);
+
+        // 4 quarterly divs (3 ~ 9)
+        List<DividendAnnouncement> quarterlyDivs = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            quarterlyDivs.add(new DividendAnnouncement(null, null, "00878", now.minusMonths(i * 3), now.minusMonths(i * 3), new BigDecimal("0.55"), TaxTag.DOMESTIC_54C));
+        }
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(quarterlyDivs)).isEqualTo(DistributionFrequency.QUARTERLY);
+
+        // 2 semi-annual divs (2)
+        List<DividendAnnouncement> semiAnnualDivs = List.of(
+                new DividendAnnouncement(null, null, "0050", now.minusMonths(6), now.minusMonths(6), new BigDecimal("1.0"), TaxTag.DOMESTIC_54C),
+                new DividendAnnouncement(null, null, "0050", now.minusMonths(1), now.minusMonths(1), new BigDecimal("3.0"), TaxTag.DOMESTIC_54C)
+        );
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(semiAnnualDivs)).isEqualTo(DistributionFrequency.SEMI_ANNUAL);
+
+        // 1 annual div (1)
+        List<DividendAnnouncement> annualDiv = List.of(
+                new DividendAnnouncement(null, null, "00999", now.minusMonths(3), now.minusMonths(3), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C)
+        );
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(annualDiv)).isEqualTo(DistributionFrequency.ANNUAL);
+
+        // 0 divs / null
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(List.of())).isEqualTo(DistributionFrequency.NONE);
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(null)).isEqualTo(DistributionFrequency.NONE);
     }
 }
