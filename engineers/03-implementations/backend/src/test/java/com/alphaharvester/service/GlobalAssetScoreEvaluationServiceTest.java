@@ -90,19 +90,19 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should disqualify asset if listing days < 30")
-    void shouldDisqualifyAssetWithShortListingDays() {
+    @DisplayName("Should disqualify Core asset when AUM is below 10B TWD")
+    void shouldDisqualifyCoreAssetOnLowAum() {
         LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata youngAsset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00998", "剛掛牌ETF", now.minusDays(10), "某指數",
-                new BigDecimal("0.0030"), new BigDecimal("15000000000"),
+        GlobalAssetMetadata smallAumCore = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00998", "小規模大盤ETF", now.minusMonths(3), "某指數",
+                new BigDecimal("0.0030"), new BigDecimal("4000000000"), // 4B < 10B
                 CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, now, now, null
         );
 
-        GlobalAssetScore score = service.evaluateAsset(youngAsset, now);
+        GlobalAssetScore score = service.evaluateAsset(smallAumCore, now);
 
         assertThat(score.getIsQualified()).isFalse();
-        assertThat(score.getDisqualificationReason()).contains("未滿 30 個交易日");
+        assertThat(score.getDisqualificationReason()).contains("資產規模未達 100 億 TWD 核心規模門檻");
     }
 
     @Test
@@ -344,5 +344,23 @@ class GlobalAssetScoreEvaluationServiceTest {
         assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreRank20.getCompositeScore());
         assertThat(scoreRank20.getCompositeScore()).isGreaterThan(scoreUnranked.getCompositeScore());
         assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreDown.getCompositeScore());
+    }
+
+    @Test
+    @DisplayName("Should award higher score to Satellite asset with lower correlation to Core index")
+    void shouldAwardHigherScoreToUncorrelatedSatelliteAsset() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
+                new BigDecimal("0.0060"), new BigDecimal("35000000000"),
+                CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
+        );
+
+        // Low correlation R^2 = 0.16 (rho = 0.40) vs High correlation R^2 = 0.81 (rho = 0.90)
+        GlobalAssetScore lowCorrScore = service.evaluateAsset(asset, now, null, 0.16, 5);
+        GlobalAssetScore highCorrScore = service.evaluateAsset(asset, now, null, 0.81, 5);
+
+        // Lower correlation means higher diversification score (1 - rho)*100
+        assertThat(lowCorrScore.getCompositeScore()).isGreaterThan(highCorrScore.getCompositeScore());
     }
 }

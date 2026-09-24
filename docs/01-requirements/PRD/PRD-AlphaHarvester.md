@@ -179,17 +179,19 @@
       - **$< 40$ 分【低星觀望區】**：市場偏熱，嚴禁追高加碼。
 11. **外部接口技術規格書 (External Specs)**：所有外部資料源端點契約請參見 [External Interface Specifications](../external-specs/README.md)。
 
-#### 2. 數據齊備性守門員 (Data Completeness Gatekeeper)
-* 在每天盤後執行下游因子運算前，守門員自動執行檢核：
+#### 2. 數據齊備性守門員 (Data Completeness Gatekeeper) 與水位線 (Watermark)
+* **管線自動檢核**：在每天盤後資料採集管線（`MarketDataSyncService`）執行結束後，守門員立即於內部自動執行數據完整性檢核：
   $$\text{Completeness Check} = \begin{cases} \text{PASS}, & \text{所有監控標的均有當日有效收盤價且 FRED 殖利率最新數值正常} \\ \text{HALT}, & \text{缺失關鍵收盤價或數值異常偏離 } (> 20\% \text{ 瞬間脈衝跳空}) \end{cases}$$
-* 若未通過，發送系統告警並暫停下游自動狀態更新，防止髒資料污染個人帳本。
+* **水位線與自動斷路連動**：
+  - 若通過（`PASS`）：放行下游量化因子與資產評審引擎循序運算。
+  - 若未通過（`HALT`）：系統自動將資料來源水位線（`DataFeedSyncWatermark`）標記為 `HALT`，且不推進成功同步日期；同時強行阻斷下游多因子評審與個人帳本更新，防止髒資料污染。下次排程觸發時，系統將自動比對水位線發動差量補抓（Backfill）。
 
 ---
 
 ### 3.2 模組 G-02：全域標的治理與多因子排名 (Global Universe & Ranking Engine)
 
 本模組落實**「月度狀態感知 (Monthly State Refresh) ＋ 半年度決策執行 (Semi-Annual Decision Execution)」**架構：
-* **每月 15 日（配合證交所定期定額排行公告）**：系統自動刷新全市場標的分類（核心/衛星/債券/排除），並對新上市滿 30 個交易日（高斯中心極限定理 $N \ge 30$）之新標的執行「快速通道 (Fast-Track)」篩選，即時更新戰情室客觀候選池。
+* **每月 15 日（配合證交所定期定額排行公告）**：系統自動刷新全市場標的分類（核心/衛星/債券/排除）與客觀評分，所有標的一視同仁納入量化審查，即時更新戰情室客觀候選池。
 * **每半年（6/30 與 12/31 收盤後）**：正式鎖定多因子總排名，驅動個人投組層 (P-01, P-02) 進行 1.4N 緩衝換倉與工單求解，兼顧市場新陳代謝敏銳度與低交易摩擦。
 
 #### 1. 全域候選池分類與獨立分組爭鳴 (Segmented Candidate Universe)
@@ -200,11 +202,11 @@
 * **分組獨立排名機制 (`class_rank`)**：
   - 各組候選池規模充足，各組別選手使用專屬量化模型於組內獨立爭鳴，產出獨立的 `class_rank`（Core #1, #2...; Satellite #1, #2...; Defensive #1, #2...），絕不跨組混戰。
 
-| 競賽組別 | 目標功能 | 納入硬約束條件 | 淘汰約束條件 |
-| --- | --- | --- | --- |
-| **核心大盤 (Core)** | 穩健 Beta 基石 | 1. 廣基指數（如 0050、006208、00646 等，走勢回歸 $R^2 \ge 0.90$）<br>2. 總費用率 $\text{total\_expense\_ratio} \le 0.45\%$<br>3. 規模 $\text{fund\_size\_twd} \ge 100$ 億 TWD<br>4. **【新大盤 30 交易日快速通道】**：新掛牌滿 $N \ge 30$ 個交易日，且 $R^2 \ge 0.95$、$\text{total\_expense\_ratio} \le 0.45\%$、$\vert{}\text{折溢價}\vert{} \le 0.5\%$、$\text{fund\_size\_twd} \ge 50$ 億（或登入定期定額 Top 20 排行）者，直接破格核准納入！ | 連續 2 季追蹤誤差 $> 1.2\%$ 或規模跌破 30 億 TWD |
-| **動能衛星 (Satellite)** | 獲取超額動能與收割波動 | 1. 高成長科技/關鍵資源/特定主題<br>2. 近 252 日（未滿者取實際掛牌天數，最低門檻**滿 60 交易日**）日均成交金額 $\text{trade\_value\_twd} > 2,000$ 萬 TWD<br>3. 滾動年化波動度 $\sigma \ge 18\%$<br>4. 與核心大盤相關係數 $\rho_{\text{core}} < 0.85$ | 跌破 200 EMA 超過 60 個交易日，或成交金額持續萎縮 (日均量 $< 1,000$ 萬 TWD) |
-| **防禦債券 (Defensive)** | 鎖定現金流與安全墊 | 1. 現券型投資級公司債或中天期公債（如 00720B、00725B）<br>2. 信用評等 $\ge \text{BBB}$ 級<br>3. 存續期間在 $8 \sim 14$ 年區間<br>4. **嚴禁任何每日重置槓桿倍數之產品（槓桿倍數嚴格 $= 1.0\times$）** | 發行機構系統性違約降級潮，或次級市場溢價 $> 1.5\%$ |
+| 競賽組別 | 目標功能 | 判定基準 / 候選池硬約束條件（未通過硬約束即不合格淘汰） |
+| --- | --- | --- |
+| **核心大盤 (Core)** | 穩健 Beta 基石 | 1. **判定基準**：近 30 交易日走勢回歸與三大市場指數 (TAIEX, S&P 500, NASDAQ) 之決定係數 $R^2 \ge 0.95$ 作為跟蹤大盤的分類判定依據（非硬約束）。<br>2. **硬約束**：總費用率 $\text{total\_expense\_ratio} \le 0.45\%$。<br>3. **硬約束**：基金規模 $\text{fund\_size\_twd} \ge 100$ 億 TWD。<br>*所有標的一視同仁，無上市初期特殊特規，未通過硬約束即判定不合格淘汰。* |
+| **動能衛星 (Satellite)** | 獲取超額動能與收割波動 | 1. 高成長科技/關鍵資源/特定主題。<br>2. 日均成交金額 $\text{trade\_value\_twd} > 2,000$ 萬 TWD。<br>3. 滾動年化波動度 $\sigma \ge 18\%$。<br>*未通過硬約束即判定不合格淘汰。* |
+| **防禦債券 (Defensive)** | 鎖定現金流與安全墊 | 1. 現券型投資級公司債或中天期公債（如 00720B、00725B）。<br>2. 信用評等 $\ge \text{BBB}$ 級。<br>3. 存續期間在 $8 \sim 14$ 年區間。<br>4. **嚴禁任何每日重置槓桿倍數之產品（槓桿倍數嚴格 $= 1.0\times$）**。<br>*未通過硬約束即判定不合格淘汰。* |
 
 * **核心標的豁免條款**：核心大盤標的**永久禁止產生任何主動清倉指令**，僅接受資金流入與再平衡補償。
 
@@ -213,9 +215,12 @@
 * **核心大盤組評分 ($S_{\text{core}}$)**：
   $$S_{\text{core}} = 0.35 \times \text{TER\_Score} + 0.25 \times \text{AUM\_Score} + 0.30 \times \text{TrackingError\_Score} + 0.10 \times \text{Spread\_Score}$$
 * **動能衛星組評分 ($S_{\text{sat}}$)**：
-  $$S_{\text{sat}} = 0.30 \times \text{MOM} + 0.20 \times \text{Sharpe} + 0.20 \times \text{Hurst} - 0.15 \times \rho_{\text{core}} + 0.15 \times \text{DCARank\_Score}$$
-  * $\text{MOM}$：滿 1 年標的採過去 12 個月剔除最近 1 個月報酬率；掛牌介於 60~250 交易日者採年化報酬率。
-  * $\text{DCARank\_Score}$：證交所定期定額戶數排行換算得分，代表市場強烈共識與散戶流動性支撐。
+  $$S_{\text{sat}} = 0.30 \times \text{MOM} + 0.20 \times \text{Sharpe} + 0.20 \times \text{Hurst} + 0.15 \times (1 - \rho_{\text{core}}) \times 100 + 0.15 \times \text{DCARank\_Score}$$
+  * $\rho_{\text{core}} = \sqrt{R^2}$：直接沿用近 30 交易日對大盤指數之決定係數計算結果，與大盤低相關性獲得更高分散性加分。
+  * $\text{MOM}$：採過去 30 交易日動能報酬率換算得分。
+  * $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分：
+    $$S_{\text{dca}} = \begin{cases} (21 - r) \times 5.0, & r \in [1, 20] \\ 0.0, & \text{未進榜} \end{cases}$$
+    （Top 1 為 100 分，Top 2 為 95 分，...，Top 20 為 5 分，未進榜為 0.0 分）。
 * **防禦債券組評分 ($S_{\text{defensive}}$)**：
   $$S_{\text{defensive}} = 0.30 \times \text{Yield\_Score} + 0.30 \times \text{TER\_Score} + 0.25 \times \text{AUM\_Score} + 0.15 \times \text{DurationFit\_Score}$$
 

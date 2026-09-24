@@ -101,13 +101,14 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                 .flatMap(report -> {
                                     if (!report.isPassed()) {
                                         log.warn("Gatekeeper HALTED pipeline! Violations: {}", report.violations());
-                                        return Mono.just(new MarketDataSyncResponse(
-                                                "HALT",
-                                                "市場數據採集未齊全，量化引擎已安全暫停：" + String.join("; ", report.violations()),
-                                                now.toString(),
-                                                counts,
-                                                report
-                                        ));
+                                        return markWatermarksHalt(now, report.message())
+                                                .thenReturn(new MarketDataSyncResponse(
+                                                        "HALT",
+                                                        "市場數據採集未齊全，量化引擎已安全暫停：" + String.join("; ", report.violations()),
+                                                        now.toString(),
+                                                        counts,
+                                                        report
+                                                ));
                                     }
                                     log.info("Gatekeeper PASSED. All data completeness checks cleared.");
                                     if (Boolean.TRUE.equals(request.evaluateAfterSync())) {
@@ -213,16 +214,18 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
     private Mono<Integer> syncTaiwanEtfQuotes(LocalDateTime now, Integer backfillDays) {
         return watermarkRepository.findByFeedName(WATERMARK_TAIWAN_ETF_QUOTES)
-                .map(DataFeedSyncWatermark::getLatestRecordDate)
-                .defaultIfEmpty(now.minusDays(1))
-                .flatMap(latestRecordDate -> {
+                .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_TAIWAN_ETF_QUOTES, null, now.minusDays(1), 0, "PENDING", null, now))
+                .flatMap(watermark -> {
+                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
+                            ? watermark.getLatestRecordDate()
+                            : now.minusDays(1);
                     long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
                     long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap;
+                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus());
                     boolean force = backfillDays != null && backfillDays > 0;
 
-                    log.info("Watermark comparison for '{}': latestRecordDate={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
-                            WATERMARK_TAIWAN_ETF_QUOTES, latestRecordDate, now, daysMissed, allowedGap, hasGap, force);
+                    log.info("Watermark comparison for '{}': latestRecordDate={}, status={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
+                            WATERMARK_TAIWAN_ETF_QUOTES, latestRecordDate, watermark.getStatus(), now, daysMissed, allowedGap, hasGap, force);
 
                     Mono<Integer> primaryCountMono = metadataRepository.findAll()
                             .map(GlobalAssetMetadata::getTicker)
@@ -320,6 +323,17 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     );
                     return watermarkRepository.save(newWm);
                 }))
+                .then();
+    }
+
+    private Mono<Void> markWatermarksHalt(LocalDateTime syncTime, String reason) {
+        return watermarkRepository.findByFeedName(WATERMARK_TAIWAN_ETF_QUOTES)
+                .flatMap(wm -> {
+                    wm.setStatus("HALT");
+                    wm.setErrorMessage(reason);
+                    wm.setUpdatedAt(syncTime);
+                    return watermarkRepository.save(wm);
+                })
                 .then();
     }
 

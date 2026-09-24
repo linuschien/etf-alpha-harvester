@@ -329,21 +329,15 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         boolean isQualified = true;
         String reason = null;
 
-        // Hard Constraint 1: Minimum listing days (N >= 30)
-        if (listingDays < 30) {
-            isQualified = false;
-            reason = "掛牌未滿 30 個交易日最低門檻 (目前 " + listingDays + " 天)";
-        }
-
         double ter = asset.getTotalExpenseRatio() != null ? asset.getTotalExpenseRatio().doubleValue() : 0.0050;
         double aum = asset.getFundSizeTwd() != null ? asset.getFundSizeTwd().doubleValue() : 5_000_000_000.0;
 
-        // Hard Constraint 2: Class specific gatekeepers
+        // Hard Constraint: Class specific checks (unqualified assets are eliminated)
         if (asset.getAssetClass() == CandidateAssetClass.CORE) {
             if (ter > 0.0045) {
                 isQualified = false;
                 reason = "總費用率 (" + String.format("%.2f%%", ter * 100) + ") 超過核心大盤上限 0.45%";
-            } else if (aum < 10_000_000_000.0 && listingDays >= 180) {
+            } else if (aum < 10_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 100 億 TWD 核心規模門檻";
             }
@@ -359,7 +353,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             double spreadScore = 90.0;
             score = 0.35 * terScore + 0.25 * aumScore + 0.30 * trackScore + 0.10 * spreadScore;
         } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
-            // S_sat = 0.30 * MOM + 0.20 * Sharpe + 0.20 * Hurst + 0.15 * DCARank
+            // S_sat = 0.30 * MOM + 0.20 * Sharpe + 0.20 * Hurst + 0.15 * (1 - rho_core) * 100 + 0.15 * DCARank
             double momScore = 85.0;
             if (quotes != null && quotes.size() >= 2) {
                 double pCurrent = quotes.get(0).getClosePrice() != null ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
@@ -371,11 +365,18 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             }
             double sharpeScore = 80.0;
             double hurstScore = 75.0;
+            // Reuse R^2 to get correlation rho_core = sqrt(R^2). Low correlation earns higher diversification score.
+            double rhoCore = (trackingR2 > 0.0) ? Math.sqrt(trackingR2) : 0.0;
+            double diversificationScore = Math.min(100.0, Math.max(0.0, (1.0 - rhoCore) * 100.0));
             double dcaRankScore = (dcaRank != null && dcaRank >= 1 && dcaRank <= 20)
                     ? (21 - dcaRank) * 5.0
                     : 0.0;
 
-            score = 0.30 * momScore + 0.20 * sharpeScore + 0.20 * hurstScore + 0.15 * dcaRankScore;
+            score = 0.30 * momScore
+                    + 0.20 * sharpeScore
+                    + 0.20 * hurstScore
+                    + 0.15 * diversificationScore
+                    + 0.15 * dcaRankScore;
         } else {
             // S_defensive = 0.30 * Yield + 0.30 * TER + 0.25 * AUM + 0.15 * DurationFit
             double yieldScore = 88.0;
