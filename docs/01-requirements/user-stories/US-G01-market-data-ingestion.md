@@ -70,11 +70,11 @@
 **身份**：系統排程器 (System Scheduler)
 
 > **As a** 系統排程器，  
-> **I want to** 自動追蹤台股新掛牌 ETF 之基本面資料（代碼、指數、發行商、TER、AUM、除息日程與掛牌日期），並在掛牌滿 30 交易日後自動納入量化回歸監測，  
+> **I want to** 自動追蹤台股新掛牌 ETF 之基本面資料（代碼、名稱、指數、TER、AUM、除息日程與掛牌日期），並在掛牌滿 30 交易日後自動納入量化回歸監測，  
 > **So that** 系統能以單一資產元資料模型動態掌握新上市 ETF，無需冗餘獨立資料表，並為後續客觀分類提供完整數據輸入。
 
 ### 驗收條件 (Acceptance Criteria)
-- **AC1 (新上市 ETF 自動偵測與輕量元資料)**：系統定時比對 TWSE/TPEx 最新掛牌名單，凡新掛牌原型 ETF 自動登錄其 `ticker`、`name`、`listing_date` (掛牌日期)、`underlying_index`、`issuer` (發行投信)、`ter` (總費用率) 與最新 `aum`，直接保存於資產元資料，**不額外建立獨立暫存資料表**。
+- **AC1 (新上市 ETF 自動偵測與輕量元資料)**：系統定時比對 TWSE/TPEx 最新掛牌名單，凡新掛牌原型 ETF 自動登錄其 `ticker`、`name`、`listing_date` (掛牌日期)、`underlying_index`、`ter` (總費用率) 與最新 `aum`，直接保存於資產元資料，**不額外建立獨立暫存資料表**。
 - **AC2 (掛牌天數動態計算與滿 30 交易日門檻)**：系統每日由 `CURRENT_DATE - listing_date` 動態計算掛牌天數；當實際累積收盤交易日數達 **$N \ge 30$ 個交易日** 時，系統自動啟動回歸資料採集標籤，納入模組 G-02 之月度分類與篩選管線。
 - **AC3 (公開除息日程採集)**：每日檢索公開資訊觀測站之 ETF 配息公告，獲取包含 `ex_date` (除息日)、`payment_date` (發放日)、`dividend_per_share` (每股配息金額)，存入 `DividendAnnouncement`。
 - **AC4 (標的分割與反分割事件採集 - Corporate Action Splits)**：

@@ -59,10 +59,8 @@ public class TwseMarketDataClient {
                     CandidateAssetClass assetClass = classifyAsset(ticker, shortName);
                     DistributionFrequency frequency = ticker.endsWith("B") ? DistributionFrequency.QUARTERLY : DistributionFrequency.SEMI_ANNUAL;
 
-                    String issuer = deriveIssuer(fullName, shortName);
-
                     return new GlobalAssetMetadata(
-                            null, ticker, fullName, listingDate, underlyingIndex, issuer,
+                            null, ticker, fullName, listingDate, underlyingIndex,
                             new BigDecimal("0.0035"), fundSize, assetClass, frequency,
                             1, now, now, null
                     );
@@ -174,15 +172,6 @@ public class TwseMarketDataClient {
         return CandidateAssetClass.SATELLITE;
     }
 
-    private String deriveIssuer(String fullName, String shortName) {
-        if (fullName.contains("元大") || shortName.contains("元大")) return "元大投信";
-        if (fullName.contains("富邦") || shortName.contains("富邦")) return "富邦投信";
-        if (fullName.contains("國泰") || shortName.contains("國泰")) return "國泰投信";
-        if (fullName.contains("中信") || shortName.contains("中信")) return "中國信託投信";
-        if (fullName.contains("復華") || shortName.contains("復華")) return "復華投信";
-        if (fullName.contains("統一") || shortName.contains("統一")) return "統一投信";
-        return "國內投信";
-    }
 
     private long parseLongSafe(String str) {
         if (str == null) return 0L;

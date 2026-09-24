@@ -43,7 +43,6 @@ type GlobalAssetMetadata {
     name: String!
     listingDate: String!
     underlyingIndex: String
-    issuer: String
     totalExpenseRatio: Float
     fundSizeTwd: Float
     assetClass: CandidateAssetClass!

@@ -46,7 +46,7 @@ class CompositeExternalMarketDataAdapterTest {
     void shouldDelegateFetchEtfMasterUniverse() {
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", LocalDateTime.now(),
-                "臺灣50指數", "元大投信", new BigDecimal("0.0035"),
+                "臺灣50指數", new BigDecimal("0.0035"),
                 new BigDecimal("420000000000"), CandidateAssetClass.CORE,
                 DistributionFrequency.SEMI_ANNUAL, 1, LocalDateTime.now(), LocalDateTime.now(), null
         );

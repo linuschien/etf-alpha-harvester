@@ -36,7 +36,6 @@ Table global_asset_metadata {
   name varchar [not null, note: 'Full Chinese/English Name of ETF']
   listing_date timestamp [not null, note: 'IPO Listing Date']
   underlying_index varchar [note: 'Tracked Benchmark Index Name']
-  issuer varchar [note: 'Fund House / Asset Management Firm']
   total_expense_ratio decimal(6,4) [note: 'Total Expense Ratio (TER), e.g. 0.0024 for 0.24%']
   fund_size_twd decimal(18,2) [note: 'Assets Under Management in TWD']
   asset_class candidate_asset_class [not null, note: 'Candidate Asset Class (CORE, SATELLITE, DEFENSIVE)']

@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS global_asset_metadata (
     name VARCHAR(255) NOT NULL,
     listing_date TIMESTAMP NOT NULL,
     underlying_index VARCHAR(255),
-    issuer VARCHAR(255),
     total_expense_ratio DECIMAL(6,4),
     fund_size_twd DECIMAL(18,2),
     asset_class VARCHAR(32) NOT NULL,

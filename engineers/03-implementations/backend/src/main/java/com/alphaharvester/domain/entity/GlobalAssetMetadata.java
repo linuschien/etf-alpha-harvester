@@ -42,9 +42,6 @@ public class GlobalAssetMetadata {
     @Column("underlying_index")
     private String underlyingIndex;
 
-    @Column("issuer")
-    private String issuer;
-
     @Column("total_expense_ratio")
     private BigDecimal totalExpenseRatio;
 

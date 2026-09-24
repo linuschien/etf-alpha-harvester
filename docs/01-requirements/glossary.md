@@ -26,7 +26,7 @@
 | **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率事實（資料庫純資料化，無狀態旗標）。 | `record_date`, `us_corporate_bond_effective_yield`, `us_10_year_treasury_yield`, `us_20_year_treasury_yield`, `yield_spread_10y_minus_2y` |
 | **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對各組候選標的進行客觀評分與組內獨立排名。 | `ticker`, `evaluation_date`, `asset_class` (`CandidateAssetClass`), `class_rank`, `composite_score`, `total_expense_ratio`, `fund_size_twd`, `is_qualified`, `disqualification_reason` |
 | **定期定額熱門排行** | `DcaPopularityRank` | 臺灣證交所每月公告之定期定額交易戶數排行（年份與月份獨立）。 | `ticker`, `ranking_year`, `ranking_month`, `rank_position`, `regular_investor_count` |
-| **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，收錄法定配息週期。 | `ticker`, `name`, `listing_date`, `underlying_index`, `issuer`, `total_expense_ratio`, `fund_size_twd`, `asset_class` (`CandidateAssetClass`), `distribution_frequency` (`DistributionFrequency`) |
+| **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，收錄法定配息週期。 | `ticker`, `name`, `listing_date`, `underlying_index`, `total_expense_ratio`, `fund_size_twd`, `asset_class` (`CandidateAssetClass`), `distribution_frequency` (`DistributionFrequency`) |
 | **除息公告資訊** | `DividendAnnouncement` | 發行投信公開公告之 ETF 每期除權息日程。 | `ticker`, `ex_date` (除息日), `payment_date` (發放日), `dividend_per_share`, `tax_tag` (`OVERSEAS_76W` / `DOMESTIC_54C`) |
 | **標的分割與除權事件** | `CorporateAction` | 標的分割與反分割事件，採整數除法架構徹底消除浮點數 1 股帳差。 | `ticker`, `action_type` (SPLIT/REVERSE_SPLIT), `effective_date`, `split_from_shares`, `split_to_shares` |
 
