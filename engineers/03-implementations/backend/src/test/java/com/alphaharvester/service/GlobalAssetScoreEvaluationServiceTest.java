@@ -665,4 +665,69 @@ class GlobalAssetScoreEvaluationServiceTest {
         assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(List.of())).isEqualTo(DistributionFrequency.NONE);
         assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(null)).isEqualTo(DistributionFrequency.NONE);
     }
+
+    @Test
+    @DisplayName("Should accurately derive distribution frequency for newly listed ETFs using median interval")
+    void shouldDeriveFrequencyForNewlyListedEtfUsingMedianInterval() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Case 1: Newly listed monthly ETF (listed 100 days ago, only 3 dividends so far, 30 days apart)
+        LocalDateTime listingDate100d = now.minusDays(100);
+        List<DividendAnnouncement> newMonthlyDivs = List.of(
+                new DividendAnnouncement(null, null, "00940", now.minusDays(70), now.minusDays(60), new BigDecimal("0.05"), TaxTag.DOMESTIC_54C),
+                new DividendAnnouncement(null, null, "00940", now.minusDays(40), now.minusDays(30), new BigDecimal("0.05"), TaxTag.DOMESTIC_54C),
+                new DividendAnnouncement(null, null, "00940", now.minusDays(10), now, new BigDecimal("0.05"), TaxTag.DOMESTIC_54C)
+        );
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(newMonthlyDivs, listingDate100d, now))
+                .isEqualTo(DistributionFrequency.MONTHLY);
+
+        // Case 2: Newly listed quarterly ETF (listed 180 days ago, only 2 dividends so far, 90 days apart)
+        LocalDateTime listingDate180d = now.minusDays(180);
+        List<DividendAnnouncement> newQuarterlyDivs = List.of(
+                new DividendAnnouncement(null, null, "00990", now.minusDays(100), now.minusDays(90), new BigDecimal("0.35"), TaxTag.DOMESTIC_54C),
+                new DividendAnnouncement(null, null, "00990", now.minusDays(10), now, new BigDecimal("0.35"), TaxTag.DOMESTIC_54C)
+        );
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(newQuarterlyDivs, listingDate180d, now))
+                .isEqualTo(DistributionFrequency.QUARTERLY);
+
+        // Case 3: Newly listed ETF with only 1 dividend within 40 days of listing
+        LocalDateTime listingDate40d = now.minusDays(40);
+        List<DividendAnnouncement> singleDiv40d = List.of(
+                new DividendAnnouncement(null, null, "00995", now.minusDays(5), now, new BigDecimal("0.10"), TaxTag.DOMESTIC_54C)
+        );
+        assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(singleDiv40d, listingDate40d, now))
+                .isEqualTo(DistributionFrequency.MONTHLY);
+    }
+
+    @Test
+    @DisplayName("Should annualize dividend yield for newly listed Defensive bond ETF (listed < 365 days)")
+    void shouldAnnualizeDefensiveYieldForNewlyListedBond() {
+        LocalDateTime now = LocalDateTime.now();
+        // Bond listed only 90 days ago
+        LocalDateTime listingDate = now.minusDays(90);
+        GlobalAssetMetadata youngBond = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00937B", "群益ESG投等債20+", listingDate, "ESG投等債20+",
+                new BigDecimal("0.0018"), new BigDecimal("200000000000"), // 200B
+                CandidateAssetClass.DEFENSIVE, DistributionFrequency.MONTHLY, 1, now, now, null
+        );
+
+        List<MarketDailyQuote> quotes = List.of(
+                new MarketDailyQuote(null, null, null, "00937B", now, null, null, null,
+                        new BigDecimal("15.0"), 5000000L, new BigDecimal("75000000"), null, null)
+        );
+
+        // 3 monthly distributions of 0.08 = 0.24 TWD. Raw yield = 0.24 / 15.0 = 1.6%
+        // Annualized yield = 1.6% * (365 / 90) = 6.489% -> yieldScore = min(100, 6.489% * 1666.67) = 100.0
+        List<DividendAnnouncement> divs = List.of(
+                new DividendAnnouncement(null, null, "00937B", now.minusDays(70), now.minusDays(60), new BigDecimal("0.08"), TaxTag.OVERSEAS_76W),
+                new DividendAnnouncement(null, null, "00937B", now.minusDays(40), now.minusDays(30), new BigDecimal("0.08"), TaxTag.OVERSEAS_76W),
+                new DividendAnnouncement(null, null, "00937B", now.minusDays(10), now, new BigDecimal("0.08"), TaxTag.OVERSEAS_76W)
+        );
+
+        GlobalAssetScore score = service.evaluateAsset(youngBond, now, quotes, 0.0, null, divs);
+
+        assertThat(score).isNotNull();
+        // S_defensive = 0.40 * 100.0 (yield) + 0.30 * 82.0 (ter) + 0.30 * 100.0 (aum) = 40 + 24.6 + 30 = 94.60
+        assertThat(score.getCompositeScore()).isGreaterThan(new BigDecimal("90.00"));
+    }
 }

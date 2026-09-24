@@ -186,7 +186,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                             Integer dcaRank = dcaRankMap.get(asset.getTicker());
                             List<DividendAnnouncement> divs = dividendMap.get(asset.getTicker());
 
-                            DistributionFrequency dynamicFreq = deriveDistributionFrequency(divs);
+                            DistributionFrequency dynamicFreq = deriveDistributionFrequency(divs, asset.getListingDate(), evaluationDate);
                             if (asset.getDistributionFrequency() != dynamicFreq) {
                                 log.info("Dynamic distribution frequency for {}: derived {} from {} dividend announcements in past year (was {})",
                                         asset.getTicker(), dynamicFreq, divs != null ? divs.size() : 0, asset.getDistributionFrequency());
@@ -363,23 +363,68 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     }
 
     public static DistributionFrequency deriveDistributionFrequency(List<DividendAnnouncement> dividendsPastYear) {
-        if (dividendsPastYear == null || dividendsPastYear.isEmpty()) {
+        return deriveDistributionFrequency(dividendsPastYear, null, null);
+    }
+
+    public static DistributionFrequency deriveDistributionFrequency(List<DividendAnnouncement> dividends,
+                                                                    LocalDateTime listingDate,
+                                                                    LocalDateTime evaluationDate) {
+        if (dividends == null || dividends.isEmpty()) {
             return DistributionFrequency.NONE;
         }
-        long count = dividendsPastYear.stream()
-                .filter(d -> d != null && d.getDividendPerShare() != null && d.getDividendPerShare().compareTo(BigDecimal.ZERO) > 0)
-                .count();
 
-        if (count >= 10) {
-            return DistributionFrequency.MONTHLY;
-        } else if (count >= 3) {
-            return DistributionFrequency.QUARTERLY;
-        } else if (count == 2) {
-            return DistributionFrequency.SEMI_ANNUAL;
-        } else if (count == 1) {
-            return DistributionFrequency.ANNUAL;
-        } else {
+        List<DividendAnnouncement> validDivs = dividends.stream()
+                .filter(d -> d != null && d.getExDate() != null && d.getDividendPerShare() != null && d.getDividendPerShare().compareTo(BigDecimal.ZERO) > 0)
+                .sorted(Comparator.comparing(DividendAnnouncement::getExDate))
+                .toList();
+
+        if (validDivs.isEmpty()) {
             return DistributionFrequency.NONE;
+        }
+
+        // 1. For assets with at least 2 dividend events, calculate the median interval between consecutive ex-dates
+        if (validDivs.size() >= 2) {
+            List<Long> intervals = new ArrayList<>();
+            for (int i = 0; i < validDivs.size() - 1; i++) {
+                long days = Math.abs(ChronoUnit.DAYS.between(validDivs.get(i).getExDate(), validDivs.get(i + 1).getExDate()));
+                if (days > 0) {
+                    intervals.add(days);
+                }
+            }
+            if (!intervals.isEmpty()) {
+                Collections.sort(intervals);
+                long medianInterval = intervals.get(intervals.size() / 2);
+                if (medianInterval <= 45) {
+                    return DistributionFrequency.MONTHLY;
+                } else if (medianInterval <= 135) {
+                    return DistributionFrequency.QUARTERLY;
+                } else if (medianInterval <= 250) {
+                    return DistributionFrequency.SEMI_ANNUAL;
+                } else {
+                    return DistributionFrequency.ANNUAL;
+                }
+            }
+        }
+
+        // 2. Exactly 1 dividend event:
+        long listingDays = (listingDate != null && evaluationDate != null)
+                ? Math.max(1, ChronoUnit.DAYS.between(listingDate, evaluationDate))
+                : 365;
+
+        if (listingDays >= 365) {
+            return DistributionFrequency.ANNUAL;
+        }
+
+        // For newly listed ETF with only 1 dividend event, estimate annualized frequency from listing days
+        double annualizedCount = 1.0 * (365.0 / Math.max(listingDays, 30));
+        if (annualizedCount >= 8.0) {
+            return DistributionFrequency.MONTHLY;
+        } else if (annualizedCount >= 2.5) {
+            return DistributionFrequency.QUARTERLY;
+        } else if (annualizedCount >= 1.5) {
+            return DistributionFrequency.SEMI_ANNUAL;
+        } else {
+            return DistributionFrequency.ANNUAL;
         }
     }
 
@@ -500,7 +545,14 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                             .filter(d -> d.getDividendPerShare() != null)
                             .mapToDouble(d -> d.getDividendPerShare().doubleValue())
                             .sum();
-                    double annualYield = trailingDividend / closePrice;
+                    double rawYield = trailingDividend / closePrice;
+                    long listingDays = (asset.getListingDate() != null)
+                            ? Math.max(1, ChronoUnit.DAYS.between(asset.getListingDate(), evaluationDate))
+                            : 365;
+                    double annualYield = rawYield;
+                    if (listingDays < 365 && listingDays >= 30 && rawYield > 0.0) {
+                        annualYield = rawYield * (365.0 / listingDays);
+                    }
                     yieldScore = Math.min(100.0, Math.max(0.0, annualYield * 1666.67));
                 }
             }

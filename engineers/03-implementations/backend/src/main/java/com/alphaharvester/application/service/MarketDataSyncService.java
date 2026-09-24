@@ -476,7 +476,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                 List<DividendAnnouncement> validPastYear = savedList.stream()
                                         .filter(d -> d.getExDate() != null && !d.getExDate().isBefore(oneYearAgo))
                                         .toList();
-                                DistributionFrequency freq = GlobalAssetScoreEvaluationService.deriveDistributionFrequency(validPastYear);
+                                DistributionFrequency freq = GlobalAssetScoreEvaluationService.deriveDistributionFrequency(validPastYear, asset.getListingDate(), now);
                                 if (freq != DistributionFrequency.NONE && asset.getDistributionFrequency() != freq) {
                                     log.info("Dynamic distribution frequency for {}: derived {} from {} dividend announcements in past year",
                                             asset.getTicker(), freq, validPastYear.size());
