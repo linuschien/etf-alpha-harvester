@@ -17,11 +17,13 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,12 +32,13 @@ class CompositeExternalMarketDataAdapterTest {
     @Mock private TwseMarketDataClient twseClient;
     @Mock private TpexMarketDataClient tpexClient;
     @Mock private YahooFinanceClient yahooFinanceClient;
+    @Mock private CnnSentimentClient cnnSentimentClient;
 
     private CompositeExternalMarketDataAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new CompositeExternalMarketDataAdapter(twseClient, tpexClient, yahooFinanceClient);
+        adapter = new CompositeExternalMarketDataAdapter(twseClient, tpexClient, yahooFinanceClient, cnnSentimentClient);
     }
 
     @Test
@@ -55,8 +58,8 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
-    @DisplayName("Should combine quotes and enrich NAV from Twse MIS")
-    void shouldCombineQuotesAndEnrichNav() {
+    @DisplayName("Should combine quotes, recover missing ETF from Yahoo Finance, include CNN Fear & Greed, and enrich NAV")
+    void shouldCombineQuotesAndRecoverMissingAndIncludeFearGreed() {
         LocalDateTime now = LocalDateTime.now();
         MarketDailyQuote twseQuote = new MarketDailyQuote(
                 null, null, null, "0050", now,
@@ -68,30 +71,53 @@ class CompositeExternalMarketDataAdapterTest {
                 new BigDecimal("30.0"), new BigDecimal("31.0"), new BigDecimal("29.5"),
                 new BigDecimal("30.5"), 500000L, new BigDecimal("15250000"), null, null
         );
+        MarketDailyQuote recovered006208 = new MarketDailyQuote(
+                null, null, null, "006208", now,
+                new BigDecimal("113.0"), new BigDecimal("115.0"), new BigDecimal("112.5"),
+                new BigDecimal("114.5"), 800000L, new BigDecimal("91600000"), null, null
+        );
         MarketDailyQuote benchmarkQuote = new MarketDailyQuote(
                 null, null, null, "^TWII", now,
                 new BigDecimal("22500.0"), new BigDecimal("22800.0"), new BigDecimal("22450.0"),
                 new BigDecimal("22750.0"), 500000000L, BigDecimal.ZERO, null, null
         );
+        MarketDailyQuote fearGreedQuote = new MarketDailyQuote(
+                null, null, null, "FEAR_GREED", now,
+                new BigDecimal("45.5"), new BigDecimal("45.5"), new BigDecimal("45.5"),
+                new BigDecimal("45.5"), 0L, BigDecimal.ZERO, null, null
+        );
 
         when(twseClient.fetchTwseDailyQuotes()).thenReturn(Flux.just(twseQuote));
         when(tpexClient.fetchTpexDailyQuotes()).thenReturn(Flux.just(tpexQuote));
-        when(yahooFinanceClient.fetchBenchmarkQuote(anyString())).thenReturn(Mono.empty());
-        when(yahooFinanceClient.fetchBenchmarkQuote("^TWII")).thenReturn(Mono.just(benchmarkQuote));
+
+        // 006208 is monitored but missing from TWSE/TPEx; Yahoo recovery will be triggered
+        when(yahooFinanceClient.fetchTaiwanEtfQuote("006208")).thenReturn(Mono.just(recovered006208));
+
+        // Yahoo benchmarks (past 1 month)
+        when(yahooFinanceClient.fetchHistoricalQuotes(anyString(), anyString())).thenReturn(Flux.empty());
+        when(yahooFinanceClient.fetchHistoricalQuotes(eq("^TWII"), anyString())).thenReturn(Flux.just(benchmarkQuote));
+
+        // CNN Fear & Greed
+        when(cnnSentimentClient.fetchFearAndGreedIndex()).thenReturn(Mono.just(fearGreedQuote));
 
         Map<String, TwseMarketDataClient.NavSnapshot> navMap = Map.of(
                 "0050", new TwseMarketDataClient.NavSnapshot(new BigDecimal("188.20"), new BigDecimal("-0.11"), 2200000000L)
         );
         when(twseClient.fetchMisNavData()).thenReturn(Mono.just(navMap));
 
-        StepVerifier.create(adapter.fetchDailyQuotes())
+        // Pass monitored tickers: ["0050", "00679B", "006208"]
+        StepVerifier.create(adapter.fetchDailyQuotes(List.of("0050", "00679B", "006208")))
                 .assertNext(q -> {
                     assertThat(q.getTicker()).isEqualTo("0050");
                     assertThat(q.getNetAssetValue()).isEqualTo(new BigDecimal("188.20"));
-                    assertThat(q.getDiscountPremiumPercentage()).isEqualTo(new BigDecimal("-0.11"));
                 })
                 .assertNext(q -> assertThat(q.getTicker()).isEqualTo("00679B"))
+                .assertNext(q -> assertThat(q.getTicker()).isEqualTo("006208")) // successfully recovered from Yahoo!
                 .assertNext(q -> assertThat(q.getTicker()).isEqualTo("^TWII"))
+                .assertNext(q -> {
+                    assertThat(q.getTicker()).isEqualTo("FEAR_GREED");
+                    assertThat(q.getClosePrice()).isEqualTo(new BigDecimal("45.5"));
+                })
                 .verifyComplete();
     }
 

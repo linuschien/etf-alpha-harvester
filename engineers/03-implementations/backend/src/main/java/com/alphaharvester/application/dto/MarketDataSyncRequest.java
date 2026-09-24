@@ -4,7 +4,8 @@ import com.alphaharvester.domain.model.SyncScope;
 
 public record MarketDataSyncRequest(
         SyncScope scope,
-        Boolean evaluateAfterSync
+        Boolean evaluateAfterSync,
+        Integer backfillDays
 ) {
     public MarketDataSyncRequest {
         if (scope == null) {
@@ -13,6 +14,10 @@ public record MarketDataSyncRequest(
         if (evaluateAfterSync == null) {
             evaluateAfterSync = true;
         }
+    }
+
+    public MarketDataSyncRequest(SyncScope scope, Boolean evaluateAfterSync) {
+        this(scope, evaluateAfterSync, null);
     }
 }
 

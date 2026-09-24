@@ -30,6 +30,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -83,7 +85,7 @@ class MarketDataSyncServiceTest {
 
         // Mock external port calls
         when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset50, asset720b));
-        when(externalMarketDataPort.fetchDailyQuotes()).thenReturn(Flux.just(quote50));
+        when(externalMarketDataPort.fetchDailyQuotes(any())).thenReturn(Flux.just(quote50));
         when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(snapshot));
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(rank50));
         when(externalMarketDataPort.fetchDividendAnnouncements("00720B")).thenReturn(Flux.just(div));
@@ -96,13 +98,20 @@ class MarketDataSyncServiceTest {
         when(metadataRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         when(quoteRepository.findByTickerAndTradeDate(any(), any())).thenReturn(Mono.empty());
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc(anyString())).thenReturn(Mono.just(quote50));
         when(quoteRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         when(macroYieldRepository.findByRecordDate(any())).thenReturn(Mono.empty());
         when(macroYieldRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
+        when(dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(any(), any(), any())).thenReturn(Mono.empty());
         when(dcaRankRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        when(dividendRepository.findByTickerAndExDate(any(), any())).thenReturn(Mono.empty());
         when(dividendRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        when(corporateActionRepository.findByTickerAndEffectiveDate(any(), any())).thenReturn(Mono.empty());
+        when(corporateActionRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         when(scoreEvaluationService.evaluateGlobalAssetScores()).thenReturn(Mono.just(
                 new GlobalAssetScoreEvaluationResponse("SUCCESS", "Evaluated", now.toString(), 2, 1, 0, 1)
@@ -118,6 +127,47 @@ class MarketDataSyncServiceTest {
                     assertThat(res.syncedRecords().macroYieldSnapshotsCount()).isEqualTo(1);
                     assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(1);
                     assertThat(res.syncedRecords().dividendAnnouncementsCount()).isEqualTo(1);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should detect multi-day gap and automatically backfill missing trading bars from Yahoo Finance")
+    void shouldAutoBackfillWhenMultiDayGapDetected() {
+        LocalDateTime now = LocalDateTime.now();
+        UUID id = UUID.randomUUID();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now.minusYears(5), null, null,
+                null, null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+
+        // Previous recorded date is 5 days ago (simulating shutdown/offline outage)
+        MarketDailyQuote oldQuote = new MarketDailyQuote(null, id, null, "0050", now.minusDays(5),
+                new BigDecimal("180.0"), new BigDecimal("182.0"), new BigDecimal("179.0"),
+                new BigDecimal("181.0"), 1000000L, BigDecimal.ZERO, null, null);
+
+        MarketDailyQuote todayQuote = new MarketDailyQuote(null, id, null, "0050", now,
+                new BigDecimal("185.0"), new BigDecimal("187.0"), new BigDecimal("184.0"),
+                new BigDecimal("186.0"), 1200000L, BigDecimal.ZERO, null, null);
+
+        MarketDailyQuote backfillQuote = new MarketDailyQuote(null, id, null, "0050", now.minusDays(2),
+                new BigDecimal("182.0"), new BigDecimal("184.0"), new BigDecimal("181.0"),
+                new BigDecimal("183.0"), 1100000L, BigDecimal.ZERO, null, null);
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
+        when(externalMarketDataPort.fetchDailyQuotes(any())).thenReturn(Flux.just(todayQuote));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("0050")).thenReturn(Mono.just(oldQuote));
+
+        // When gap is detected (> 1 or 3 days), Yahoo historical backfill is triggered
+        when(externalMarketDataPort.fetchHistoricalQuotes(eq("0050"), anyString())).thenReturn(Flux.just(backfillQuote));
+        when(quoteRepository.findByTickerAndTradeDate(any(), any())).thenReturn(Mono.empty());
+        when(quoteRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.QUOTES, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    // 1 today quote + 1 backfill quote caught up = 2 quotes synced!
+                    assertThat(res.syncedRecords().dailyQuotesCount()).isEqualTo(2);
                 })
                 .verifyComplete();
     }

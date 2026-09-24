@@ -6,14 +6,19 @@ import com.alphaharvester.application.dto.MarketDataSyncResponse;
 import com.alphaharvester.application.dto.SyncedRecordsCount;
 import com.alphaharvester.application.port.in.MarketDataSyncUseCase;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
+import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.model.SyncScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.alphaharvester.domain.entity.MarketDailyQuote;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class MarketDataSyncService implements MarketDataSyncUseCase {
@@ -57,7 +62,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         LocalDateTime now = LocalDateTime.now();
         log.info("Initiating market data synchronization pipeline. Scope: {}, ExecutedAt: {}", scope, now);
 
-        return executeSync(scope, now)
+        return executeSync(scope, now, request.backfillDays())
                 .flatMap(counts -> {
                     if (Boolean.TRUE.equals(request.evaluateAfterSync())) {
                         log.info("Triggering post-sync candidate multi-factor evaluation...");
@@ -75,9 +80,9 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                 .doOnError(e -> log.error("Market data synchronization pipeline failed: {}", e.getMessage(), e));
     }
 
-    private Mono<SyncedRecordsCount> executeSync(SyncScope scope, LocalDateTime now) {
+    private Mono<SyncedRecordsCount> executeSync(SyncScope scope, LocalDateTime now, Integer backfillDays) {
         return syncMetadata(scope, now)
-                .flatMap(metaCount -> syncQuotes(scope, now)
+                .flatMap(metaCount -> syncQuotes(scope, now, backfillDays)
                         .flatMap(quotesCount -> syncMacroYields(scope, now)
                                 .flatMap(yieldCount -> syncDcaRanks(scope, now)
                                         .flatMap(dcaCount -> syncDividendsAndSplits(scope, now)
@@ -112,27 +117,74 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                 .map(Long::intValue);
     }
 
-    private Mono<Integer> syncQuotes(SyncScope scope, LocalDateTime now) {
+    private Mono<Integer> syncQuotes(SyncScope scope, LocalDateTime now, Integer backfillDays) {
         if (scope != SyncScope.ALL && scope != SyncScope.QUOTES) {
             return Mono.just(0);
         }
-        log.info("Fetching and syncing daily market quotes from TWSE, TPEx, and Yahoo Finance...");
-        return externalMarketDataPort.fetchDailyQuotes()
-                .flatMap(q -> quoteRepository.findByTickerAndTradeDate(q.getTicker(), q.getTradeDate())
-                        .flatMap(existing -> {
-                            existing.setOpenPrice(q.getOpenPrice());
-                            existing.setHighPrice(q.getHighPrice());
-                            existing.setLowPrice(q.getLowPrice());
-                            existing.setClosePrice(q.getClosePrice());
-                            existing.setVolumeShares(q.getVolumeShares());
-                            existing.setTradeValueTwd(q.getTradeValueTwd());
-                            existing.setNetAssetValue(q.getNetAssetValue());
-                            existing.setDiscountPremiumPercentage(q.getDiscountPremiumPercentage());
-                            return quoteRepository.save(existing);
-                        })
-                        .switchIfEmpty(quoteRepository.save(q)))
+        log.info("Fetching and syncing daily market quotes from TWSE, TPEx, Yahoo Finance, and CNN Fear & Greed...");
+
+        Mono<Integer> primaryDailyCountMono = metadataRepository.findAll()
+                .map(GlobalAssetMetadata::getTicker)
+                .collectList()
+                .flatMapMany(externalMarketDataPort::fetchDailyQuotes)
+                .flatMap(this::upsertDailyQuote)
                 .count()
                 .map(Long::intValue);
+
+        Mono<Integer> backfillCountMono = metadataRepository.findAll()
+                .flatMap(asset -> quoteRepository.findFirstByTickerOrderByTradeDateDesc(asset.getTicker())
+                        .map(latest -> isTradingGap(latest.getTradeDate(), now))
+                        .defaultIfEmpty(true)
+                        .flatMapMany(needsBackfill -> {
+                            boolean force = backfillDays != null && backfillDays > 0;
+                            if (needsBackfill || force) {
+                                String range = deriveRange(force ? backfillDays : 30);
+                                log.warn("Gap or backfill triggered for ETF '{}' (force: {}, range: {}). Backfilling history from Yahoo Finance...",
+                                        asset.getTicker(), force, range);
+                                return externalMarketDataPort.fetchHistoricalQuotes(asset.getTicker(), range)
+                                        .flatMap(this::upsertDailyQuote);
+                            }
+                            return Flux.empty();
+                        }))
+                .count()
+                .map(Long::intValue);
+
+        return primaryDailyCountMono.flatMap(primaryCount ->
+                backfillCountMono.map(backfillCount -> primaryCount + backfillCount)
+        );
+    }
+
+    private Mono<MarketDailyQuote> upsertDailyQuote(MarketDailyQuote q) {
+        return quoteRepository.findByTickerAndTradeDate(q.getTicker(), q.getTradeDate())
+                .flatMap(existing -> {
+                    existing.setOpenPrice(q.getOpenPrice());
+                    existing.setHighPrice(q.getHighPrice());
+                    existing.setLowPrice(q.getLowPrice());
+                    existing.setClosePrice(q.getClosePrice());
+                    existing.setVolumeShares(q.getVolumeShares());
+                    existing.setTradeValueTwd(q.getTradeValueTwd());
+                    existing.setNetAssetValue(q.getNetAssetValue());
+                    existing.setDiscountPremiumPercentage(q.getDiscountPremiumPercentage());
+                    return quoteRepository.save(existing);
+                })
+                .switchIfEmpty(quoteRepository.save(q));
+    }
+
+    private boolean isTradingGap(LocalDateTime latestTradeDate, LocalDateTime now) {
+        if (latestTradeDate == null) {
+            return true;
+        }
+        long daysBetween = ChronoUnit.DAYS.between(latestTradeDate.toLocalDate(), now.toLocalDate());
+        long allowedGap = now.getDayOfWeek() == DayOfWeek.MONDAY ? 3 : 1;
+        return daysBetween > allowedGap;
+    }
+
+    private String deriveRange(int days) {
+        if (days <= 30) return "1mo";
+        if (days <= 90) return "3mo";
+        if (days <= 180) return "6mo";
+        if (days <= 365) return "1y";
+        return "2y";
     }
 
     private Mono<Integer> syncMacroYields(SyncScope scope, LocalDateTime now) {
@@ -163,9 +215,26 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                 .flatMap(rank -> metadataRepository.findByTicker(rank.getTicker())
                         .flatMap(asset -> {
                             rank.setAssetId(asset.getId());
-                            return dcaRankRepository.save(rank);
+                            return dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
+                                            rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
+                                    .flatMap(existing -> {
+                                        existing.setRankPosition(rank.getRankPosition());
+                                        existing.setRegularInvestorCount(rank.getRegularInvestorCount());
+                                        existing.setAssetId(asset.getId());
+                                        return dcaRankRepository.save(existing);
+                                    })
+                                    .switchIfEmpty(dcaRankRepository.save(rank));
                         })
-                        .switchIfEmpty(dcaRankRepository.save(rank)))
+                        .switchIfEmpty(
+                                dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
+                                                rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
+                                        .flatMap(existing -> {
+                                            existing.setRankPosition(rank.getRankPosition());
+                                            existing.setRegularInvestorCount(rank.getRegularInvestorCount());
+                                            return dcaRankRepository.save(existing);
+                                        })
+                                        .switchIfEmpty(dcaRankRepository.save(rank))
+                        ))
                 .count()
                 .map(Long::intValue);
     }
@@ -180,7 +249,15 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     Mono<Integer> divCount = externalMarketDataPort.fetchDividendAnnouncements(asset.getTicker())
                             .flatMap(div -> {
                                 div.setAssetId(asset.getId());
-                                return dividendRepository.save(div);
+                                return dividendRepository.findByTickerAndExDate(div.getTicker(), div.getExDate())
+                                        .flatMap(existing -> {
+                                            existing.setDividendPerShare(div.getDividendPerShare());
+                                            existing.setPaymentDate(div.getPaymentDate());
+                                            existing.setTaxTag(div.getTaxTag());
+                                            existing.setAssetId(asset.getId());
+                                            return dividendRepository.save(existing);
+                                        })
+                                        .switchIfEmpty(dividendRepository.save(div));
                             })
                             .count()
                             .map(Long::intValue);
@@ -188,7 +265,14 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     Mono<Integer> splitCount = externalMarketDataPort.fetchCorporateActions(asset.getTicker())
                             .flatMap(split -> {
                                 split.setAssetId(asset.getId());
-                                return corporateActionRepository.save(split);
+                                return corporateActionRepository.findByTickerAndEffectiveDate(split.getTicker(), split.getEffectiveDate())
+                                        .flatMap(existing -> {
+                                            existing.setSplitToShares(split.getSplitToShares());
+                                            existing.setSplitFromShares(split.getSplitFromShares());
+                                            existing.setAssetId(asset.getId());
+                                            return corporateActionRepository.save(existing);
+                                        })
+                                        .switchIfEmpty(corporateActionRepository.save(split));
                             })
                             .count()
                             .map(Long::intValue);

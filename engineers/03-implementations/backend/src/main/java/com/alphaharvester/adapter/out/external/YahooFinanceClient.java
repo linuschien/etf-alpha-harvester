@@ -38,50 +38,90 @@ public class YahooFinanceClient {
     }
 
     /**
-     * Fetches daily quote for a global benchmark index (e.g. ^TWII, ^GSPC, ^NDX, ^SOX, ^N225, ^VIX, ^VXN, ^MOVE).
+     * Fetches historical daily quotes for any symbol (index or ETF) from Yahoo Finance Chart API.
+     * E.g. range = "1mo", "3mo", "1y", "5d".
      */
-    public Mono<MarketDailyQuote> fetchBenchmarkQuote(String symbol) {
-        String url = YAHOO_CHART_BASE + symbol + "?interval=1d&range=5d";
+    public Flux<MarketDailyQuote> fetchHistoricalQuotes(String symbol, String range) {
+        String url = YAHOO_CHART_BASE + symbol + "?interval=1d&range=" + range;
         return webClient.get()
                 .uri(url)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .flatMap(root -> {
+                .flatMapMany(root -> {
                     try {
                         JsonNode result = root.path("chart").path("result").get(0);
-                        if (result == null) return Mono.empty();
+                        if (result == null) return Flux.empty();
 
                         JsonNode timestamps = result.path("timestamp");
                         JsonNode quote = result.path("indicators").path("quote").get(0);
                         if (timestamps == null || quote == null || !timestamps.isArray() || timestamps.isEmpty()) {
-                            return Mono.empty();
+                            return Flux.empty();
                         }
 
-                        int lastIdx = timestamps.size() - 1;
-                        long epochSec = timestamps.get(lastIdx).asLong();
-                        LocalDateTime tradeDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSec), ZoneId.systemDefault());
+                        List<MarketDailyQuote> list = new ArrayList<>();
+                        for (int i = 0; i < timestamps.size(); i++) {
+                            long epochSec = timestamps.get(i).asLong();
+                            LocalDateTime tradeDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSec), ZoneId.systemDefault());
 
-                        BigDecimal open = parseBigDecimalSafe(quote.path("open").get(lastIdx));
-                        BigDecimal high = parseBigDecimalSafe(quote.path("high").get(lastIdx));
-                        BigDecimal low = parseBigDecimalSafe(quote.path("low").get(lastIdx));
-                        BigDecimal close = parseBigDecimalSafe(quote.path("close").get(lastIdx));
-                        long volume = quote.path("volume").get(lastIdx).asLong(0L);
+                            BigDecimal open = parseBigDecimalSafe(quote.path("open").get(i));
+                            BigDecimal high = parseBigDecimalSafe(quote.path("high").get(i));
+                            BigDecimal low = parseBigDecimalSafe(quote.path("low").get(i));
+                            BigDecimal close = parseBigDecimalSafe(quote.path("close").get(i));
+                            long volume = quote.path("volume").get(i).asLong(0L);
 
-                        if (close == null) return Mono.empty();
-
-                        MarketDailyQuote mdq = new MarketDailyQuote(
-                                null, null, null, symbol, tradeDate,
-                                open, high, low, close, volume, BigDecimal.ZERO, null, null
-                        );
-                        return Mono.just(mdq);
+                            if (close != null) {
+                                list.add(new MarketDailyQuote(
+                                        null, null, null, symbol, tradeDate,
+                                        open, high, low, close, volume, BigDecimal.ZERO, null, null
+                                ));
+                            }
+                        }
+                        return Flux.fromIterable(list);
                     } catch (Exception e) {
-                        log.error("Failed to parse Yahoo chart quote for symbol '{}': {}", symbol, e.getMessage());
-                        return Mono.empty();
+                        log.error("Failed to parse Yahoo historical chart quotes for symbol '{}': {}", symbol, e.getMessage());
+                        return Flux.empty();
                     }
                 })
                 .onErrorResume(e -> {
-                    log.error("Error fetching Yahoo chart quote for '{}': {}", symbol, e.getMessage(), e);
-                    return Mono.empty();
+                    log.error("Error fetching Yahoo historical quotes for '{}': {}", symbol, e.getMessage(), e);
+                    return Flux.empty();
+                });
+    }
+
+    /**
+     * Fetches daily quote for a global benchmark index (latest).
+     */
+    public Mono<MarketDailyQuote> fetchBenchmarkQuote(String symbol) {
+        return fetchHistoricalQuotes(symbol, "5d").last()
+                .onErrorResume(e -> Mono.empty());
+    }
+
+    /**
+     * Fallback to fetch Taiwan ETF quote from Yahoo Finance when TWSE/TPEx misses data.
+     * Tries {ticker}.TW (TWSE listed) first, then {ticker}.TWO (TPEx OTC listed).
+     */
+    public Mono<MarketDailyQuote> fetchTaiwanEtfQuote(String ticker) {
+        log.info("Attempting Yahoo Finance fallback quote fetch for ETF '{}'...", ticker);
+        return fetchTaiwanEtfHistoricalQuotes(ticker, "5d").last()
+                .onErrorResume(e -> Mono.empty())
+                .doOnSuccess(q -> {
+                    if (q != null) {
+                        log.info("Successfully recovered ETF '{}' quote from Yahoo Finance fallback (close: {})", ticker, q.getClosePrice());
+                    }
+                });
+    }
+
+    /**
+     * Multi-day historical backfill for Taiwan ETF from Yahoo Finance.
+     * Tries {ticker}.TW first, then {ticker}.TWO.
+     */
+    public Flux<MarketDailyQuote> fetchTaiwanEtfHistoricalQuotes(String ticker, String range) {
+        log.info("Attempting Yahoo Finance historical backfill for ETF '{}' (range: {})...", ticker, range);
+        return fetchHistoricalQuotes(ticker + ".TW", range)
+                .switchIfEmpty(Flux.defer(() -> fetchHistoricalQuotes(ticker + ".TWO", range)))
+                .map(q -> {
+                    q.setTicker(ticker);
+                    return q;
                 });
     }
 
