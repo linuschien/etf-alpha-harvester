@@ -58,9 +58,14 @@ paths:
       summary: Trigger quantitative multi-factor scoring and candidate ranking
       description: >
         Executes factor evaluation models for candidate ETFs:
-        1. Validates hard gates (Listing days >= 30, R^2 >= 0.95, Total Expense Ratio <= 0.45%, |Discount/Premium| <= 0.5%).
-        2. Independently ranks candidates within CandidateAssetClass (CORE, SATELLITE, DEFENSIVE).
-        3. Persists point-in-time score snapshots into the GlobalAssetScore ledger.
+        1. Validates hard constraints:
+           - Core: TER <= 0.45%, AUM >= 10B TWD
+           - Satellite: AUM >= 2B TWD, 30d Avg Turnover >= 20M TWD
+           - Defensive: AUM >= 5B TWD, Leverage = 1.0x (no L/R)
+        2. Dynamic Core classification via max(R^2) >= 0.95 across 3 benchmarks (^TWII, ^GSPC, ^NDX).
+        3. Disqualifies failing candidates immediately (not scored, not ranked, never written to score ledger).
+        4. Independently ranks qualified candidates within CandidateAssetClass (CORE, SATELLITE, DEFENSIVE).
+        5. Persists pure qualified score snapshots into the GlobalAssetScore ledger.
       operationId: evaluateGlobalAssetScores
       responses:
         '200':
