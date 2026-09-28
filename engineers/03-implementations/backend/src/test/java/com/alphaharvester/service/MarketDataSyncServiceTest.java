@@ -332,4 +332,97 @@ class MarketDataSyncServiceTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should skip metadata synchronization when already synced in current month (Scope ALL)")
+    void shouldSkipMetadataWhenAlreadySyncedInCurrentMonth() {
+        LocalDateTime now = LocalDateTime.now();
+        DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA,
+                now.minusDays(3), now.minusDays(3), 150, "SUCCESS", null, now.minusDays(3)
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA))
+                .thenReturn(Mono.just(watermark));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().etfAssetsCount()).isEqualTo(0);
+                    verify(externalMarketDataPort, never()).fetchEtfMasterUniverse();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should execute metadata synchronization when scope is explicitly METADATA even if already synced")
+    void shouldExecuteMetadataWhenScopeExplicit() {
+        LocalDateTime now = LocalDateTime.now();
+        UUID id = UUID.randomUUID();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null, 1, now, now, null);
+        when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset));
+        when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(asset));
+        when(metadataRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.METADATA, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().etfAssetsCount()).isEqualTo(1);
+                    verify(externalMarketDataPort).fetchEtfMasterUniverse();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should skip DCA rankings synchronization when already synced in current month with records (Scope ALL)")
+    void shouldSkipDcaRanksWhenAlreadySyncedInCurrentMonth() {
+        LocalDateTime now = LocalDateTime.now();
+        DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS,
+                now.minusDays(5), now.minusDays(5), 20, "SUCCESS", null, now.minusDays(5)
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS))
+                .thenReturn(Mono.just(watermark));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(0);
+                    verify(externalMarketDataPort, never()).fetchDcaPopularityRanks(anyInt(), anyInt());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should retry DCA rankings synchronization when watermark has 0 records synced this month")
+    void shouldRetryDcaRanksWhenWatermarkHasZeroRecords() {
+        LocalDateTime now = LocalDateTime.now();
+        DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS,
+                now.minusDays(2), now.minusDays(2), 0, "SUCCESS", null, now.minusDays(2)
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS))
+                .thenReturn(Mono.just(watermark));
+
+        DcaPopularityRank rank = new DcaPopularityRank(null, null, "0050", now.getYear(), now.getMonthValue(), 1, 1000000);
+        when(externalMarketDataPort.fetchDcaPopularityRanks(now.getYear(), now.getMonthValue())).thenReturn(Flux.just(rank));
+        when(metadataRepository.findByTicker("0050")).thenReturn(Mono.empty());
+        when(dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(any(), any(), any())).thenReturn(Mono.empty());
+        when(dcaRankRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(1);
+                    verify(externalMarketDataPort).fetchDcaPopularityRanks(now.getYear(), now.getMonthValue());
+                })
+                .verifyComplete();
+    }
 }

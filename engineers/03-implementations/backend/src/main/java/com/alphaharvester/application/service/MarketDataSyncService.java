@@ -178,25 +178,43 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         if (scope != SyncScope.ALL && scope != SyncScope.METADATA) {
             return Mono.just(0);
         }
+
+        if (scope == SyncScope.ALL && watermarkRepository != null) {
+            return watermarkRepository.findByFeedName(WATERMARK_TWSE_ETF_METADATA)
+                    .flatMap(wm -> {
+                        if ("SUCCESS".equalsIgnoreCase(wm.getStatus()) && wm.getLatestRecordDate() != null) {
+                            if (wm.getLatestRecordDate().getYear() == now.getYear()
+                                    && wm.getLatestRecordDate().getMonthValue() == now.getMonthValue()) {
+                                log.info("TWSE ETF metadata for {}-{} has already been synced (Watermark SUCCESS). Skipping monthly sync.",
+                                        now.getYear(), now.getMonthValue());
+                                return Mono.just(0);
+                            }
+                        }
+                        return executeSyncMetadata(now);
+                    })
+                    .switchIfEmpty(Mono.defer(() -> executeSyncMetadata(now)));
+        }
+
+        return executeSyncMetadata(now);
+    }
+
+    private Mono<Integer> executeSyncMetadata(LocalDateTime now) {
         log.info("Fetching and syncing ETF metadata catalog from TWSE OpenAPI...");
-        return watermarkRepository.findByFeedName(WATERMARK_TWSE_ETF_METADATA)
-                .map(DataFeedSyncWatermark::getLatestRecordDate)
-                .defaultIfEmpty(now.minusDays(1))
-                .flatMap(latestRecordDate -> externalMarketDataPort.fetchEtfMasterUniverse()
-                        .flatMap(asset -> metadataRepository.findByTicker(asset.getTicker())
-                                .flatMap(existing -> {
-                                    existing.setName(asset.getName());
-                                    if (asset.getUnderlyingIndex() != null) {
-                                        existing.setUnderlyingIndex(asset.getUnderlyingIndex());
-                                    }
-                                    existing.setUpdatedAt(now);
-                                    return metadataRepository.save(existing);
-                                })
-                                .switchIfEmpty(metadataRepository.save(asset)))
-                        .count()
-                        .map(Long::intValue)
-                        .flatMap(metaCount -> updateWatermark(WATERMARK_TWSE_ETF_METADATA, now, now, metaCount)
-                                .thenReturn(metaCount)));
+        return externalMarketDataPort.fetchEtfMasterUniverse()
+                .flatMap(asset -> metadataRepository.findByTicker(asset.getTicker())
+                        .flatMap(existing -> {
+                            existing.setName(asset.getName());
+                            if (asset.getUnderlyingIndex() != null) {
+                                existing.setUnderlyingIndex(asset.getUnderlyingIndex());
+                            }
+                            existing.setUpdatedAt(now);
+                            return metadataRepository.save(existing);
+                        })
+                        .switchIfEmpty(Mono.defer(() -> metadataRepository.save(asset))))
+                .count()
+                .map(Long::intValue)
+                .flatMap(metaCount -> updateWatermark(WATERMARK_TWSE_ETF_METADATA, now, now, metaCount)
+                        .thenReturn(metaCount));
     }
 
     private Mono<Integer> syncQuotes(SyncScope scope, LocalDateTime now, Integer backfillDays) {
@@ -413,38 +431,57 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         if (scope != SyncScope.ALL && scope != SyncScope.DCA_RANKS) {
             return Mono.just(0);
         }
+
+        if (scope == SyncScope.ALL && watermarkRepository != null) {
+            return watermarkRepository.findByFeedName(WATERMARK_TWSE_DCA_RANKINGS)
+                    .flatMap(wm -> {
+                        if ("SUCCESS".equalsIgnoreCase(wm.getStatus()) && wm.getLatestRecordDate() != null
+                                && wm.getRecordsSyncedCount() != null && wm.getRecordsSyncedCount() > 0) {
+                            if (wm.getLatestRecordDate().getYear() == now.getYear()
+                                    && wm.getLatestRecordDate().getMonthValue() == now.getMonthValue()) {
+                                log.info("TWSE DCA rankings for {}-{} have already been synced (Watermark SUCCESS, count={}). Skipping monthly sync.",
+                                        now.getYear(), now.getMonthValue(), wm.getRecordsSyncedCount());
+                                return Mono.just(0);
+                            }
+                        }
+                        return executeSyncDcaRanks(now);
+                    })
+                    .switchIfEmpty(Mono.defer(() -> executeSyncDcaRanks(now)));
+        }
+
+        return executeSyncDcaRanks(now);
+    }
+
+    private Mono<Integer> executeSyncDcaRanks(LocalDateTime now) {
         log.info("Fetching and syncing regular quota (DCA) Top 20 rankings from TWSE...");
-        return watermarkRepository.findByFeedName(WATERMARK_TWSE_DCA_RANKINGS)
-                .map(DataFeedSyncWatermark::getLatestRecordDate)
-                .defaultIfEmpty(now.minusMonths(1))
-                .flatMap(latestRecordDate -> externalMarketDataPort.fetchDcaPopularityRanks(now.getYear(), now.getMonthValue())
-                        .flatMap(rank -> metadataRepository.findByTicker(rank.getTicker())
-                                .flatMap(asset -> {
-                                    rank.setAssetId(asset.getId());
-                                    return dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
-                                                    rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
-                                            .flatMap(existing -> {
-                                                existing.setRankPosition(rank.getRankPosition());
-                                                existing.setRegularInvestorCount(rank.getRegularInvestorCount());
-                                                existing.setAssetId(asset.getId());
-                                                return dcaRankRepository.save(existing);
-                                            })
-                                            .switchIfEmpty(dcaRankRepository.save(rank));
-                                })
-                                .switchIfEmpty(
-                                        dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
-                                                        rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
-                                                .flatMap(existing -> {
-                                                    existing.setRankPosition(rank.getRankPosition());
-                                                    existing.setRegularInvestorCount(rank.getRegularInvestorCount());
-                                                    return dcaRankRepository.save(existing);
-                                                })
-                                                .switchIfEmpty(dcaRankRepository.save(rank))
-                                ))
-                        .count()
-                        .map(Long::intValue)
-                        .flatMap(dcaCount -> updateWatermark(WATERMARK_TWSE_DCA_RANKINGS, now, now, dcaCount)
-                                .thenReturn(dcaCount)));
+        return externalMarketDataPort.fetchDcaPopularityRanks(now.getYear(), now.getMonthValue())
+                .flatMap(rank -> metadataRepository.findByTicker(rank.getTicker())
+                        .flatMap(asset -> {
+                            rank.setAssetId(asset.getId());
+                            return dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
+                                            rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
+                                    .flatMap(existing -> {
+                                        existing.setRankPosition(rank.getRankPosition());
+                                        existing.setRegularInvestorCount(rank.getRegularInvestorCount());
+                                        existing.setAssetId(asset.getId());
+                                        return dcaRankRepository.save(existing);
+                                    })
+                                    .switchIfEmpty(Mono.defer(() -> dcaRankRepository.save(rank)));
+                        })
+                        .switchIfEmpty(Mono.defer(() -> 
+                                dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
+                                                rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
+                                        .flatMap(existing -> {
+                                            existing.setRankPosition(rank.getRankPosition());
+                                            existing.setRegularInvestorCount(rank.getRegularInvestorCount());
+                                            return dcaRankRepository.save(existing);
+                                        })
+                                        .switchIfEmpty(Mono.defer(() -> dcaRankRepository.save(rank)))
+                        )))
+                .count()
+                .map(Long::intValue)
+                .flatMap(dcaCount -> updateWatermark(WATERMARK_TWSE_DCA_RANKINGS, now, now, dcaCount)
+                        .thenReturn(dcaCount));
     }
 
     private Mono<int[]> syncDividendsAndSplits(SyncScope scope, LocalDateTime now) {
@@ -466,7 +503,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                         }
                         return executeSyncDividendsAndSplits(now);
                     })
-                    .switchIfEmpty(executeSyncDividendsAndSplits(now));
+                    .switchIfEmpty(Mono.defer(() -> executeSyncDividendsAndSplits(now)));
         }
 
         return executeSyncDividendsAndSplits(now);
