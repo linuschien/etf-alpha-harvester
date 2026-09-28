@@ -125,7 +125,7 @@ class GlobalAssetScoreEvaluationServiceTest {
 
         assertThat(score).isNotNull();
         assertThat(score.getTicker()).isEqualTo("006208");
-        assertThat(score.getCompositeScore().doubleValue()).isGreaterThan(70.0);
+        assertThat(score.getCompositeScore().doubleValue()).isGreaterThan(65.0);
     }
 
     @Test
@@ -157,10 +157,11 @@ class GlobalAssetScoreEvaluationServiceTest {
         GlobalAssetScore score = service.evaluateAsset(core, now);
 
         assertThat(score).isNotNull();
+        assertThat(score.getAssetClass()).isEqualTo(CandidateAssetClass.CORE);
     }
 
     @Test
-    @DisplayName("Should disqualify Core asset when AUM is below 10B TWD")
+    @DisplayName("Should disqualify Core asset when AUM is below 2B TWD universal gate")
     void shouldDisqualifyCoreAssetOnLowAum() {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata smallAumCore = new GlobalAssetMetadata(
@@ -168,7 +169,21 @@ class GlobalAssetScoreEvaluationServiceTest {
                 1, now, now, null
         );
 
-        GlobalAssetScore score = service.evaluateAsset(smallAumCore, now, new BigDecimal("4000000000"), CandidateAssetClass.CORE);
+        GlobalAssetScore score = service.evaluateAsset(smallAumCore, now, new BigDecimal("1500000000"), CandidateAssetClass.CORE);
+
+        assertThat(score).isNull();
+    }
+
+    @Test
+    @DisplayName("Should disqualify Core asset when R^2 is below 0.80 threshold")
+    void shouldDisqualifyCoreAssetOnLowR2() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata lowR2Core = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00998", "低R2大盤ETF", now.minusYears(2), "某指數",
+                1, now, now, null
+        );
+
+        GlobalAssetScore score = service.evaluateAsset(lowR2Core, now, null, 0.79, null, null, new BigDecimal("50000000000"), CandidateAssetClass.CORE);
 
         assertThat(score).isNull();
     }
@@ -460,7 +475,7 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should disqualify Defensive asset when AUM is below 5B TWD")
+    @DisplayName("Should disqualify Defensive asset when AUM is below 2B TWD universal gate")
     void shouldDisqualifyDefensiveAssetOnLowAum() {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata smallBond = new GlobalAssetMetadata(
@@ -468,7 +483,7 @@ class GlobalAssetScoreEvaluationServiceTest {
                 1, now, now, null
         );
 
-        GlobalAssetScore score = service.evaluateAsset(smallBond, now, new BigDecimal("3000000000"), CandidateAssetClass.DEFENSIVE);
+        GlobalAssetScore score = service.evaluateAsset(smallBond, now, new BigDecimal("1500000000"), CandidateAssetClass.DEFENSIVE);
 
         assertThat(score).isNull();
     }

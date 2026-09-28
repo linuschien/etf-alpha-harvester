@@ -742,20 +742,20 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset, LocalDateTime evaluationDate) {
-        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null, new BigDecimal("50000000000"), null);
+        return evaluateAsset(asset, evaluationDate, null, CORE_R2_THRESHOLD, null, null, new BigDecimal("50000000000"), null);
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
                                           LocalDateTime evaluationDate,
                                           BigDecimal currentAum) {
-        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null, currentAum, null);
+        return evaluateAsset(asset, evaluationDate, null, CORE_R2_THRESHOLD, null, null, currentAum, null);
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
                                           LocalDateTime evaluationDate,
                                           BigDecimal currentAum,
                                           CandidateAssetClass targetAssetClass) {
-        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null, currentAum, targetAssetClass);
+        return evaluateAsset(asset, evaluationDate, null, CORE_R2_THRESHOLD, null, null, currentAum, targetAssetClass);
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
@@ -812,6 +812,9 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         if (effectiveAum.compareTo(BigDecimal.ZERO) <= 0) {
             isQualified = false;
             reason = "資產規模 (AUM) 缺失或為非正數，無法確認規模門檻";
+        } else if (aum < UNIVERSAL_MIN_AUM.doubleValue()) {
+            isQualified = false;
+            reason = "資產規模未達 20 億 TWD 全局規模門檻";
         }
 
         CandidateAssetClass effectiveAssetClass = targetAssetClass;
@@ -827,15 +830,12 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         }
 
         if (isQualified && effectiveAssetClass == CandidateAssetClass.CORE) {
-            if (aum < 10_000_000_000.0) {
+            if (trackingR2 < CORE_R2_THRESHOLD) {
                 isQualified = false;
-                reason = "資產規模未達 100 億 TWD 核心規模門檻";
+                reason = "基準指數判定係數 R^2 (" + String.format("%.2f", trackingR2) + ") 未達 " + CORE_R2_THRESHOLD + " 核心門檻";
             }
         } else if (isQualified && effectiveAssetClass == CandidateAssetClass.SATELLITE) {
-            if (aum < 2_000_000_000.0) {
-                isQualified = false;
-                reason = "資產規模未達 20 億 TWD 衛星規模門檻";
-            } else if (quotes == null || quotes.isEmpty()) {
+            if (quotes == null || quotes.isEmpty()) {
                 isQualified = false;
                 reason = "無市場成交報價資料，無法驗證 2,000 萬 TWD 衛星流動性門檻";
             } else {
@@ -848,16 +848,13 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     }
                 }
                 double avgTurnover = quoteCount > 0 ? totalTurnover / quoteCount : 0.0;
-                if (quoteCount == 0 || avgTurnover < 20_000_000.0) {
+                if (quoteCount == 0 || avgTurnover < UNIVERSAL_MIN_30D_TURNOVER.doubleValue()) {
                     isQualified = false;
                     reason = "滾動日均成交金額未達 2,000 萬 TWD 衛星流動性門檻 (當前: " + String.format("%.2f 萬", avgTurnover / 10000.0) + ")";
                 }
             }
         } else if (isQualified && effectiveAssetClass == CandidateAssetClass.DEFENSIVE) {
-            if (aum < 5_000_000_000.0) {
-                isQualified = false;
-                reason = "資產規模未達 50 億 TWD 防禦資產規模門檻";
-            } else if (ticker.endsWith("L") || ticker.endsWith("R")) {
+            if (ticker.endsWith("L") || ticker.endsWith("R")) {
                 isQualified = false;
                 reason = "防禦資產嚴禁槓桿或反向型標的 (" + ticker + ")";
             } else if (quotes == null || quotes.isEmpty()) {

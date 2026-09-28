@@ -4,8 +4,6 @@ import com.alphaharvester.adapter.out.external.util.RocDateUtil;
 import com.alphaharvester.domain.entity.DcaPopularityRank;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
-import com.alphaharvester.domain.model.CandidateAssetClass;
-import com.alphaharvester.domain.model.DistributionFrequency;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -383,7 +383,7 @@ def main():
         returns_0050 = [math.log(prices_0050[i] / prices_0050[i-1]) for i in range(1, len(prices_0050))]
         returns_twii = [math.log(prices_twii[i] / prices_twii[i-1]) for i in range(1, len(prices_twii))]
         r2 = calculate_r_squared(returns_twii, returns_0050)
-        print(f"         [CLT Verification] 0050.TW vs ^TWII ({len(returns_0050)} trading days) -> R^2: {r2:.4f} (Core Fast-Track Target: >= 0.95)")
+        print(f"         [CLT Verification] 0050.TW vs ^TWII ({len(returns_0050)} trading days) -> R^2: {r2:.4f} (Core Benchmark Target: >= 0.80)")
 
     # 7. U.S. Treasury Public XML Feed (Zero-Key Mode)
     print("\n[7/7] Probing U.S. Department of the Treasury XML Feed (Zero-Key Mode)...")

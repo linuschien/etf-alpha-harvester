@@ -57,16 +57,35 @@ paths:
     post:
       summary: Trigger quantitative multi-factor scoring and candidate ranking
       description: >
-        Executes factor evaluation models for candidate ETFs:
-        1. Validates hard constraints:
-           - Core: TER <= 0.45%, AUM >= 10B TWD
-           - Satellite: AUM >= 2B TWD, 30d Avg Turnover >= 20M TWD
-           - Defensive: AUM >= 5B TWD, Leverage = 1.0x (no L/R)
-        2. Dynamic Core classification via max(R^2) >= 0.95 across 3 benchmarks (^TWII, ^GSPC, ^NDX).
-        3. Disqualifies failing candidates immediately (not scored, not ranked, never written to score ledger).
-        4. Independently ranks qualified candidates within CandidateAssetClass (CORE, SATELLITE, DEFENSIVE).
-        5. Persists pure qualified score snapshots into the GlobalAssetScore ledger.
+        Executes four-stage screening and ranking pipeline (Stage 0 to Stage 3) for candidate ETF universe:
+        1. Stage 0: Regex short-circuit blocking for leveraged, inverse, futures, active, and ETN symbols.
+        2. Stage 1: Universal hard gates: Listing age >= 365 calendar days, trading days N >= 220, dynamic AUM >= 2B TWD, 30d avg turnover >= 20M TWD.
+        3. Mutual exclusive pool classification:
+           - Core: max(R^2) >= 0.80 across 4 global benchmarks (^TWII, ^GSPC, ^NDX, ^N225). Falling out means permanent removal (never demoted to satellite).
+           - Defensive: Ticker ends with B or name contains '債'.
+           - Satellite: Non-core (max(R^2) < 0.80), Non-bond, 90d annualized volatility >= 18%, MOM(12-1) > 0.
+        4. Stage 2: Continuous percentile scoring (Percentile Rank 0~1):
+           - Core Top 10: 1/3 Rank(R^2) + 1/3 Rank(DCA) + 1/3 Rank(AUM).
+           - Satellite Top 20: (1/3 Rank(MOM) + 1/3 Rank(KER) + 1/3 Rank(Sharpe)) * (1 - R^2_TAIEX).
+           - Bond Top 5: 0.70 Rank(YTM) + 0.30 Rank(AUM).
+        5. Stage 3: Upper-triangular pairwise matrix persistence and Greedy Orthogonal Engine (R^2 < 0.50).
       operationId: evaluateGlobalAssetScores
+      parameters:
+        - name: yearMonth
+          in: query
+          required: false
+          description: Target evaluation year-month (YYYY-MM). Defaults to current year-month.
+          schema:
+            type: string
+            example: "2026-09"
+        - name: force
+          in: query
+          required: false
+          description: Force re-evaluation and override existing monthly watermark cache. Defaults to true.
+          schema:
+            type: boolean
+            default: true
+            example: true
       responses:
         '200':
           description: Candidate asset scoring and class ranking completed successfully

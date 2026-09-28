@@ -9,7 +9,7 @@
 ## 1. Executive Summary & Verification Status
 
 AlphaHarvester relies on automated ingestion of external financial market data to drive:
-1. **Global Layer Screening & Factor Ranking** (Central Limit Theorem $N \ge 30$ trading days, $R^2 \ge 0.95$, TER, Discount/Premium, DCA Top 20).
+1. **Global Layer Screening & Factor Ranking** (Stage 0 regex blocking, trading days $N \ge 220$ within 365 calendar days, Core $R^2 \ge 0.80$, dynamic AUM $\ge 20$ 億 TWD, DCA Top 20).
 2. **Macro Yield State Machine** (US Investment Grade Corporate Bond Yield vs 10Y/20Y US Treasuries).
 3. **Personal Portfolio Valuation & Calibrations** (NAV, daily close, dividends, volume).
 

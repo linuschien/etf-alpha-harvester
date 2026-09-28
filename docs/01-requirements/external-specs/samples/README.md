@@ -82,7 +82,7 @@ python3 docs/01-requirements/external-specs/samples/verify_external_feeds.py
          Benchmark ^NDX   -> Latest Close: 30482.35
          Benchmark ^SOX   -> Latest Close: 12433.17
          Benchmark ^N225  -> Latest Close: 65018.95
-         [CLT Verification] 0050.TW vs ^TWII (65 trading days) -> R^2: 0.9510 (Core Fast-Track Target: >= 0.95)
+         [CLT Verification] 0050.TW vs ^TWII (65 trading days) -> R^2: 0.9510 (Core Benchmark Target: >= 0.80)
 
 [7/7] Probing U.S. Department of the Treasury XML Feed (Zero-Key Mode)...
       -> SUCCESS: Official U.S. Treasury Yields for Date 2026-09-21:
