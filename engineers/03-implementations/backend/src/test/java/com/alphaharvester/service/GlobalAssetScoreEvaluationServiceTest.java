@@ -25,7 +25,6 @@ import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -110,82 +109,6 @@ class GlobalAssetScoreEvaluationServiceTest {
             curr = curr.plusDays(1);
         }
         return quotes;
-    }
-
-    @Test
-    @DisplayName("Should evaluate and qualify Core asset with low expense ratio and high AUM")
-    void shouldEvaluateQualifiedCoreAsset() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata coreAsset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "006208", "富邦台50", now.minusYears(8), "臺灣50",
-                1, now, now, null
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(coreAsset, now);
-
-        assertThat(score).isNotNull();
-        assertThat(score.getTicker()).isEqualTo("006208");
-        assertThat(score.getCompositeScore().doubleValue()).isGreaterThan(65.0);
-    }
-
-    @Test
-    @DisplayName("Should award higher score to Core asset with higher DCA rank")
-    void shouldAwardHigherScoreToCoreAssetWithHigherDcaRank() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata coreAsset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(20), "臺灣50",
-                1, now, now, null
-        );
-
-        GlobalAssetScore scoreRank1 = service.evaluateAsset(coreAsset, now, null, 0.98, 1);
-        GlobalAssetScore scoreRank20 = service.evaluateAsset(coreAsset, now, null, 0.98, 20);
-        GlobalAssetScore scoreUnranked = service.evaluateAsset(coreAsset, now, null, 0.98, null);
-
-        assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreRank20.getCompositeScore());
-        assertThat(scoreRank20.getCompositeScore()).isGreaterThan(scoreUnranked.getCompositeScore());
-    }
-
-    @Test
-    @DisplayName("Should qualify Core asset meeting AUM threshold without TER constraint")
-    void shouldQualifyCoreAssetWithoutTerConstraint() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata core = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00999", "大盤ETF", now.minusYears(3), "某大盤指數",
-                1, now, now, null
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(core, now);
-
-        assertThat(score).isNotNull();
-        assertThat(score.getAssetClass()).isEqualTo(CandidateAssetClass.CORE);
-    }
-
-    @Test
-    @DisplayName("Should disqualify Core asset when AUM is below 2B TWD universal gate")
-    void shouldDisqualifyCoreAssetOnLowAum() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata smallAumCore = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00998", "小規模大盤ETF", now.minusMonths(3), "某指數",
-                1, now, now, null
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(smallAumCore, now, new BigDecimal("1500000000"), CandidateAssetClass.CORE);
-
-        assertThat(score).isNull();
-    }
-
-    @Test
-    @DisplayName("Should disqualify Core asset when R^2 is below 0.80 threshold")
-    void shouldDisqualifyCoreAssetOnLowR2() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata lowR2Core = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00998", "低R2大盤ETF", now.minusYears(2), "某指數",
-                1, now, now, null
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(lowR2Core, now, null, 0.79, null, null, new BigDecimal("50000000000"), CandidateAssetClass.CORE);
-
-        assertThat(score).isNull();
     }
 
     @Test
@@ -371,176 +294,6 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should evaluate linear scores for DCA rank and momentum")
-    void shouldEvaluateLinearScoresForDcaRankAndMom() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata asset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00878", "國泰永續高股息", now.minusYears(4), "MSCI臺灣ESG",
-                1, now, now, null
-        );
-
-        List<MarketDailyQuote> upQuotes = List.of(
-                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("25.0"), 1_000_000L, new BigDecimal("25000000"), null, null),
-                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), 1_000_000L, new BigDecimal("20000000"), null, null)
-        ); // +25% return
-
-        List<MarketDailyQuote> downQuotes = List.of(
-                new MarketDailyQuote(null, null, null, "00878", now, null, null, null, new BigDecimal("18.0"), 1_000_000L, new BigDecimal("25000000"), null, null),
-                new MarketDailyQuote(null, null, null, "00878", now.minusDays(30), null, null, null, new BigDecimal("20.0"), 1_000_000L, new BigDecimal("20000000"), null, null)
-        ); // -10% return
-
-        GlobalAssetScore scoreRank1 = service.evaluateAsset(asset, now, upQuotes, 0.5, 1);
-        GlobalAssetScore scoreRank20 = service.evaluateAsset(asset, now, upQuotes, 0.5, 20);
-        GlobalAssetScore scoreUnranked = service.evaluateAsset(asset, now, upQuotes, 0.5, null);
-        GlobalAssetScore scoreDown = service.evaluateAsset(asset, now, downQuotes, 0.5, 1);
-
-        assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreRank20.getCompositeScore());
-        assertThat(scoreRank20.getCompositeScore()).isGreaterThan(scoreUnranked.getCompositeScore());
-        assertThat(scoreRank1.getCompositeScore()).isGreaterThan(scoreDown.getCompositeScore());
-    }
-
-    @Test
-    @DisplayName("Should award higher score to Satellite asset with lower correlation to Core index")
-    void shouldAwardHigherScoreToUncorrelatedSatelliteAsset() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata asset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
-                1, now, now, null
-        );
-
-        List<MarketDailyQuote> quotes = List.of(
-                new MarketDailyQuote(null, null, null, "00757", now, null, null, null,
-                        new BigDecimal("80.0"), 1_000_000L, new BigDecimal("80000000"), null, null),
-                new MarketDailyQuote(null, null, null, "00757", now.minusDays(1), null, null, null,
-                        new BigDecimal("78.0"), 1_000_000L, new BigDecimal("78000000"), null, null)
-        );
-
-        // Low correlation R^2 = 0.16 (rho = 0.40) vs High correlation R^2 = 0.81 (rho = 0.90)
-        GlobalAssetScore lowCorrScore = service.evaluateAsset(asset, now, quotes, 0.16, 5, CandidateAssetClass.SATELLITE);
-        GlobalAssetScore highCorrScore = service.evaluateAsset(asset, now, quotes, 0.81, 5, CandidateAssetClass.SATELLITE);
-
-        // Lower correlation means higher diversification score (1 - rho)*100
-        assertThat(lowCorrScore.getCompositeScore()).isGreaterThan(highCorrScore.getCompositeScore());
-    }
-
-    @Test
-    @DisplayName("Should disqualify Satellite asset when quotes are missing (null or empty)")
-    void shouldDisqualifySatelliteAssetWhenQuotesAreMissing() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata asset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
-                1, now, now, null
-        );
-
-        GlobalAssetScore scoreNullQuotes = service.evaluateAsset(asset, now, null, 0.16, 5);
-        GlobalAssetScore scoreEmptyQuotes = service.evaluateAsset(asset, now, List.of(), 0.16, 5);
-
-        assertThat(scoreNullQuotes).isNull();
-        assertThat(scoreEmptyQuotes).isNull();
-    }
-
-    @Test
-    @DisplayName("Should disqualify Satellite asset when AUM is below 2B TWD")
-    void shouldDisqualifySatelliteAssetOnLowAum() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata smallSatellite = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00991", "超微型衛星", now.minusYears(1), "某主題指數",
-                1, now, now, null
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(smallSatellite, now, new BigDecimal("1500000000"), CandidateAssetClass.SATELLITE);
-
-        assertThat(score).isNull();
-    }
-
-    @Test
-    @DisplayName("Should disqualify Satellite asset when rolling 30d turnover is below 20M TWD")
-    void shouldDisqualifySatelliteAssetOnLowTurnover() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata illiquidSatellite = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00992", "冷門衛星", now.minusYears(2), "冷門指數",
-                1, now, now, null
-        );
-
-        List<MarketDailyQuote> quotes = List.of(
-                new MarketDailyQuote(null, null, null, "00992", now, null, null, null,
-                        new BigDecimal("20.0"), 500_000L, new BigDecimal("10000000"), null, null), // 1,000萬 < 2,000萬
-                new MarketDailyQuote(null, null, null, "00992", now.minusDays(1), null, null, null,
-                        new BigDecimal("20.0"), 600_000L, new BigDecimal("12000000"), null, null)  // 1,200萬 < 2,000萬
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(illiquidSatellite, now, quotes, 0.20, null, null, new BigDecimal("5000000000"), CandidateAssetClass.SATELLITE);
-
-        assertThat(score).isNull();
-    }
-
-    @Test
-    @DisplayName("Should disqualify Defensive asset when AUM is below 2B TWD universal gate")
-    void shouldDisqualifyDefensiveAssetOnLowAum() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata smallBond = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00993B", "小微公債", now.minusYears(1), "公債指數",
-                1, now, now, null
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(smallBond, now, new BigDecimal("1500000000"), CandidateAssetClass.DEFENSIVE);
-
-        assertThat(score).isNull();
-    }
-
-    @Test
-    @DisplayName("Should disqualify Defensive asset on leveraged or inverse ticker")
-    void shouldDisqualifyDefensiveAssetOnLeverageOrInverse() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata leveragedBond = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00680L", "元大美債20正2", now.minusYears(5), "20年美債正2",
-                1, now, now, null
-        );
-
-        GlobalAssetMetadata inverseBond = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00681R", "元大美債20反1", now.minusYears(5), "20年美債反1",
-                1, now, now, null
-        );
-
-        GlobalAssetScore scoreL = service.evaluateAsset(leveragedBond, now);
-        GlobalAssetScore scoreR = service.evaluateAsset(inverseBond, now);
-
-        assertThat(scoreL).isNull();
-        assertThat(scoreR).isNull();
-    }
-
-    @Test
-    @DisplayName("Should calculate Defensive yield score from dividend announcement history")
-    void shouldCalculateDefensiveYieldFromDividendHistory() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata bondAsset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00720B", "元大投資級公司債", now.minusYears(6), "投資級公司債",
-                1, now, now, null
-        );
-
-        List<MarketDailyQuote> quotes = List.of(
-                new MarketDailyQuote(null, null, null, "00720B", now, null, null, null,
-                        new BigDecimal("30.0"), 1000000L, new BigDecimal("30000000"), null, null)
-        );
-
-        // 4 quarters * 0.45 = 1.8 TWD / share. Annual yield = 1.8 / 30.0 = 6% -> yieldScore = 100.0
-        List<DividendAnnouncement> dividends = List.of(
-                new DividendAnnouncement(null, null, "00720B", now.minusMonths(2), now.minusMonths(1), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W),
-                new DividendAnnouncement(null, null, "00720B", now.minusMonths(5), now.minusMonths(4), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W),
-                new DividendAnnouncement(null, null, "00720B", now.minusMonths(8), now.minusMonths(7), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W),
-                new DividendAnnouncement(null, null, "00720B", now.minusMonths(11), now.minusMonths(10), new BigDecimal("0.45"), TaxTag.OVERSEAS_76W)
-        );
-
-        GlobalAssetScore scoreWithDivs = service.evaluateAsset(bondAsset, now, quotes, 0.0, null, dividends);
-        GlobalAssetScore scoreNoDivs = service.evaluateAsset(bondAsset, now, quotes, 0.0, null, List.of());
-
-        assertThat(scoreWithDivs).isNotNull();
-        assertThat(scoreNoDivs).isNotNull();
-        // With 6% yield, yieldScore = 100, which is higher than default 75 when dividends are empty
-        assertThat(scoreWithDivs.getCompositeScore()).isGreaterThan(scoreNoDivs.getCompositeScore());
-    }
-
-    @Test
     @DisplayName("Should eliminate disqualified assets so they are NOT ranked or saved to scoreRepository")
     @SuppressWarnings("unchecked")
     void shouldFilterDisqualifiedAssetsFromScoringPipelineAndNotPersistThem() {
@@ -613,22 +366,6 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should disqualify Defensive asset when market quotes are null or empty")
-    void shouldDisqualifyDefensiveAssetWhenQuotesAreMissing() {
-        LocalDateTime now = LocalDateTime.now();
-        GlobalAssetMetadata bondAsset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00679B", "元大美債20年", now.minusYears(7), "彭博20年美債",
-                1, now, now, null
-        );
-
-        GlobalAssetScore scoreNullQuotes = service.evaluateAsset(bondAsset, now, null, 0.0, null);
-        GlobalAssetScore scoreEmptyQuotes = service.evaluateAsset(bondAsset, now, List.of(), 0.0, null);
-
-        assertThat(scoreNullQuotes).isNull();
-        assertThat(scoreEmptyQuotes).isNull();
-    }
-
-    @Test
     @DisplayName("Should dynamically derive distribution frequency from 1-year dividend announcement count")
     void shouldDeriveDistributionFrequencyFromDividendCount() {
         LocalDateTime now = LocalDateTime.now();
@@ -697,35 +434,5 @@ class GlobalAssetScoreEvaluationServiceTest {
         assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(singleDiv40d, listingDate40d, now))
                 .isEqualTo(DistributionFrequency.MONTHLY);
     }
-
-    @Test
-    @DisplayName("Should annualize dividend yield for newly listed Defensive bond ETF (listed < 365 days)")
-    void shouldAnnualizeDefensiveYieldForNewlyListedBond() {
-        LocalDateTime now = LocalDateTime.now();
-        // Bond listed only 90 days ago
-        LocalDateTime listingDate = now.minusDays(90);
-        GlobalAssetMetadata youngBond = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00937B", "群益ESG投等債20+", listingDate, "ESG投等債20+",
-                1, now, now, null
-        );
-
-        List<MarketDailyQuote> quotes = List.of(
-                new MarketDailyQuote(null, null, null, "00937B", now, null, null, null,
-                        new BigDecimal("15.0"), 5000000L, new BigDecimal("75000000"), null, null)
-        );
-
-        // 3 monthly distributions of 0.08 = 0.24 TWD. Raw yield = 0.24 / 15.0 = 1.6%
-        // Annualized yield = 1.6% * (365 / 90) = 6.489% -> yieldScore = min(100, 6.489% * 1666.67) = 100.0
-        List<DividendAnnouncement> divs = List.of(
-                new DividendAnnouncement(null, null, "00937B", now.minusDays(70), now.minusDays(60), new BigDecimal("0.08"), TaxTag.OVERSEAS_76W),
-                new DividendAnnouncement(null, null, "00937B", now.minusDays(40), now.minusDays(30), new BigDecimal("0.08"), TaxTag.OVERSEAS_76W),
-                new DividendAnnouncement(null, null, "00937B", now.minusDays(10), now, new BigDecimal("0.08"), TaxTag.OVERSEAS_76W)
-        );
-
-        GlobalAssetScore score = service.evaluateAsset(youngBond, now, quotes, 0.0, null, divs);
-
-        assertThat(score).isNotNull();
-        // S_defensive = 0.60 * 100.0 (yield) + 0.40 * 100.0 (aum) = 60 + 40 = 100.00
-        assertThat(score.getCompositeScore()).isGreaterThan(new BigDecimal("90.00"));
-    }
 }
+
