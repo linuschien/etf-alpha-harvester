@@ -86,7 +86,7 @@ class StageScreeningAndRankingIntegrationTest {
     private List<MarketDailyQuote> generateCalendarQuotes(String ticker, YearMonth targetYm, double startPrice, double growthRate, double noiseFactor, int pattern) {
         LocalDate evalDate = targetYm.atDay(1);
         LocalDate cutoffDate = evalDate.minusDays(1);
-        LocalDate start = cutoffDate.minusYears(1).plusDays(1);
+        LocalDate start = evalDate.minusYears(1);
 
         List<MarketDailyQuote> quotes = new ArrayList<>();
         double p = startPrice;

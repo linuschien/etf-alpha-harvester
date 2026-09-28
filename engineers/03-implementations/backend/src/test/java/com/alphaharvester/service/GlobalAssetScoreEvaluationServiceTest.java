@@ -77,7 +77,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         YearMonth ym = YearMonth.from(LocalDate.now());
         LocalDate evalDate = ym.atDay(1);
         LocalDate cutoffDate = evalDate.minusDays(1);
-        LocalDate start = cutoffDate.minusYears(1).plusDays(1);
+        LocalDate start = evalDate.minusYears(1);
 
         List<MarketDailyQuote> quotes = new ArrayList<>();
         double p = startPrice;

@@ -117,9 +117,9 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         LocalDate cutoffDate = evalDate.minusDays(1);
         LocalDateTime cutoffDateTime = cutoffDate.atTime(23, 59, 59);
 
-        LocalDate window365dStart = cutoffDate.minusYears(1).plusDays(1);
-        LocalDate window90dStart = cutoffDate.minusMonths(3).plusDays(1);
-        LocalDate window30dStart = cutoffDate.minusMonths(1).plusDays(1);
+        LocalDate window365dStart = evalDate.minusYears(1);
+        LocalDate window90dStart = evalDate.minusMonths(3);
+        LocalDate window30dStart = evalDate.minusMonths(1);
 
         log.info("Initiating Monthly Top List evaluation for [{}]. Cutoff: {}, 365d: [{} ~ {}], 90d: [{} ~ {}], 30d: [{} ~ {}], Force: {}",
                 targetYm, cutoffDate, window365dStart, cutoffDate, window90dStart, cutoffDate, window30dStart, cutoffDate, force);
