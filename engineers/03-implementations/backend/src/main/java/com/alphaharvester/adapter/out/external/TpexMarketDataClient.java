@@ -12,11 +12,14 @@ import reactor.core.publisher.Flux;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.regex.Pattern;
 
 @Component
 public class TpexMarketDataClient {
 
     private static final Logger log = LoggerFactory.getLogger(TpexMarketDataClient.class);
+
+    public static final Pattern STAGE_0_BLOCKING_PATTERN = Pattern.compile("^(00\\d{2,4}[ULRA]|02\\d{4})$");
 
     private static final String TPEX_QUOTES_URL = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes";
 
@@ -28,6 +31,7 @@ public class TpexMarketDataClient {
 
     /**
      * Fetches daily trading quotes from TPEx OTC market (Bond and OTC ETFs).
+     * Enforces Stage 0 filter to block leveraged, inverse, futures, active, and ETN symbols.
      */
     public Flux<MarketDailyQuote> fetchTpexDailyQuotes() {
         LocalDateTime now = LocalDateTime.now();
@@ -37,7 +41,7 @@ public class TpexMarketDataClient {
                 .bodyToFlux(JsonNode.class)
                 .filter(node -> {
                     String code = node.path("SecuritiesCompanyCode").asText("").trim();
-                    return code.startsWith("00"); // filter ETFs
+                    return code.startsWith("00") && !STAGE_0_BLOCKING_PATTERN.matcher(code).matches();
                 })
                 .map(node -> {
                     String ticker = node.path("SecuritiesCompanyCode").asText("").trim();
@@ -84,4 +88,3 @@ public class TpexMarketDataClient {
         }
     }
 }
-

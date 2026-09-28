@@ -14,7 +14,7 @@ import java.util.UUID;
 public interface DividendAnnouncementRepository extends R2dbcRepository<DividendAnnouncement, UUID>, ReactiveQueryByExampleExecutor<DividendAnnouncement> {
     Mono<DividendAnnouncement> findByTickerAndExDate(String ticker, LocalDateTime exDate);
     Flux<DividendAnnouncement> findByExDateBetweenOrderByExDateAsc(LocalDateTime startDate, LocalDateTime endDate);
+    Flux<DividendAnnouncement> findByTickerAndExDateBetweenOrderByExDateAsc(String ticker, LocalDateTime startDate, LocalDateTime endDate);
     Flux<DividendAnnouncement> findByAssetIdOrderByExDateDesc(UUID assetId);
     Flux<DividendAnnouncement> findByTickerOrderByExDateDesc(String ticker);
 }
-

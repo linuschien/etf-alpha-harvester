@@ -16,5 +16,5 @@ public interface GlobalAssetScoreRepository extends R2dbcRepository<GlobalAssetS
     Mono<GlobalAssetScore> findByTickerAndEvaluationDate(String ticker, LocalDateTime evaluationDate);
     Flux<GlobalAssetScore> findByAssetClassAndEvaluationDateOrderByClassRankAsc(CandidateAssetClass assetClass, LocalDateTime evaluationDate);
     Flux<GlobalAssetScore> findByEvaluationDateOrderByClassRankAsc(LocalDateTime evaluationDate);
+    Mono<Void> deleteByEvaluationDate(LocalDateTime evaluationDate);
 }
-

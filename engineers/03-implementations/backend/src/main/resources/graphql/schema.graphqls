@@ -39,6 +39,11 @@ enum CrisisLevel {
     CRISIS_LEVEL_2
 }
 
+enum OrthogonalStatus {
+    ACCEPTED
+    REJECTED_COLLINEAR
+}
+
 type GlobalAssetMetadata {
     id: ID!
     ticker: String!
@@ -98,6 +103,26 @@ type GlobalAssetScore {
     classRank: Int!
     compositeScore: Float!
     fundSizeTwd: Float
+    orthogonalStatus: OrthogonalStatus
+    collisionDetail: String
+    rSquared: Float
+    momentum121: Float
+    kaufmanEr: Float
+    sharpeRatio: Float
+    volatility90d: Float
+    ytm: Float
+    dcaRank: Int
+}
+
+type GlobalAssetPairwiseMatrix {
+    id: ID!
+    evaluationDate: String!
+    assetClass: CandidateAssetClass!
+    baseTicker: String!
+    targetTicker: String!
+    rSquared: Float!
+    correlationCoefficient: Float!
+    createdAt: String!
 }
 
 type DcaPopularityRank {
@@ -247,5 +272,9 @@ type Query {
     # Pure Quantitative Function Queries
     getDipBuyOpportunity(ticker: String!): DipBuyOpportunityScore!
     getMacroRegime: MacroRegimeAssessment!
+
+    # Pairwise Matrix & Orthogonal Engine Queries
+    listPairwiseMatrix(assetClass: CandidateAssetClass!, evaluationDate: String): [GlobalAssetPairwiseMatrix!]!
+    getOrthogonalCandidates(assetClass: CandidateAssetClass!, seedTicker: String, evaluationDate: String): [GlobalAssetScore!]!
 }
 

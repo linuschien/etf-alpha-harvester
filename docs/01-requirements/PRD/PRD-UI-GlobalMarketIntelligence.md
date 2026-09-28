@@ -359,7 +359,7 @@
 | **合規標的天梯榜** | `GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `classRank`, `compositeScore`, `fundSizeTwd`, `orthogonalStatus`, `collisionDetail` |
 | **Stage 3 正交去共線求解** | `GlobalAssetScoreGraphQLResolver.getOrthogonalCandidates` | `assetClass`, `seedTicker` (選填), `orthogonalStatus` (`ACCEPTED` / `REJECTED_COLLINEAR`), `collisionDetail`, `ticker`, `classRank`, `compositeScore` |
 | **兩兩正交矩陣視圖** | `GlobalAssetScoreGraphQLResolver.getPairwiseMatrix` | `assetClass`, `baseTicker`, `targetTicker`, `rSquared`, `correlationCoefficient` |
-| **手動評估/覆蓋重算 Mutation** | `GlobalAssetScoreGraphQLResolver.evaluateScores` | `yearMonth` (選填，格式 YYYY-MM，如 "2026-08"), `evaluationDate`, `totalEvaluatedCount` |
+| **手動評估/覆蓋重算 (Admin Trigger)** | REST API `POST /api/v1/globalAssetScores:evaluate` (GraphQL 嚴守純 Read Gateway，不提供 Mutation) | `yearMonth` (選填，格式 YYYY-MM，如 "2026-08"), `force` (布林值，預設 false) |
 | **天梯榜多天期績效與收盤折溢價** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `discountPremiumPercentage`, `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (採收盤價價差 + 期間配息現金加總零誤差計算) |
 | **超跌加碼勝率指數卡片** | `MarketDailyQuoteGraphQLResolver.getDipBuyOpportunity` (純函數求解) | `score` ($S_{\text{dip}}$), `grade`, `winRateRange`, `bollingerScore`, `fibonacciScore`, `maSupportScore`, `panicScore`, `recommendation` |
 | **ETF 除息月曆** | `DividendAnnouncementGraphQLResolver.listDividendsByDateRange` | `ticker`, `exDate`, `paymentDate`, `dividendPerShare`, `taxTag` |

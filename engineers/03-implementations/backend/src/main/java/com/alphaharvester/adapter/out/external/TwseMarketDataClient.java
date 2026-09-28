@@ -17,13 +17,23 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Pattern;
 
 @Component
 public class TwseMarketDataClient {
 
     private static final Logger log = LoggerFactory.getLogger(TwseMarketDataClient.class);
+
+    /**
+     * Stage 0 regex blocking:
+     * - Ends with U (Commodity futures)
+     * - Ends with L (Leveraged 2x)
+     * - Ends with R (Inverse -1x)
+     * - Ends with A (Active management)
+     * - Starts with 02 (ETN Exchange Traded Notes)
+     */
+    public static final Pattern STAGE_0_BLOCKING_PATTERN = Pattern.compile("^(00\\d{2,4}[ULRA]|02\\d{4})$");
 
     private static final String TWSE_MASTER_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap47_L";
     private static final String TWSE_QUOTES_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL";
@@ -37,7 +47,8 @@ public class TwseMarketDataClient {
     }
 
     /**
-     * Fetches all listed ETF metadata from TWSE OpenAPI.
+     * Fetches all listed ETF metadata from TWSE OpenAPI and enriches with TPEx OTC ETFs from MIS.
+     * Enforces Stage 0 regex short-circuit blocking: filters out U, L, R, A, and 02 ETNs.
      */
     public Flux<GlobalAssetMetadata> fetchEtfMasterUniverse() {
         LocalDateTime now = LocalDateTime.now();
@@ -72,8 +83,49 @@ public class TwseMarketDataClient {
                                     fundSize, assetClass, frequency,
                                     1, now, now, null
                             );
+                        })
+                        .filter(asset -> !asset.getTicker().isBlank())
+                        .collectList()
+                        .flatMapMany(twseList -> {
+                            List<GlobalAssetMetadata> combined = new ArrayList<>();
+                            Set<String> seenTickers = new HashSet<>();
+
+                            // 1. Add TWSE listed ETFs passing Stage 0
+                            for (GlobalAssetMetadata m : twseList) {
+                                if (!STAGE_0_BLOCKING_PATTERN.matcher(m.getTicker()).matches()) {
+                                    combined.add(m);
+                                    seenTickers.add(m.getTicker());
+                                }
+                            }
+
+                            // 2. Enrich with TPEx (OTC) ETFs from MIS NAV snapshot (e.g. 00679B, 00720B)
+                            for (Map.Entry<String, NavSnapshot> entry : navMap.entrySet()) {
+                                String symbol = entry.getKey();
+                                NavSnapshot snap = entry.getValue();
+                                if (!seenTickers.contains(symbol)
+                                        && !STAGE_0_BLOCKING_PATTERN.matcher(symbol).matches()
+                                        && (symbol.startsWith("00") || symbol.endsWith("B"))) {
+                                    BigDecimal aum = null;
+                                    if (snap.nav() != null && snap.sharesOutstanding() > 0) {
+                                        aum = snap.nav().multiply(BigDecimal.valueOf(snap.sharesOutstanding())).setScale(2, RoundingMode.HALF_UP);
+                                    }
+                                    CandidateAssetClass assetClass = classifyAsset(symbol, snap.name());
+                                    // Default listing date to 3 years ago if unknown to avoid unfair elimination
+                                    LocalDateTime defaultListingDate = now.minusYears(3);
+
+                                    GlobalAssetMetadata otcAsset = new GlobalAssetMetadata(
+                                            null, symbol, snap.name(), defaultListingDate, snap.name(),
+                                            aum, assetClass, DistributionFrequency.NONE,
+                                            1, now, now, null
+                                    );
+                                    combined.add(otcAsset);
+                                    seenTickers.add(symbol);
+                                }
+                            }
+
+                            log.info("Total ETF master universe compiled: {} prototype ETFs after Stage 0 filter.", combined.size());
+                            return Flux.fromIterable(combined);
                         }))
-                .filter(asset -> !asset.getTicker().isBlank())
                 .onErrorResume(e -> {
                     log.error("Failed to fetch TWSE ETF master universe: {}", e.getMessage(), e);
                     return Flux.empty();
@@ -82,6 +134,7 @@ public class TwseMarketDataClient {
 
     /**
      * Fetches daily trading quotes from TWSE concentrated market.
+     * Enforces Stage 0 filter to block leveraged, inverse, futures, active, and ETN symbols.
      */
     public Flux<MarketDailyQuote> fetchTwseDailyQuotes() {
         LocalDateTime now = LocalDateTime.now();
@@ -91,7 +144,7 @@ public class TwseMarketDataClient {
                 .bodyToFlux(JsonNode.class)
                 .filter(node -> {
                     String code = node.path("Code").asText("").trim();
-                    return code.startsWith("00"); // filter ETFs
+                    return code.startsWith("00") && !STAGE_0_BLOCKING_PATTERN.matcher(code).matches();
                 })
                 .map(node -> {
                     String ticker = node.path("Code").asText("").trim();
@@ -132,11 +185,12 @@ public class TwseMarketDataClient {
                             if (msgArray.isArray()) {
                                 for (JsonNode item : msgArray) {
                                     String symbol = item.path("a").asText("").trim();
+                                    String name = item.path("b").asText("").trim();
                                     if (symbol.isBlank()) continue;
                                     BigDecimal nav = parseBigDecimalSafe(item.path("f").asText(""));
                                     BigDecimal discountPrem = parseBigDecimalSafe(item.path("g").asText(""));
                                     long shares = parseLongSafe(item.path("c").asText("0").split("\\.")[0]);
-                                    map.put(symbol, new NavSnapshot(nav, discountPrem, shares));
+                                    map.put(symbol, new NavSnapshot(name, nav, discountPrem, shares));
                                 }
                             }
                         }
@@ -174,12 +228,11 @@ public class TwseMarketDataClient {
     }
 
     private CandidateAssetClass classifyAsset(String ticker, String shortName) {
-        if (ticker.endsWith("B") || shortName.contains("債")) {
+        if (ticker.endsWith("B") || (shortName != null && shortName.contains("債"))) {
             return CandidateAssetClass.DEFENSIVE;
         }
         return CandidateAssetClass.SATELLITE;
     }
-
 
     private long parseLongSafe(String str) {
         if (str == null) return 0L;
@@ -201,6 +254,9 @@ public class TwseMarketDataClient {
         }
     }
 
-    public record NavSnapshot(BigDecimal nav, BigDecimal discountPremiumPct, long sharesOutstanding) {}
+    public record NavSnapshot(String name, BigDecimal nav, BigDecimal discountPremiumPct, long sharesOutstanding) {
+        public NavSnapshot(BigDecimal nav, BigDecimal discountPremiumPct, long sharesOutstanding) {
+            this(null, nav, discountPremiumPct, sharesOutstanding);
+        }
+    }
 }
-

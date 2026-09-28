@@ -122,10 +122,10 @@ class RepositoryIntegrationTest {
     void shouldVerifyFlywaySeededWatermarks() {
         StepVerifier.create(watermarkRepository.findAll().collectList())
                 .assertNext(list -> {
-                    assertThat(list).hasSize(6);
+                    assertThat(list).hasSize(7);
                     assertThat(list).extracting("feedName")
                             .contains("TAIWAN_ETF_QUOTES", "GLOBAL_BENCHMARKS", "CNN_FEAR_GREED",
-                                    "MACRO_YIELD_SNAPSHOT", "TWSE_DCA_RANKINGS", "TWSE_ETF_METADATA");
+                                    "MACRO_YIELD_SNAPSHOT", "TWSE_DCA_RANKINGS", "TWSE_ETF_METADATA", "MONTHLY_TOP_LIST");
                 })
                 .verifyComplete();
 

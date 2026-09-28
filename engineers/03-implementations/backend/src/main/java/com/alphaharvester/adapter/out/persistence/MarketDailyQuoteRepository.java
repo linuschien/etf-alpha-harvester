@@ -15,8 +15,9 @@ public interface MarketDailyQuoteRepository extends R2dbcRepository<MarketDailyQ
     Mono<MarketDailyQuote> findByTickerAndTradeDate(String ticker, LocalDateTime tradeDate);
     Flux<MarketDailyQuote> findByTickerAndTradeDateBetweenOrderByTradeDateAsc(String ticker, LocalDateTime startDate, LocalDateTime endDate);
     Flux<MarketDailyQuote> findByAssetIdOrderByTradeDateAsc(UUID assetId);
+    Flux<MarketDailyQuote> findByAssetIdOrderByTradeDateDesc(UUID assetId);
     Flux<MarketDailyQuote> findByBenchmarkIdOrderByTradeDateAsc(UUID benchmarkId);
+    Flux<MarketDailyQuote> findByBenchmarkIdOrderByTradeDateDesc(UUID benchmarkId);
     Flux<MarketDailyQuote> findByTickerOrderByTradeDateDesc(String ticker);
     Mono<MarketDailyQuote> findFirstByTickerOrderByTradeDateDesc(String ticker);
 }
-

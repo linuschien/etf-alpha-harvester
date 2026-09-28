@@ -16,7 +16,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
@@ -29,6 +29,7 @@ public class GlobalServicesGraphQLResolver {
     private final DipBuyOpportunityService dipBuyService;
     private final MacroYieldEvaluationService macroYieldService;
 
+    @Autowired
     public GlobalServicesGraphQLResolver(GlobalAssetQueryService queryService,
                                          DipBuyOpportunityService dipBuyService,
                                          MacroYieldEvaluationService macroYieldService) {
@@ -398,6 +399,40 @@ public class GlobalServicesGraphQLResolver {
     @SchemaMapping(typeName = "CorporateAction", field = "effectiveDate")
     public String corporateActionEffectiveDate(CorporateAction ca) {
         return ca.getEffectiveDate() != null ? ca.getEffectiveDate().toString() : null;
+    }
+
+    // ----------------------------------------------------
+    // Pairwise Matrix & Orthogonal Candidate Queries
+    // ----------------------------------------------------
+
+    @QueryMapping
+    public Flux<GlobalAssetPairwiseMatrix> listPairwiseMatrix(@Argument CandidateAssetClass assetClass,
+                                                              @Argument String evaluationDate) {
+        log.debug("GraphQL Query: listPairwiseMatrix({}, {})", assetClass, evaluationDate);
+        return queryService.listPairwiseMatrix(assetClass, evaluationDate);
+    }
+
+    @QueryMapping
+    public Flux<GlobalAssetScore> getOrthogonalCandidates(@Argument CandidateAssetClass assetClass,
+                                                          @Argument String seedTicker,
+                                                          @Argument String evaluationDate) {
+        log.debug("GraphQL Query: getOrthogonalCandidates({}, {}, {})", assetClass, seedTicker, evaluationDate);
+        return queryService.getOrthogonalCandidates(assetClass, seedTicker, evaluationDate);
+    }
+
+    @SchemaMapping(typeName = "GlobalAssetPairwiseMatrix", field = "id")
+    public String globalAssetPairwiseMatrixId(GlobalAssetPairwiseMatrix matrix) {
+        return matrix.getId() != null ? matrix.getId().toString() : null;
+    }
+
+    @SchemaMapping(typeName = "GlobalAssetPairwiseMatrix", field = "evaluationDate")
+    public String globalAssetPairwiseMatrixEvaluationDate(GlobalAssetPairwiseMatrix matrix) {
+        return matrix.getEvaluationDate() != null ? matrix.getEvaluationDate().toString() : null;
+    }
+
+    @SchemaMapping(typeName = "GlobalAssetPairwiseMatrix", field = "createdAt")
+    public String globalAssetPairwiseMatrixCreatedAt(GlobalAssetPairwiseMatrix matrix) {
+        return matrix.getCreatedAt() != null ? matrix.getCreatedAt().toString() : null;
     }
 }
 

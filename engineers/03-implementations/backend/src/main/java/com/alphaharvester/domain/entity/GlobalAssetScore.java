@@ -1,6 +1,7 @@
 package com.alphaharvester.domain.entity;
 
 import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.domain.model.OrthogonalStatus;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -48,4 +49,45 @@ public class GlobalAssetScore {
 
     @Column("fund_size_twd")
     private BigDecimal fundSizeTwd;
+
+    @Column("orthogonal_status")
+    private OrthogonalStatus orthogonalStatus = OrthogonalStatus.ACCEPTED;
+
+    @Column("collision_detail")
+    private String collisionDetail;
+
+    @Column("r_squared")
+    private BigDecimal rSquared;
+
+    @Column("momentum_12_1")
+    private BigDecimal momentum121;
+
+    @Column("kaufman_er")
+    private BigDecimal kaufmanEr;
+
+    @Column("sharpe_ratio")
+    private BigDecimal sharpeRatio;
+
+    @Column("volatility_90d")
+    private BigDecimal volatility90d;
+
+    @Column("ytm")
+    private BigDecimal ytm;
+
+    @Column("dca_rank")
+    private Integer dcaRank;
+
+    public GlobalAssetScore(UUID id, UUID assetId, String ticker, LocalDateTime evaluationDate,
+                            CandidateAssetClass assetClass, Integer classRank,
+                            BigDecimal compositeScore, BigDecimal fundSizeTwd) {
+        this.id = id;
+        this.assetId = assetId;
+        this.ticker = ticker;
+        this.evaluationDate = evaluationDate;
+        this.assetClass = assetClass;
+        this.classRank = classRank;
+        this.compositeScore = compositeScore;
+        this.fundSizeTwd = fundSizeTwd;
+        this.orthogonalStatus = OrthogonalStatus.ACCEPTED;
+    }
 }

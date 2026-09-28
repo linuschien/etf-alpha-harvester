@@ -63,7 +63,28 @@ CREATE TABLE IF NOT EXISTS global_asset_score (
     class_rank INT NOT NULL,
     composite_score DECIMAL(6,2) NOT NULL,
     fund_size_twd DECIMAL(18,2),
+    orthogonal_status VARCHAR(32) DEFAULT 'ACCEPTED',
+    collision_detail VARCHAR(255),
+    r_squared DECIMAL(6,4),
+    momentum_12_1 DECIMAL(10,4),
+    kaufman_er DECIMAL(6,4),
+    sharpe_ratio DECIMAL(10,4),
+    volatility_90d DECIMAL(10,4),
+    ytm DECIMAL(6,4),
+    dca_rank INT,
     CONSTRAINT uq_global_asset_score UNIQUE (ticker, evaluation_date)
+);
+
+CREATE TABLE IF NOT EXISTS global_asset_pairwise_matrix (
+    id UUID PRIMARY KEY,
+    evaluation_date TIMESTAMP NOT NULL,
+    asset_class VARCHAR(32) NOT NULL,
+    base_ticker VARCHAR(32) NOT NULL,
+    target_ticker VARCHAR(32) NOT NULL,
+    r_squared DECIMAL(6,4) NOT NULL,
+    correlation_coefficient DECIMAL(6,4) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_pairwise_matrix UNIQUE (evaluation_date, asset_class, base_ticker, target_ticker)
 );
 
 CREATE TABLE IF NOT EXISTS dca_popularity_rank (
@@ -113,6 +134,7 @@ CREATE TABLE IF NOT EXISTS data_feed_sync_watermark (
 CREATE INDEX IF NOT EXISTS idx_quote_trade_date ON market_daily_quote(trade_date);
 CREATE INDEX IF NOT EXISTS idx_quote_ticker ON market_daily_quote(ticker);
 CREATE INDEX IF NOT EXISTS idx_score_eval_class ON global_asset_score(asset_class, evaluation_date, class_rank);
+CREATE INDEX IF NOT EXISTS idx_pairwise_eval_class ON global_asset_pairwise_matrix(evaluation_date, asset_class);
 CREATE INDEX IF NOT EXISTS idx_dca_rank ON dca_popularity_rank(ranking_year, ranking_month, rank_position);
 CREATE INDEX IF NOT EXISTS idx_dividend_payment ON dividend_announcement(payment_date);
 CREATE INDEX IF NOT EXISTS idx_watermark_feed_name ON data_feed_sync_watermark(feed_name);

@@ -9,10 +9,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -41,12 +38,19 @@ public class MarketOrchestrationRestController {
     }
 
     @PostMapping("/globalAssetScores:evaluate")
-    public Mono<ResponseEntity<GlobalAssetScoreEvaluationResponse>> evaluateGlobalAssetScores() {
-        log.info("REST Ingress: POST /api/v1/globalAssetScores:evaluate initiated");
+    public Mono<ResponseEntity<GlobalAssetScoreEvaluationResponse>> evaluateGlobalAssetScores(
+            @RequestParam(name = "yearMonth", required = false) String yearMonth,
+            @RequestParam(name = "force", required = false, defaultValue = "true") boolean force) {
+        log.info("REST Ingress: POST /api/v1/globalAssetScores:evaluate initiated with yearMonth: {}, force: {}", yearMonth, force);
 
+        return scoreEvaluationUseCase.evaluateGlobalAssetScores(yearMonth, force)
+                .map(ResponseEntity::ok)
+                .doOnError(e -> log.error("REST Ingress error on /globalAssetScores:evaluate: {}", e.getMessage(), e));
+    }
+
+    public Mono<ResponseEntity<GlobalAssetScoreEvaluationResponse>> evaluateGlobalAssetScores() {
         return scoreEvaluationUseCase.evaluateGlobalAssetScores()
                 .map(ResponseEntity::ok)
                 .doOnError(e -> log.error("REST Ingress error on /globalAssetScores:evaluate: {}", e.getMessage(), e));
     }
 }
-

@@ -5,5 +5,5 @@ import reactor.core.publisher.Mono;
 
 public interface GlobalAssetScoreEvaluationUseCase {
     Mono<GlobalAssetScoreEvaluationResponse> evaluateGlobalAssetScores();
+    Mono<GlobalAssetScoreEvaluationResponse> evaluateGlobalAssetScores(String yearMonth, boolean force);
 }
-

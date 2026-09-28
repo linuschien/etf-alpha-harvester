@@ -25,10 +25,13 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,7 +62,47 @@ class GlobalAssetScoreEvaluationServiceTest {
     void setUp() {
         lenient().when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         lenient().when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
+        lenient().when(quoteRepository.findByTickerOrderByTradeDateDesc(any())).thenReturn(Flux.empty());
+        lenient().when(scoreRepository.deleteByEvaluationDate(any())).thenReturn(Mono.empty());
         service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository);
+    }
+
+    private List<MarketDailyQuote> generateQuotesForWindow(String ticker, double startPrice, double growthRate, double noiseFactor, int pattern) {
+        YearMonth ym = YearMonth.from(LocalDate.now());
+        LocalDate evalDate = ym.atDay(1);
+        LocalDate cutoffDate = evalDate.minusDays(1);
+        LocalDate start = cutoffDate.minusYears(1).plusDays(1);
+
+        List<MarketDailyQuote> quotes = new ArrayList<>();
+        double p = startPrice;
+        LocalDate curr = start;
+        int i = 0;
+        while (!curr.isAfter(cutoffDate)) {
+            if (curr.getDayOfWeek().getValue() <= 5) {
+                double factor;
+                if (pattern == 0) {
+                    double noise = (i % 2 == 0) ? noiseFactor : -noiseFactor;
+                    factor = 1.0 + growthRate + noise;
+                } else if (pattern == 1) {
+                    factor = 1.0 + ((i % 4 < 2) ? 0.025 : -0.018);
+                } else if (pattern == 2) {
+                    double noise = ((i - 1) % 2 == 0) ? noiseFactor : -noiseFactor;
+                    factor = 1.0 + growthRate + noise;
+                } else {
+                    factor = 1.0 + growthRate;
+                }
+                p *= factor;
+                quotes.add(new MarketDailyQuote(
+                        UUID.randomUUID(), UUID.randomUUID(), null, ticker, curr.atTime(13, 30),
+                        BigDecimal.valueOf(p), BigDecimal.valueOf(p * 1.01), BigDecimal.valueOf(p * 0.99),
+                        BigDecimal.valueOf(p), 1_000_000L, BigDecimal.valueOf(50_000_000L),
+                        BigDecimal.valueOf(p), BigDecimal.ZERO
+                ));
+                i++;
+            }
+            curr = curr.plusDays(1);
+        }
+        return quotes;
     }
 
     @Test
@@ -219,81 +262,56 @@ class GlobalAssetScoreEvaluationServiceTest {
     @DisplayName("Should execute evaluateGlobalAssetScores pipeline with dynamic R^2 classification")
     void shouldExecuteEvaluationPipelineWithDynamicClassification() {
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime longAgo = now.minusYears(10);
 
-        // 0050: starts as SATELLITE, will achieve R^2 >= 0.95 and promote to CORE
+        // 0050: starts as SATELLITE, will achieve R^2 >= 0.80 and qualify for CORE
         GlobalAssetMetadata asset1 = new GlobalAssetMetadata(
-                UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(15), "臺灣50",
+                UUID.randomUUID(), "0050", "元大台灣50", longAgo, "臺灣50",
                 new BigDecimal("420000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
-        // 006208: starts as SATELLITE, will achieve R^2 >= 0.95 and promote to CORE
+        // 006208: starts as SATELLITE, will achieve R^2 >= 0.80 and qualify for CORE
         GlobalAssetMetadata asset2 = new GlobalAssetMetadata(
-                UUID.randomUUID(), "006208", "富邦台50", now.minusYears(10), "臺灣50",
+                UUID.randomUUID(), "006208", "富邦台50", longAgo, "臺灣50",
                 new BigDecimal("185000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
-        // 00757: FANG+ satellite, stays SATELLITE (uncorrelated or low R^2 with TWII)
+        // 00757: FANG+ satellite, stays SATELLITE (uncorrelated with TWII, high volatility >= 18%, MOM > 0)
         GlobalAssetMetadata asset3 = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00757", "統一FANG+", now.minusYears(5), "FANG+",
+                UUID.randomUUID(), "00757", "統一FANG+", longAgo, "FANG+",
                 new BigDecimal("35000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
         // 00679B: bond, starts and stays DEFENSIVE
         GlobalAssetMetadata asset4 = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00679B", "元大海美債20年", now.minusYears(7), "彭博20年期以上美國公債指數",
+                UUID.randomUUID(), "00679B", "元大海美債20年", longAgo, "彭博20年期以上美國公債指數",
                 new BigDecimal("250000000000"),
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, now, now, null
         );
 
-        // Mock benchmark quotes (^TWII)
-        List<MarketDailyQuote> twiiQuotes = new ArrayList<>();
-        List<MarketDailyQuote> highCorrQuotes1 = new ArrayList<>();
-        List<MarketDailyQuote> highCorrQuotes2 = new ArrayList<>();
-        List<MarketDailyQuote> lowCorrQuotes = new ArrayList<>();
-
-        double pTwii = 20000.0;
-        double p0050 = 180.0;
-        double p006208 = 100.0;
-        double p00757 = 80.0;
-
-        for (int i = 0; i < 20; i++) {
-            LocalDateTime d = now.minusDays(20 - i);
-            twiiQuotes.add(new MarketDailyQuote(null, null, null, "^TWII", d, null, null, null, BigDecimal.valueOf(pTwii), null, null, null, null));
-            highCorrQuotes1.add(new MarketDailyQuote(null, null, null, "0050", d, null, null, null, BigDecimal.valueOf(p0050), null, null, null, null));
-            highCorrQuotes2.add(new MarketDailyQuote(null, null, null, "006208", d, null, null, null, BigDecimal.valueOf(p006208), null, null, null, null));
-            lowCorrQuotes.add(new MarketDailyQuote(null, null, null, "00757", d, null, null, null, BigDecimal.valueOf(p00757), 1_000_000L, BigDecimal.valueOf(50_000_000), null, null));
-
-            double factor = (i % 2 == 0) ? 1.01 : 0.995;
-            pTwii *= factor;
-            p0050 *= factor;
-            p006208 *= factor;
-            p00757 *= (i % 3 == 0) ? 1.02 : 0.98; // Different movement pattern
-        }
+        List<MarketDailyQuote> twiiQuotes = generateQuotesForWindow("^TWII", 20000.0, 0.0005, 0.008, 0);
+        List<MarketDailyQuote> highCorrQuotes1 = generateQuotesForWindow("0050", 180.0, 0.0005, 0.008, 0);
+        List<MarketDailyQuote> highCorrQuotes2 = generateQuotesForWindow("006208", 100.0, 0.0005, 0.008, 0);
+        List<MarketDailyQuote> lowCorrQuotes = generateQuotesForWindow("00757", 80.0, 0.001, 0.02, 1);
+        List<MarketDailyQuote> bondQuotes = generateQuotesForWindow("00679B", 30.0, 0.0001, 0.0, 3);
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset1, asset2, asset3, asset4));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^GSPC")).thenReturn(Flux.empty());
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^NDX")).thenReturn(Flux.empty());
-
         when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(highCorrQuotes1));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("006208")).thenReturn(Flux.fromIterable(highCorrQuotes2));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("00757")).thenReturn(Flux.fromIterable(lowCorrQuotes));
-        List<MarketDailyQuote> bondQuotes = List.of(
-                new MarketDailyQuote(null, null, null, "00679B", now, null, null, null, BigDecimal.valueOf(30.0), 10_000_000L, BigDecimal.valueOf(300_000_000), null, null)
-        );
         when(quoteRepository.findByTickerOrderByTradeDateDesc("00679B")).thenReturn(Flux.fromIterable(bondQuotes));
 
-        when(metadataRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
         StepVerifier.create(service.evaluateGlobalAssetScores())
                 .assertNext(res -> {
                     assertThat(res.status()).isEqualTo("SUCCESS");
                     assertThat(res.evaluatedCandidatesCount()).isEqualTo(4);
-                    assertThat(res.coreCount()).isEqualTo(2); // 0050, 006208 dynamically promoted to CORE
+                    assertThat(res.coreCount()).isEqualTo(2); // 0050, 006208 promoted to CORE
                     assertThat(res.satelliteCount()).isEqualTo(1); // 00757 remains SATELLITE
                     assertThat(res.defensiveCount()).isEqualTo(1); // 00679B remains DEFENSIVE
                 })
@@ -304,34 +322,22 @@ class GlobalAssetScoreEvaluationServiceTest {
     @DisplayName("Should promote asset matching S&P500 benchmark to CORE")
     void shouldPromoteAssetMatchingSP500ToCore() {
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime longAgo = now.minusYears(8);
 
         // 00646 tracking S&P500
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00646", "元大S&P500", now.minusYears(8), "標普500",
+                UUID.randomUUID(), "00646", "元大S&P500", longAgo, "標普500",
                 new BigDecimal("35000000000"),
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
-        List<MarketDailyQuote> gspcQuotes = new ArrayList<>();
-        List<MarketDailyQuote> etfQuotes = new ArrayList<>();
-        double pGspc = 5000.0;
-        double pEtf = 50.0;
-        for (int i = 0; i < 20; i++) {
-            LocalDateTime d = now.minusDays(20 - i);
-            gspcQuotes.add(new MarketDailyQuote(null, null, null, "^GSPC", d, null, null, null, BigDecimal.valueOf(pGspc), null, null, null, null));
-            etfQuotes.add(new MarketDailyQuote(null, null, null, "00646", d, null, null, null, BigDecimal.valueOf(pEtf), null, null, null, null));
-            double factor = (i % 2 == 0) ? 1.01 : 0.995;
-            pGspc *= factor;
-            pEtf *= factor;
-        }
+        List<MarketDailyQuote> gspcQuotes = generateQuotesForWindow("^GSPC", 5000.0, 0.0005, 0.01, 0);
+        List<MarketDailyQuote> etfQuotes = generateQuotesForWindow("00646", 50.0, 0.0005, 0.01, 2);
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.empty());
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^GSPC")).thenReturn(Flux.fromIterable(gspcQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^NDX")).thenReturn(Flux.empty());
         when(quoteRepository.findByTickerOrderByTradeDateDesc("00646")).thenReturn(Flux.fromIterable(etfQuotes));
 
-        when(metadataRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
         StepVerifier.create(service.evaluateGlobalAssetScores())
@@ -526,64 +532,43 @@ class GlobalAssetScoreEvaluationServiceTest {
     @SuppressWarnings("unchecked")
     void shouldFilterDisqualifiedAssetsFromScoringPipelineAndNotPersistThem() {
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime longAgo = now.minusYears(15);
 
         // Qualified Core: 0050
         GlobalAssetMetadata qualifiedCore = new GlobalAssetMetadata(
-                UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(15), "臺灣50",
+                UUID.randomUUID(), "0050", "元大台灣50", longAgo, "臺灣50",
                 new BigDecimal("420000000000"),
                 CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
         );
 
-        // Disqualified Core: low AUM (< 10B)
+        // Disqualified Core: low AUM (< 2B TWD)
         GlobalAssetMetadata smallCore = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00999", "微型核心", now.minusYears(3), "臺灣50",
-                new BigDecimal("5000000000"), // 5B < 10B
+                UUID.randomUUID(), "00999", "微型核心", longAgo, "臺灣50",
+                new BigDecimal("1000000000"), // 1B < 2B Universal Gatekeeper
                 CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, now, now, null
         );
 
-        // Disqualified Satellite: low AUM
+        // Disqualified Satellite: low AUM (< 2B TWD)
         GlobalAssetMetadata smallSatellite = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00991", "微型衛星", now.minusYears(2), "主題指數",
-                new BigDecimal("1000000000"), // 1B < 2B
+                UUID.randomUUID(), "00991", "微型衛星", longAgo, "主題指數",
+                new BigDecimal("1000000000"), // 1B < 2B Universal Gatekeeper
                 CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, now, now, null
         );
 
-        // Disqualified Defensive: Leveraged ETF
+        // Disqualified Defensive: Leveraged ETF (00680L -> Stage 0 regex blocked)
         GlobalAssetMetadata leveragedBond = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00680L", "槓桿美債正2", now.minusYears(3), "美債正2",
+                UUID.randomUUID(), "00680L", "槓桿美債正2", longAgo, "美債正2",
                 new BigDecimal("10000000000"),
                 CandidateAssetClass.DEFENSIVE, DistributionFrequency.NONE, 1, now, now, null
         );
 
-        // Mock quotes to achieve R^2 >= 0.95 for 0050 and 00999 against ^TWII
-        List<MarketDailyQuote> twiiQuotes = new ArrayList<>();
-        List<MarketDailyQuote> corrQuotes1 = new ArrayList<>();
-        List<MarketDailyQuote> corrQuotes2 = new ArrayList<>();
-        double pTwii = 20000.0;
-        double p0050 = 180.0;
-        double p00999 = 50.0;
-        for (int i = 0; i < 20; i++) {
-            LocalDateTime d = now.minusDays(20 - i);
-            twiiQuotes.add(new MarketDailyQuote(null, null, null, "^TWII", d, null, null, null, BigDecimal.valueOf(pTwii), null, null, null, null));
-            corrQuotes1.add(new MarketDailyQuote(null, null, null, "0050", d, null, null, null, BigDecimal.valueOf(p0050), null, null, null, null));
-            corrQuotes2.add(new MarketDailyQuote(null, null, null, "00999", d, null, null, null, BigDecimal.valueOf(p00999), null, null, null, null));
-            double factor = (i % 2 == 0) ? 1.01 : 0.995;
-            pTwii *= factor;
-            p0050 *= factor;
-            p00999 *= factor;
-        }
+        List<MarketDailyQuote> twiiQuotes = generateQuotesForWindow("^TWII", 20000.0, 0.0005, 0.01, 0);
+        List<MarketDailyQuote> corrQuotes1 = generateQuotesForWindow("0050", 180.0, 0.0005, 0.01, 0);
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(qualifiedCore, smallCore, smallSatellite, leveragedBond));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^GSPC")).thenReturn(Flux.empty());
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^NDX")).thenReturn(Flux.empty());
-
         when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(corrQuotes1));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00999")).thenReturn(Flux.fromIterable(corrQuotes2));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00991")).thenReturn(Flux.empty());
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00680L")).thenReturn(Flux.empty());
 
-        lenient().when(metadataRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
         StepVerifier.create(service.evaluateGlobalAssetScores())

@@ -3,8 +3,11 @@ package com.alphaharvester.application.service;
 import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.*;
 import com.alphaharvester.domain.entity.*;
+import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.domain.model.OrthogonalStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.stereotype.Service;
@@ -14,7 +17,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class GlobalAssetQueryService {
@@ -29,6 +32,28 @@ public class GlobalAssetQueryService {
     private final DcaPopularityRankRepository dcaRankRepository;
     private final DividendAnnouncementRepository dividendRepository;
     private final CorporateActionRepository corporateActionRepository;
+    private final GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
+
+    @Autowired
+    public GlobalAssetQueryService(GlobalAssetMetadataRepository metadataRepository,
+                                   BenchmarkIndexRepository benchmarkRepository,
+                                   MarketDailyQuoteRepository quoteRepository,
+                                   MacroYieldSnapshotRepository macroYieldRepository,
+                                   GlobalAssetScoreRepository scoreRepository,
+                                   DcaPopularityRankRepository dcaRankRepository,
+                                   DividendAnnouncementRepository dividendRepository,
+                                   CorporateActionRepository corporateActionRepository,
+                                   @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository) {
+        this.metadataRepository = metadataRepository;
+        this.benchmarkRepository = benchmarkRepository;
+        this.quoteRepository = quoteRepository;
+        this.macroYieldRepository = macroYieldRepository;
+        this.scoreRepository = scoreRepository;
+        this.dcaRankRepository = dcaRankRepository;
+        this.dividendRepository = dividendRepository;
+        this.corporateActionRepository = corporateActionRepository;
+        this.pairwiseMatrixRepository = pairwiseMatrixRepository;
+    }
 
     public GlobalAssetQueryService(GlobalAssetMetadataRepository metadataRepository,
                                    BenchmarkIndexRepository benchmarkRepository,
@@ -38,14 +63,8 @@ public class GlobalAssetQueryService {
                                    DcaPopularityRankRepository dcaRankRepository,
                                    DividendAnnouncementRepository dividendRepository,
                                    CorporateActionRepository corporateActionRepository) {
-        this.metadataRepository = metadataRepository;
-        this.benchmarkRepository = benchmarkRepository;
-        this.quoteRepository = quoteRepository;
-        this.macroYieldRepository = macroYieldRepository;
-        this.scoreRepository = scoreRepository;
-        this.dcaRankRepository = dcaRankRepository;
-        this.dividendRepository = dividendRepository;
-        this.corporateActionRepository = corporateActionRepository;
+        this(metadataRepository, benchmarkRepository, quoteRepository, macroYieldRepository,
+             scoreRepository, dcaRankRepository, dividendRepository, corporateActionRepository, null);
     }
 
     public Flux<GlobalAssetMetadata> listGlobalAssets(GlobalAssetFilterInput filter) {
@@ -59,7 +78,7 @@ public class GlobalAssetQueryService {
 
         ExampleMatcher matcher = ExampleMatcher.matchingAll()
                 .withIgnoreNullValues()
-                .withIgnorePaths("version", "fundSizeTwd");
+                .withIgnorePaths("fundSizeTwd", "version");
 
         return metadataRepository.findAll(Example.of(probe, matcher));
     }
@@ -110,11 +129,11 @@ public class GlobalAssetQueryService {
     }
 
     public Flux<MarketDailyQuote> listQuotesByAssetId(UUID assetId) {
-        return quoteRepository.findByAssetIdOrderByTradeDateAsc(assetId);
+        return quoteRepository.findByAssetIdOrderByTradeDateDesc(assetId);
     }
 
     public Flux<MarketDailyQuote> listQuotesByBenchmarkId(UUID benchmarkId) {
-        return quoteRepository.findByBenchmarkIdOrderByTradeDateAsc(benchmarkId);
+        return quoteRepository.findByBenchmarkIdOrderByTradeDateDesc(benchmarkId);
     }
 
     public Flux<MacroYieldSnapshot> listMacroYieldSnapshots(MacroYieldFilterInput filter) {
@@ -146,13 +165,111 @@ public class GlobalAssetQueryService {
 
         ExampleMatcher matcher = ExampleMatcher.matchingAll()
                 .withIgnoreNullValues()
-                .withIgnorePaths("compositeScore", "fundSizeTwd", "classRank");
+                .withIgnorePaths("compositeScore", "fundSizeTwd", "classRank", "orthogonalStatus", "rSquared", "momentum121", "kaufmanEr", "sharpeRatio", "volatility90d", "ytm", "dcaRank");
 
         return scoreRepository.findAll(Example.of(probe, matcher));
     }
 
     public Mono<GlobalAssetScore> getGlobalAssetScoreById(UUID id) {
         return scoreRepository.findById(id);
+    }
+
+    public Flux<GlobalAssetScore> getScoresByAssetClass(CandidateAssetClass assetClass, String evaluationDate) {
+        LocalDateTime evalDate = parseDate(evaluationDate, false);
+        return scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(assetClass, evalDate);
+    }
+
+    public Mono<GlobalAssetScore> getScoreByTicker(String ticker, String evaluationDate) {
+        LocalDateTime evalDate = parseDate(evaluationDate, false);
+        return scoreRepository.findByTickerAndEvaluationDate(ticker, evalDate);
+    }
+
+    public Flux<GlobalAssetPairwiseMatrix> listPairwiseMatrix(CandidateAssetClass assetClass, String evaluationDateStr) {
+        if (pairwiseMatrixRepository == null) return Flux.empty();
+        LocalDateTime evalDate = (evaluationDateStr != null && !evaluationDateStr.isBlank())
+                ? parseDate(evaluationDateStr, false)
+                : LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        return pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(evalDate, assetClass);
+    }
+
+    public Flux<GlobalAssetScore> getOrthogonalCandidates(CandidateAssetClass assetClass, String seedTicker, String evaluationDateStr) {
+        LocalDateTime evalDate = (evaluationDateStr != null && !evaluationDateStr.isBlank())
+                ? parseDate(evaluationDateStr, false)
+                : LocalDate.now().withDayOfMonth(1).atStartOfDay();
+
+        return scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(assetClass, evalDate)
+                .collectList()
+                .flatMapMany(scores -> {
+                    if (scores.isEmpty()) return Flux.empty();
+                    if (pairwiseMatrixRepository == null) return Flux.fromIterable(scores);
+
+                    return pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(evalDate, assetClass)
+                            .collectList()
+                            .flatMapMany(matrix -> {
+                                if (seedTicker != null && !seedTicker.isBlank()) {
+                                    Optional<GlobalAssetScore> seedOpt = scores.stream()
+                                            .filter(s -> s.getTicker().equalsIgnoreCase(seedTicker.trim()))
+                                            .findFirst();
+                                    if (seedOpt.isPresent()) {
+                                        GlobalAssetScore seed = seedOpt.get();
+                                        List<GlobalAssetScore> reordered = new ArrayList<>();
+                                        reordered.add(seed);
+                                        for (GlobalAssetScore s : scores) {
+                                            if (!s.getTicker().equalsIgnoreCase(seed.getTicker())) {
+                                                reordered.add(s);
+                                            }
+                                        }
+                                        applyGreedyOrthogonalWithSeed(reordered, matrix);
+                                        return Flux.fromIterable(reordered);
+                                    }
+                                }
+                                return Flux.fromIterable(scores);
+                            });
+                });
+    }
+
+    private void applyGreedyOrthogonalWithSeed(List<GlobalAssetScore> candidates, List<GlobalAssetPairwiseMatrix> matrix) {
+        if (candidates.isEmpty()) return;
+
+        Map<String, Map<String, Double>> r2Lookup = new HashMap<>();
+        for (GlobalAssetPairwiseMatrix m : matrix) {
+            r2Lookup.computeIfAbsent(m.getBaseTicker(), k -> new HashMap<>())
+                    .put(m.getTargetTicker(), m.getRSquared().doubleValue());
+        }
+
+        GlobalAssetScore seed = candidates.get(0);
+        seed.setOrthogonalStatus(OrthogonalStatus.ACCEPTED);
+        seed.setCollisionDetail("Anchor Seed (Mode B)");
+
+        List<GlobalAssetScore> selected = new ArrayList<>();
+        selected.add(seed);
+
+        for (int i = 1; i < candidates.size(); i++) {
+            GlobalAssetScore c = candidates.get(i);
+            boolean isCollinear = false;
+            String conflictTicker = null;
+            double conflictR2 = 0.0;
+
+            for (GlobalAssetScore s : selected) {
+                double r2 = r2Lookup.getOrDefault(c.getTicker(), Collections.emptyMap())
+                        .getOrDefault(s.getTicker(), 0.0);
+                if (r2 >= 0.50) {
+                    isCollinear = true;
+                    conflictTicker = s.getTicker();
+                    conflictR2 = r2;
+                    break;
+                }
+            }
+
+            if (isCollinear) {
+                c.setOrthogonalStatus(OrthogonalStatus.REJECTED_COLLINEAR);
+                c.setCollisionDetail(String.format("Collinear with %s (R^2 = %.2f)", conflictTicker, conflictR2));
+            } else {
+                c.setOrthogonalStatus(OrthogonalStatus.ACCEPTED);
+                c.setCollisionDetail("Natural Orthogonal");
+                selected.add(c);
+            }
+        }
     }
 
     public Flux<DcaPopularityRank> listDcaPopularityRanks(DcaPopularityFilterInput filter) {
@@ -166,7 +283,7 @@ public class GlobalAssetQueryService {
         return dcaRankRepository.findById(id);
     }
 
-    public Flux<DcaPopularityRank> getTop20DcaRanks(Integer year, Integer month) {
+    public Flux<DcaPopularityRank> getTop20DcaRanks(int year, int month) {
         return dcaRankRepository.findByRankingYearAndRankingMonthOrderByRankPositionAsc(year, month);
     }
 
@@ -175,12 +292,15 @@ public class GlobalAssetQueryService {
     }
 
     public Flux<DividendAnnouncement> listDividendAnnouncements(DividendAnnouncementFilterInput filter) {
-        if (filter != null && filter.startDate() != null && filter.endDate() != null) {
+        if (filter == null) {
+            return dividendRepository.findAll();
+        }
+        if (filter.ticker() != null && filter.startDate() != null && filter.endDate() != null) {
             LocalDateTime start = parseDate(filter.startDate(), false);
             LocalDateTime end = parseDate(filter.endDate(), true);
-            return dividendRepository.findByExDateBetweenOrderByExDateAsc(start, end);
+            return dividendRepository.findByTickerAndExDateBetweenOrderByExDateAsc(filter.ticker(), start, end);
         }
-        if (filter != null && filter.ticker() != null) {
+        if (filter.ticker() != null) {
             return dividendRepository.findByTickerOrderByExDateDesc(filter.ticker());
         }
         return dividendRepository.findAll();
@@ -233,4 +353,3 @@ public class GlobalAssetQueryService {
         }
     }
 }
-
