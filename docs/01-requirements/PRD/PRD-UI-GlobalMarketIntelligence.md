@@ -322,9 +322,12 @@
   1. **管線執行日誌監控**：
      - 顯示今日 08:00 TST 排程抓取筆數（ETF清單、日行情、FRED 利率、定期定額 Top 20、除息公告）。
      - 齊備性守門員檢核日誌（檢查是否有跳空偏離 $>20\%$ 異常）。
-  2. **手動維運觸發按鈕**：
+  2. **手動維運觸發按鈕與月份覆蓋重算**：
      - `[ 手動觸發市場情報同步 (POST /marketData:sync) ]`
-     - `[ 手動重新計算候選池多因子評分 (POST /globalAssetScores:evaluate) ]`
+     - **候選池多因子評分重算器**：
+       - `[ 月份選擇器：預設當前月份 (如 2026-09) ▾ ]`
+       - `[ 執行評估 / 覆蓋重算 (POST /globalAssetScores:evaluate?yearMonth=YYYY-MM) ]`
+       - 提示：「由 Admin 觸發時自動強制略過 Watermark 檢查；若選擇過去月份，系統自動截取該月之歷史數據窗口重新計算並覆寫評審記錄」。
   3. **外部端點連線健康度**：
      - TWSE OpenAPI (HTTP 200)
      - TPEx OpenAPI (HTTP 200)
@@ -356,6 +359,7 @@
 | **合規標的天梯榜** | `GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `classRank`, `compositeScore`, `fundSizeTwd`, `orthogonalStatus`, `collisionDetail` |
 | **Stage 3 正交去共線求解** | `GlobalAssetScoreGraphQLResolver.getOrthogonalCandidates` | `assetClass`, `seedTicker` (選填), `orthogonalStatus` (`ACCEPTED` / `REJECTED_COLLINEAR`), `collisionDetail`, `ticker`, `classRank`, `compositeScore` |
 | **兩兩正交矩陣視圖** | `GlobalAssetScoreGraphQLResolver.getPairwiseMatrix` | `assetClass`, `baseTicker`, `targetTicker`, `rSquared`, `correlationCoefficient` |
+| **手動評估/覆蓋重算 Mutation** | `GlobalAssetScoreGraphQLResolver.evaluateScores` | `yearMonth` (選填，格式 YYYY-MM，如 "2026-08"), `evaluationDate`, `totalEvaluatedCount` |
 | **天梯榜多天期績效與收盤折溢價** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `discountPremiumPercentage`, `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (採收盤價價差 + 期間配息現金加總零誤差計算) |
 | **超跌加碼勝率指數卡片** | `MarketDailyQuoteGraphQLResolver.getDipBuyOpportunity` (純函數求解) | `score` ($S_{\text{dip}}$), `grade`, `winRateRange`, `bollingerScore`, `fibonacciScore`, `maSupportScore`, `panicScore`, `recommendation` |
 | **ETF 除息月曆** | `DividendAnnouncementGraphQLResolver.listDividendsByDateRange` | `ticker`, `exDate`, `paymentDate`, `dividendPerShare`, `taxTag` |

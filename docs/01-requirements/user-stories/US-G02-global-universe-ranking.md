@@ -3,9 +3,11 @@
 ## 背景 (Background)
 本模組為 AlphaHarvester 系統全域層（Global Services）之選品與正交去共線核心。投資的成功首先取決於資產池的品質，拒絕劣質、高內扣費用、流動性匱乏或相互共線踩踏的標的。
 
-本模組嚴格落實**「四階段篩選與評分體系 (Stage 0 ~ Stage 3)」**與**「月度狀態感知 (Monthly State Refresh) ＋ 半年度決策執行 (Semi-Annual Decision Execution)」**架構：
-1. **每月 15 日（配合證交所定期定額排行公告）**：系統自動刷新全市場標的門禁審查（Stage 1）、多因子百分位連續打分（Stage 2）、兩兩正交矩陣計算與貪婪正交去共線（Stage 3），即時更新戰情室客觀候選池；
-2. **每半年（6/30 與 12/31 收盤後）**：正式鎖定多因子總排名與正交結果，驅動個人投組層 (P-01, P-02) 進行 1.4N 緩衝換倉與工單求解，兼顧市場新陳代謝敏銳度與低交易摩擦。
+本模組嚴格落實**「四階段篩選與評分體系 (Stage 0 ~ Stage 3)」**，並依據**「月度排程產出 (Monthly Cadence on the 1st) ＋ Watermark 斷路跳過 ＋ Admin 歷史覆蓋重算」**與**「半年度 7/1 與 1/1 個人換倉對齊」**之架構運作：
+1. **每月 1 日月度排程產出機制**：每月 1 日 08:00 TST（或當月首次排程啟動時），系統以截至上月底之完整月度數據（如 9 月評分採用截至 8 月 31 日數據）產出當月 Top List，評審日期標記為當月 1 號（如 `2026-09-01`）。
+2. **Watermark 斷路跳過機制**：利用 `data_feed_sync_watermark`（`feed_name = 'MONTHLY_TOP_LIST'`）記錄當月 Top List 是否已完成；每日例行排程在當月已完成時自動跳過計算。
+3. **Admin API 覆蓋與歷史重算機制**：Admin 可隨時透過 API 指定過去月份（`yearMonth = YYYY-MM`）強制覆蓋重算該月之評分與正交矩陣。
+4. **半年度個人換倉對齊**：個人投組層（P-01, P-02）之 1.4N 換倉決策直接對齊每年 7/1 與 1/1 產出之月度 Top List。
 
 ---
 
@@ -48,9 +50,11 @@
 > **So that** 系統消除極端離群值對權重的扭曲，各池主力因子均衡等權配置，客觀產出核心 Top 10、衛星 Top 20 與債券 Top 5 名單。
 
 ### 驗收條件 (Acceptance Criteria)
-- **AC1 (排程機制：月度感知 vs 半年度鎖定)**：
-  - **月度狀態刷新 (Monthly Refresh)**：每月 15 日 18:00（配合證交所定期定額排行公告），系統自動重算各標的最新得分與排名，更新戰情室全域看板，但**不發布個人投組換倉指示**。
-  - **半年度決策鎖定 (Semi-Annual Rebalance Execution)**：每年 6 月 30 日 18:00 與 12 月 31 日 18:00，系統鎖定最終名次，驅動個人模組 P-01 的 1.4N 緩衝換倉判定。
+- **AC1 (排程週期、Watermark 與 Admin 歷史重算)**：
+  - **每月 1 日排程產出機制**：每月 1 日 08:00 TST（或當月首次排程啟動時），系統以截至上月最後一日之歷史數據（如 9 月評分採用截至 8 月 31 日數據）產出當月 Top List，評審日期標記為當月 1 號（`evaluation_date = YYYY-MM-01`）。DCA 沿用當前最新已有之期數。
+  - **Watermark 斷路跳過**：當月 Top List 產出成功後，標記 `data_feed_sync_watermark`（`feed_name = 'MONTHLY_TOP_LIST'`, `last_successful_sync_date = YYYY-MM-01`）。後續日常每日排程喚醒時，若比對當月已標記完成，自動**跳過** Top List 計算。
+  - **Admin API 覆蓋與歷史月份重算**：管理員可透過端點（`POST /api/v1/globalAssetScores:evaluate?yearMonth=YYYY-MM`）強制重新計算。由 Admin 觸發時略過 Watermark 檢查；若傳入過去月份（如 `yearMonth = "2026-08"`），系統以該月歷史窗口重算並覆寫該月份之評分與正交矩陣。
+  - **半年度換倉對齊**：個人投組層（P-01）之 1.4N 換倉直接以每年 7/1 與 1/1 產出之月度 Top List 執行。
 - **AC2 (核心大盤池評分公式計算 - 產出 Core Top 10)**：
   $$S_{\text{core}} = \frac{1}{3}\text{Rank}(R^2_{\text{bench}}) + \frac{1}{3}\text{Rank}(\text{DCA}) + \frac{1}{3}\text{Rank}(\text{AUM})$$
   - $\text{Rank}(R^2_{\text{bench}})$：與通過門禁所對應基準指數近 365 日曆天 $R^2$ 之百分位排名。
