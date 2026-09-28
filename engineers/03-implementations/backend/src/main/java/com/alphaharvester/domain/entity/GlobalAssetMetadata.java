@@ -1,7 +1,5 @@
 package com.alphaharvester.domain.entity;
 
-import com.alphaharvester.domain.model.CandidateAssetClass;
-import com.alphaharvester.domain.model.DistributionFrequency;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -13,7 +11,6 @@ import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -41,15 +38,6 @@ public class GlobalAssetMetadata {
 
     @Column("underlying_index")
     private String underlyingIndex;
-
-    @Column("fund_size_twd")
-    private BigDecimal fundSizeTwd;
-
-    @Column("asset_class")
-    private CandidateAssetClass assetClass;
-
-    @Column("distribution_frequency")
-    private DistributionFrequency distributionFrequency;
 
     @Version
     @Column("version")

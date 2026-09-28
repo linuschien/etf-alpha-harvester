@@ -50,9 +50,6 @@ type GlobalAssetMetadata {
     name: String!
     listingDate: String!
     underlyingIndex: String
-    fundSizeTwd: Float
-    assetClass: CandidateAssetClass!
-    distributionFrequency: DistributionFrequency
     version: Int!
     createdAt: String!
     updatedAt: String!
@@ -182,8 +179,6 @@ type MacroRegimeAssessment {
 
 input GlobalAssetFilterInput {
     ticker: String
-    assetClass: CandidateAssetClass
-    distributionFrequency: DistributionFrequency
 }
 
 input MarketDailyQuoteFilterInput {

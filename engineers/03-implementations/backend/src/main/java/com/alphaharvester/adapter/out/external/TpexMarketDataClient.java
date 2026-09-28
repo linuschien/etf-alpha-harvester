@@ -103,11 +103,8 @@ public class TpexMarketDataClient {
 
             String underlyingIndex = (indexCol >= 0 && indexCol < row.size()) ? row.get(indexCol).trim() : "";
 
-            CandidateAssetClass assetClass = classifyAsset(ticker, fullName);
-
             list.add(new GlobalAssetMetadata(
                     null, ticker, fullName, listingDate, underlyingIndex,
-                    null, assetClass, DistributionFrequency.NONE,
                     1, now, now, null
             ));
         }
@@ -141,13 +138,6 @@ public class TpexMarketDataClient {
         }
         tokens.add(sb.toString().trim());
         return tokens;
-    }
-
-    private CandidateAssetClass classifyAsset(String ticker, String name) {
-        if (ticker.endsWith("B") || (name != null && name.contains("債"))) {
-            return CandidateAssetClass.DEFENSIVE;
-        }
-        return CandidateAssetClass.SATELLITE;
     }
 
     /**

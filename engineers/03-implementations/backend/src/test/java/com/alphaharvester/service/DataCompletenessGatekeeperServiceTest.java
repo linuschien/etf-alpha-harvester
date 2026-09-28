@@ -57,8 +57,7 @@ class DataCompletenessGatekeeperServiceTest {
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(10), "臺灣50",
-                new BigDecimal("400000000000"),
-                CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
+                1, now, now, null
         );
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
 
@@ -114,8 +113,7 @@ class DataCompletenessGatekeeperServiceTest {
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(10), "臺灣50",
-                new BigDecimal("400000000000"),
-                CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null
+                1, now, now, null
         );
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
         when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("0050")).thenReturn(Mono.empty()); // Missing 0050

@@ -69,17 +69,15 @@ public class GlobalAssetQueryService {
     }
 
     public Flux<GlobalAssetMetadata> listGlobalAssets(GlobalAssetFilterInput filter) {
-        if (filter == null || (filter.ticker() == null && filter.assetClass() == null && filter.distributionFrequency() == null)) {
+        if (filter == null || filter.ticker() == null || filter.ticker().isBlank()) {
             return metadataRepository.findAll();
         }
         GlobalAssetMetadata probe = new GlobalAssetMetadata();
         probe.setTicker(filter.ticker());
-        probe.setAssetClass(filter.assetClass());
-        probe.setDistributionFrequency(filter.distributionFrequency());
 
         ExampleMatcher matcher = ExampleMatcher.matchingAll()
                 .withIgnoreNullValues()
-                .withIgnorePaths("fundSizeTwd", "version");
+                .withIgnorePaths("version");
 
         return metadataRepository.findAll(Example.of(probe, matcher));
     }

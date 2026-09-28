@@ -46,7 +46,7 @@ class GlobalServicesGraphQLResolverTest {
         LocalDateTime now = LocalDateTime.now();
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null,
-                null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+                1, now, now, null);
         BenchmarkIndex benchmark = new BenchmarkIndex(id, "^TWII", "加權指數", "TW", "台股大盤", 1, now, now, null);
         MarketDailyQuote quote = new MarketDailyQuote(id, id, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
@@ -152,7 +152,7 @@ class GlobalServicesGraphQLResolverTest {
         LocalDateTime now = LocalDateTime.now();
 
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null,
-                null, CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, now, now, null);
+                1, now, now, null);
         BenchmarkIndex benchmark = new BenchmarkIndex(id, "^TWII", "加權指數", "TW", "台股大盤", 1, now, now, null);
         MarketDailyQuote quote = new MarketDailyQuote(id, id, id, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),

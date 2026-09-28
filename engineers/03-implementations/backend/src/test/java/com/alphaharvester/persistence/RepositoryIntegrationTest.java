@@ -52,9 +52,6 @@ class RepositoryIntegrationTest {
                 "元大台灣卓越50",
                 now,
                 "臺灣50指數",
-                new BigDecimal("420000000000.00"),
-                CandidateAssetClass.CORE,
-                DistributionFrequency.SEMI_ANNUAL,
                 null,
                 null,
                 null,
@@ -67,14 +64,14 @@ class RepositoryIntegrationTest {
                     assertThat(saved.getCreatedAt()).isNotNull();
                     assertThat(saved.getUpdatedAt()).isNotNull();
                     assertThat(saved.getTicker()).isEqualTo("0050");
-                    assertThat(saved.getDistributionFrequency()).isEqualTo(DistributionFrequency.SEMI_ANNUAL);
+                    assertThat(saved.getUnderlyingIndex()).isEqualTo("臺灣50指數");
                 })
                 .verifyComplete();
 
         StepVerifier.create(metadataRepository.findByTicker("0050"))
                 .assertNext(found -> {
                     assertThat(found.getName()).isEqualTo("元大台灣卓越50");
-                    assertThat(found.getAssetClass()).isEqualTo(CandidateAssetClass.CORE);
+                    assertThat(found.getListingDate()).isNotNull();
                 })
                 .verifyComplete();
     }

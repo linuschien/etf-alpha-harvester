@@ -48,14 +48,12 @@ class CompositeExternalMarketDataAdapterTest {
         GlobalAssetMetadata twseAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", LocalDateTime.now(),
                 "臺灣50指數",
-                null, CandidateAssetClass.CORE,
-                DistributionFrequency.SEMI_ANNUAL, 1, LocalDateTime.now(), LocalDateTime.now(), null
+                1, LocalDateTime.now(), LocalDateTime.now(), null
         );
         GlobalAssetMetadata tpexAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00679B", "元大美債20年", LocalDateTime.now(),
                 "ICE美國政府20+年期債券指數",
-                null, CandidateAssetClass.DEFENSIVE,
-                DistributionFrequency.QUARTERLY, 1, LocalDateTime.now(), LocalDateTime.now(), null
+                1, LocalDateTime.now(), LocalDateTime.now(), null
         );
         when(twseClient.fetchEtfMasterUniverse()).thenReturn(Flux.just(twseAsset));
         when(tpexClient.fetchTpexEtfMasterUniverse()).thenReturn(Flux.just(tpexAsset));

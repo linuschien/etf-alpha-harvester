@@ -66,12 +66,8 @@ public class TwseMarketDataClient {
                     String listingDateStr = node.path("上市日期").asText("");
                     LocalDateTime listingDate = RocDateUtil.parseRocDate(listingDateStr);
 
-                    CandidateAssetClass assetClass = classifyAsset(ticker, shortName);
-                    DistributionFrequency frequency = DistributionFrequency.NONE;
-
                     return new GlobalAssetMetadata(
                             null, ticker, fullName, listingDate, underlyingIndex,
-                            null, assetClass, frequency,
                             1, now, now, null
                     );
                 })
@@ -175,13 +171,6 @@ public class TwseMarketDataClient {
                     log.error("Failed to fetch TWSE DCA rankings: {}", e.getMessage(), e);
                     return Flux.empty();
                 });
-    }
-
-    private CandidateAssetClass classifyAsset(String ticker, String shortName) {
-        if (ticker.endsWith("B") || (shortName != null && shortName.contains("債"))) {
-            return CandidateAssetClass.DEFENSIVE;
-        }
-        return CandidateAssetClass.SATELLITE;
     }
 
     private long parseLongSafe(String str) {

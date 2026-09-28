@@ -7,7 +7,6 @@ import com.alphaharvester.application.dto.SyncedRecordsCount;
 import com.alphaharvester.application.port.in.MarketDataSyncUseCase;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
-import com.alphaharvester.domain.model.DistributionFrequency;
 import com.alphaharvester.domain.model.SyncScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -186,12 +185,8 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                         .flatMap(asset -> metadataRepository.findByTicker(asset.getTicker())
                                 .flatMap(existing -> {
                                     existing.setName(asset.getName());
-                                    if (asset.getFundSizeTwd() != null) {
-                                        existing.setFundSizeTwd(asset.getFundSizeTwd());
-                                    }
-                                    existing.setAssetClass(asset.getAssetClass());
-                                    if (asset.getDistributionFrequency() != null && asset.getDistributionFrequency() != DistributionFrequency.NONE) {
-                                        existing.setDistributionFrequency(asset.getDistributionFrequency());
+                                    if (asset.getUnderlyingIndex() != null) {
+                                        existing.setUnderlyingIndex(asset.getUnderlyingIndex());
                                     }
                                     existing.setUpdatedAt(now);
                                     return metadataRepository.save(existing);
@@ -471,22 +466,8 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                         })
                                         .switchIfEmpty(dividendRepository.save(div));
                             })
-                            .collectList()
-                            .flatMap(savedList -> {
-                                LocalDateTime oneYearAgo = now.minusDays(365);
-                                List<DividendAnnouncement> validPastYear = savedList.stream()
-                                        .filter(d -> d.getExDate() != null && !d.getExDate().isBefore(oneYearAgo))
-                                        .toList();
-                                DistributionFrequency freq = GlobalAssetScoreEvaluationService.deriveDistributionFrequency(validPastYear, asset.getListingDate(), now);
-                                if (freq != DistributionFrequency.NONE && asset.getDistributionFrequency() != freq) {
-                                    log.info("Dynamic distribution frequency for {}: derived {} from {} dividend announcements in past year",
-                                            asset.getTicker(), freq, validPastYear.size());
-                                    asset.setDistributionFrequency(freq);
-                                    asset.setUpdatedAt(now);
-                                    return metadataRepository.save(asset).thenReturn(savedList.size());
-                                }
-                                return Mono.just(savedList.size());
-                            });
+                            .count()
+                            .map(Long::intValue);
 
                     Mono<Integer> splitCount = externalMarketDataPort.fetchCorporateActions(asset.getTicker())
                             .flatMap(split -> {

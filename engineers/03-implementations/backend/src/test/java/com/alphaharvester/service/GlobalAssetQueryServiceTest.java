@@ -58,8 +58,7 @@ class GlobalAssetQueryServiceTest {
     void shouldQueryGlobalAssetMetadata() {
         UUID id = UUID.randomUUID();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", LocalDateTime.now(),
-                "臺灣50", new BigDecimal("420000000000"),
-                CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, LocalDateTime.now(), LocalDateTime.now(), null);
+                "臺灣50", 1, LocalDateTime.now(), LocalDateTime.now(), null);
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
         when(metadataRepository.findById(id)).thenReturn(Mono.just(asset));
@@ -70,7 +69,7 @@ class GlobalAssetQueryServiceTest {
                 .assertNext(a -> assertThat(a.getTicker()).isEqualTo("0050"))
                 .verifyComplete();
 
-        StepVerifier.create(queryService.listGlobalAssets(new GlobalAssetFilterInput("0050", CandidateAssetClass.CORE, null)))
+        StepVerifier.create(queryService.listGlobalAssets(new GlobalAssetFilterInput("0050")))
                 .assertNext(a -> assertThat(a.getTicker()).isEqualTo("0050"))
                 .verifyComplete();
 

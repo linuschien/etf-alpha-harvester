@@ -68,8 +68,6 @@ class TpexMarketDataClientTest {
                     assertThat(asset.getTicker()).isEqualTo("00679B");
                     assertThat(asset.getName()).isEqualTo("元大美債20年ETF");
                     assertThat(asset.getUnderlyingIndex()).isEqualTo("ICE美國政府20+年期債券指數");
-                    assertThat(asset.getAssetClass()).isEqualTo(CandidateAssetClass.DEFENSIVE);
-                    assertThat(asset.getFundSizeTwd()).isNull();
                     // 1060117 -> 2017-01-17
                     assertThat(asset.getListingDate()).isEqualTo(LocalDateTime.of(2017, 1, 17, 0, 0));
                 })

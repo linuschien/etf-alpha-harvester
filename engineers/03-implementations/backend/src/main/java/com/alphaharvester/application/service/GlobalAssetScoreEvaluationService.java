@@ -299,9 +299,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
                                 // Universal Gatekeeper 2: Latest AUM >= 20 億 TWD
                                 BigDecimal currentAum = aumMap.get(asset.getTicker());
-                                if (currentAum == null) {
-                                    currentAum = asset.getFundSizeTwd();
-                                }
                                 if (currentAum == null || currentAum.compareTo(UNIVERSAL_MIN_AUM) < 0) {
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
@@ -491,7 +488,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         Map<EvaluatedCandidate, Double> dcaRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, c -> (c.dcaRank() != null && c.dcaRank() <= 20) ? (21 - c.dcaRank()) : 0.0, true);
         Map<EvaluatedCandidate, Double> aumRanks = FinancialMetricsCalculator.calculatePercentileRanks(
                 candidates,
-                c -> (c.currentAum() != null ? c.currentAum().doubleValue() : (c.metadata().getFundSizeTwd() != null ? c.metadata().getFundSizeTwd().doubleValue() : 0.0)),
+                c -> (c.currentAum() != null ? c.currentAum().doubleValue() : 0.0),
                 true
         );
 
@@ -510,7 +507,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             score.setEvaluationDate(evaluationDateTime);
             score.setAssetClass(CandidateAssetClass.CORE);
             score.setCompositeScore(BigDecimal.valueOf(composite).setScale(2, RoundingMode.HALF_UP));
-            score.setFundSizeTwd(c.currentAum() != null ? c.currentAum() : c.metadata().getFundSizeTwd());
+            score.setFundSizeTwd(c.currentAum());
             score.setRSquared(BigDecimal.valueOf(c.maxR2()).setScale(4, RoundingMode.HALF_UP));
             score.setDcaRank(c.dcaRank());
             scores.add(score);
@@ -547,7 +544,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             score.setEvaluationDate(evaluationDateTime);
             score.setAssetClass(CandidateAssetClass.SATELLITE);
             score.setCompositeScore(BigDecimal.valueOf(composite).setScale(2, RoundingMode.HALF_UP));
-            score.setFundSizeTwd(c.currentAum() != null ? c.currentAum() : c.metadata().getFundSizeTwd());
+            score.setFundSizeTwd(c.currentAum());
             score.setRSquared(BigDecimal.valueOf(c.r2Taiex()).setScale(4, RoundingMode.HALF_UP));
             score.setMomentum121(BigDecimal.valueOf(c.mom121()).setScale(4, RoundingMode.HALF_UP));
             score.setKaufmanEr(BigDecimal.valueOf(c.ker()).setScale(4, RoundingMode.HALF_UP));
@@ -570,7 +567,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         Map<EvaluatedCandidate, Double> ytmRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, EvaluatedCandidate::ytm, true);
         Map<EvaluatedCandidate, Double> aumRanks = FinancialMetricsCalculator.calculatePercentileRanks(
                 candidates,
-                c -> (c.currentAum() != null ? c.currentAum().doubleValue() : (c.metadata().getFundSizeTwd() != null ? c.metadata().getFundSizeTwd().doubleValue() : 0.0)),
+                c -> (c.currentAum() != null ? c.currentAum().doubleValue() : 0.0),
                 true
         );
 
@@ -588,7 +585,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             score.setEvaluationDate(evaluationDateTime);
             score.setAssetClass(CandidateAssetClass.DEFENSIVE);
             score.setCompositeScore(BigDecimal.valueOf(composite).setScale(2, RoundingMode.HALF_UP));
-            score.setFundSizeTwd(c.currentAum() != null ? c.currentAum() : c.metadata().getFundSizeTwd());
+            score.setFundSizeTwd(c.currentAum());
             score.setYtm(BigDecimal.valueOf(c.ytm()).setScale(4, RoundingMode.HALF_UP));
             scores.add(score);
         }
@@ -743,8 +740,22 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         }
     }
 
+
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset, LocalDateTime evaluationDate) {
-        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null);
+        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null, new BigDecimal("50000000000"), null);
+    }
+
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
+                                          LocalDateTime evaluationDate,
+                                          BigDecimal currentAum) {
+        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null, currentAum, null);
+    }
+
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
+                                          LocalDateTime evaluationDate,
+                                          BigDecimal currentAum,
+                                          CandidateAssetClass targetAssetClass) {
+        return evaluateAsset(asset, evaluationDate, null, 0.95, null, null, currentAum, targetAssetClass);
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
@@ -752,7 +763,16 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                           List<MarketDailyQuote> quotes,
                                           double trackingR2,
                                           Integer dcaRank) {
-        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, null);
+        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, null, new BigDecimal("50000000000"), null);
+    }
+
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
+                                          LocalDateTime evaluationDate,
+                                          List<MarketDailyQuote> quotes,
+                                          double trackingR2,
+                                          Integer dcaRank,
+                                          CandidateAssetClass targetAssetClass) {
+        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, null, new BigDecimal("50000000000"), targetAssetClass);
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
@@ -761,7 +781,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                           double trackingR2,
                                           Integer dcaRank,
                                           List<DividendAnnouncement> dividends) {
-        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, dividends, null);
+        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, dividends, new BigDecimal("50000000000"), null);
     }
 
     public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
@@ -771,24 +791,47 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                           Integer dcaRank,
                                           List<DividendAnnouncement> dividends,
                                           BigDecimal currentAum) {
+        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, dividends, currentAum, null);
+    }
+
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
+                                          LocalDateTime evaluationDate,
+                                          List<MarketDailyQuote> quotes,
+                                          double trackingR2,
+                                          Integer dcaRank,
+                                          List<DividendAnnouncement> dividends,
+                                          BigDecimal currentAum,
+                                          CandidateAssetClass targetAssetClass) {
         boolean isQualified = true;
         String reason = null;
 
-        BigDecimal effectiveAum = currentAum != null ? currentAum : (asset != null ? asset.getFundSizeTwd() : null);
-        double aum = effectiveAum != null ? effectiveAum.doubleValue() : 0.0;
+        BigDecimal effectiveAum = currentAum != null ? currentAum : BigDecimal.ZERO;
+        double aum = effectiveAum.doubleValue();
         String ticker = (asset != null && asset.getTicker() != null) ? asset.getTicker().toUpperCase() : "";
 
-        if (effectiveAum == null || effectiveAum.compareTo(BigDecimal.ZERO) <= 0) {
+        if (effectiveAum.compareTo(BigDecimal.ZERO) <= 0) {
             isQualified = false;
             reason = "資產規模 (AUM) 缺失或為非正數，無法確認規模門檻";
         }
 
-        if (isQualified && asset.getAssetClass() == CandidateAssetClass.CORE) {
+        CandidateAssetClass effectiveAssetClass = targetAssetClass;
+        if (effectiveAssetClass == null) {
+            boolean isBond = ticker.endsWith("B") || (asset != null && asset.getName() != null && asset.getName().contains("債"));
+            if (isBond) {
+                effectiveAssetClass = CandidateAssetClass.DEFENSIVE;
+            } else if (trackingR2 >= CORE_R2_THRESHOLD) {
+                effectiveAssetClass = CandidateAssetClass.CORE;
+            } else {
+                effectiveAssetClass = CandidateAssetClass.SATELLITE;
+            }
+        }
+
+        if (isQualified && effectiveAssetClass == CandidateAssetClass.CORE) {
             if (aum < 10_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 100 億 TWD 核心規模門檻";
             }
-        } else if (isQualified && asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
+        } else if (isQualified && effectiveAssetClass == CandidateAssetClass.SATELLITE) {
             if (aum < 2_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 20 億 TWD 衛星規模門檻";
@@ -810,7 +853,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     reason = "滾動日均成交金額未達 2,000 萬 TWD 衛星流動性門檻 (當前: " + String.format("%.2f 萬", avgTurnover / 10000.0) + ")";
                 }
             }
-        } else if (isQualified && asset.getAssetClass() == CandidateAssetClass.DEFENSIVE) {
+        } else if (isQualified && effectiveAssetClass == CandidateAssetClass.DEFENSIVE) {
             if (aum < 5_000_000_000.0) {
                 isQualified = false;
                 reason = "資產規模未達 50 億 TWD 防禦資產規模門檻";
@@ -833,11 +876,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                 : 0.0;
 
         double score;
-        if (asset.getAssetClass() == CandidateAssetClass.CORE) {
+        if (effectiveAssetClass == CandidateAssetClass.CORE) {
             double aumScore = Math.min(100.0, Math.max(0.0, (aum / 50_000_000_000.0) * 100.0));
             double trackScore = (trackingR2 > 0.0) ? Math.min(100.0, trackingR2 * 100.0) : 0.0;
             score = 0.40 * trackScore + 0.35 * aumScore + 0.25 * dcaRankScore;
-        } else if (asset.getAssetClass() == CandidateAssetClass.SATELLITE) {
+        } else if (effectiveAssetClass == CandidateAssetClass.SATELLITE) {
             double momScore = 50.0;
             if (quotes != null && quotes.size() >= 2) {
                 double pCurrent = quotes.get(0).getClosePrice() != null ? quotes.get(0).getClosePrice().doubleValue() : 0.0;
@@ -886,7 +929,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         scoreEntity.setAssetId(asset.getId());
         scoreEntity.setTicker(asset.getTicker());
         scoreEntity.setEvaluationDate(evaluationDate);
-        scoreEntity.setAssetClass(asset.getAssetClass());
+        scoreEntity.setAssetClass(effectiveAssetClass);
         scoreEntity.setCompositeScore(finalScore);
         scoreEntity.setFundSizeTwd(effectiveAum);
         scoreEntity.setRSquared(BigDecimal.valueOf(trackingR2).setScale(4, RoundingMode.HALF_UP));

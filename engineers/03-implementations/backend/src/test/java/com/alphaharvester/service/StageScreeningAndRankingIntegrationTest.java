@@ -1,6 +1,7 @@
 package com.alphaharvester.service;
 
 import com.alphaharvester.adapter.out.persistence.*;
+import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.service.GlobalAssetQueryService;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
@@ -49,6 +50,7 @@ class StageScreeningAndRankingIntegrationTest {
     @Mock private BenchmarkIndexRepository benchmarkRepository;
     @Mock private MacroYieldSnapshotRepository macroYieldRepository;
     @Mock private CorporateActionRepository corporateActionRepository;
+    @Mock private ExternalMarketDataPort externalMarketDataPort;
 
     private GlobalAssetScoreEvaluationService evaluationService;
     private GlobalAssetQueryService queryService;
@@ -57,7 +59,8 @@ class StageScreeningAndRankingIntegrationTest {
     void setUp() {
         evaluationService = new GlobalAssetScoreEvaluationService(
                 metadataRepository, scoreRepository, quoteRepository,
-                dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository
+                dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository,
+                externalMarketDataPort
         );
 
         queryService = new GlobalAssetQueryService(
@@ -65,6 +68,8 @@ class StageScreeningAndRankingIntegrationTest {
                 macroYieldRepository, scoreRepository, dcaRankRepository,
                 dividendRepository, corporateActionRepository, pairwiseMatrixRepository
         );
+
+        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Collections.emptyMap()));
 
         when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
@@ -148,28 +153,34 @@ class StageScreeningAndRankingIntegrationTest {
         // 1. Too young (listing < 365d)
         GlobalAssetMetadata youngAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00940", "元大台灣價值高息", cutoffDate.minusMonths(6).atStartOfDay(),
-                "臺灣價值高息", new BigDecimal("50000000000"), CandidateAssetClass.CORE, DistributionFrequency.MONTHLY, 1, evalDateTime, evalDateTime, null
+                "臺灣價值高息", 1, evalDateTime, evalDateTime, null
         );
 
         // 2. Low AUM (< 2B)
         GlobalAssetMetadata lowAumAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00998", "微型ETF", cutoffDate.minusYears(2).atStartOfDay(),
-                "某指數", new BigDecimal("1500000000"), CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, evalDateTime, evalDateTime, null
+                "某指數", 1, evalDateTime, evalDateTime, null
         );
 
         // 3. Insufficient trading days (< 220)
         GlobalAssetMetadata lowTradingDaysAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00997", "交易日不足ETF", cutoffDate.minusYears(2).atStartOfDay(),
-                "某指數", new BigDecimal("10000000000"), CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, evalDateTime, evalDateTime, null
+                "某指數", 1, evalDateTime, evalDateTime, null
         );
 
         // 4. Low liquidity (30d turnover < 20M)
         GlobalAssetMetadata lowTurnoverAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00996", "低流動性ETF", cutoffDate.minusYears(2).atStartOfDay(),
-                "某指數", new BigDecimal("10000000000"), CandidateAssetClass.CORE, DistributionFrequency.NONE, 1, evalDateTime, evalDateTime, null
+                "某指數", 1, evalDateTime, evalDateTime, null
         );
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(youngAsset, lowAumAsset, lowTradingDaysAsset, lowTurnoverAsset));
+        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
+                "00940", new BigDecimal("50000000000"),
+                "00998", new BigDecimal("1500000000"),
+                "00997", new BigDecimal("10000000000"),
+                "00996", new BigDecimal("10000000000")
+        )));
 
         // 20 quotes only (< 220) for lowTradingDaysAsset
         List<MarketDailyQuote> shortQuotes = generateCalendarQuotes("00997", targetYm, 50.0, 0.0005, 0.01, 0).subList(0, 50);
@@ -203,25 +214,25 @@ class StageScreeningAndRankingIntegrationTest {
         // Core 1: 0050 (AUM 420B, high correlation with ^TWII)
         GlobalAssetMetadata core1 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", longAgo, "臺灣50",
-                new BigDecimal("420000000000"), CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, evalDateTime, evalDateTime, null
+                1, evalDateTime, evalDateTime, null
         );
 
         // Core 2: 006208 (AUM 185B, collinear with 0050, R^2 ~ 1.0 >= 0.50 -> Should be REJECTED_COLLINEAR)
         GlobalAssetMetadata core2 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "006208", "富邦台50", longAgo, "臺灣50",
-                new BigDecimal("185000000000"), CandidateAssetClass.CORE, DistributionFrequency.SEMI_ANNUAL, 1, evalDateTime, evalDateTime, null
+                1, evalDateTime, evalDateTime, null
         );
 
         // Satellite 1: 00757 (vol >= 18%, MOM > 0, zero corr with ^TWII)
         GlobalAssetMetadata sat1 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00757", "統一FANG+", longAgo, "FANG+",
-                new BigDecimal("35000000000"), CandidateAssetClass.SATELLITE, DistributionFrequency.NONE, 1, evalDateTime, evalDateTime, null
+                1, evalDateTime, evalDateTime, null
         );
 
         // Bond 1: 00679B (Defensive bond, flat/independent from TWII)
         GlobalAssetMetadata bond1 = new GlobalAssetMetadata(
                 UUID.randomUUID(), "00679B", "元大海美債20年", longAgo, "美債20年",
-                new BigDecimal("250000000000"), CandidateAssetClass.DEFENSIVE, DistributionFrequency.QUARTERLY, 1, evalDateTime, evalDateTime, null
+                1, evalDateTime, evalDateTime, null
         );
 
         List<MarketDailyQuote> twiiQuotes = generateCalendarQuotes("^TWII", targetYm, 20000.0, 0.0005, 0.008, 0);
@@ -230,6 +241,12 @@ class StageScreeningAndRankingIntegrationTest {
         List<MarketDailyQuote> sat1Quotes = generateCalendarQuotes("00757", targetYm, 80.0, 0.001, 0.02, 1);
         List<MarketDailyQuote> bond1Quotes = generateCalendarQuotes("00679B", targetYm, 30.0, 0.0001, 0.0, 3);
 
+        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
+                "0050", new BigDecimal("420000000000"),
+                "006208", new BigDecimal("185000000000"),
+                "00757", new BigDecimal("35000000000"),
+                "00679B", new BigDecimal("250000000000")
+        )));
         when(metadataRepository.findAll()).thenReturn(Flux.just(core1, core2, sat1, bond1));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(core1Quotes));

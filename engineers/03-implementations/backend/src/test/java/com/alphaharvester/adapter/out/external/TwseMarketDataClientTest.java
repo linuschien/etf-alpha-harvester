@@ -84,8 +84,6 @@ class TwseMarketDataClientTest {
                     assertThat(asset.getTicker()).isEqualTo("0050");
                     assertThat(asset.getName()).isEqualTo("元大台灣卓越50證券投資信託基金");
                     assertThat(asset.getUnderlyingIndex()).isEqualTo("臺灣50指數");
-                    assertThat(asset.getAssetClass()).isEqualTo(CandidateAssetClass.SATELLITE);
-                    assertThat(asset.getFundSizeTwd()).isNull();
                     // 0920630 -> 2003-06-30
                     assertThat(asset.getListingDate()).isEqualTo(LocalDateTime.of(2003, 6, 30, 0, 0));
                 })
