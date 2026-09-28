@@ -85,10 +85,11 @@ public final class FinancialMetricsCalculator {
 
         List<Double> retA = new ArrayList<>();
         List<Double> retB = new ArrayList<>();
+        TreeMap<LocalDate, Double> sortedA = new TreeMap<>(seriesA);
 
         if (shiftDaysB == 0) {
             // Same-day intersection
-            for (Map.Entry<LocalDate, Double> entry : seriesA.entrySet()) {
+            for (Map.Entry<LocalDate, Double> entry : sortedA.entrySet()) {
                 LocalDate date = entry.getKey();
                 if (seriesB.containsKey(date)) {
                     retA.add(entry.getValue());
@@ -98,7 +99,7 @@ public final class FinancialMetricsCalculator {
         } else {
             // Shift-1 alignment: for date T in A, match with latest date in B on or before T - 1 day
             TreeMap<LocalDate, Double> sortedB = new TreeMap<>(seriesB);
-            for (Map.Entry<LocalDate, Double> entry : seriesA.entrySet()) {
+            for (Map.Entry<LocalDate, Double> entry : sortedA.entrySet()) {
                 LocalDate dateA = entry.getKey();
                 LocalDate targetBDate = dateA.minusDays(shiftDaysB);
                 // Floor date in B to handle US holidays/weekends
@@ -303,4 +304,18 @@ public final class FinancialMetricsCalculator {
 
         return percentileMap;
     }
+
+    /**
+     * Looks up pairwise R^2 from a lookup map where entries are keyed by "base:target" with base < target.
+     * Compares ticker strings to determine base and target in O(1).
+     * Returns 1.0 if tickerA == tickerB.
+     */
+    public static double getPairwiseRSquared(Map<String, Double> r2Lookup, String tickerA, String tickerB) {
+        if (tickerA == null || tickerB == null || r2Lookup == null) return 0.0;
+        if (tickerA.equalsIgnoreCase(tickerB)) return 1.0;
+        String base = (tickerA.compareTo(tickerB) < 0) ? tickerA : tickerB;
+        String target = (tickerA.compareTo(tickerB) < 0) ? tickerB : tickerA;
+        return r2Lookup.getOrDefault(base + ":" + target, 0.0);
+    }
 }
+

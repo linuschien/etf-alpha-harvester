@@ -256,25 +256,26 @@ class StageScreeningAndRankingIntegrationTest {
         List<GlobalAssetScore> savedScores = scoreCaptor.getValue();
         List<GlobalAssetPairwiseMatrix> savedMatrix = matrixCaptor.getValue();
 
-        // Verify Core Orthogonalization: 0050 is Seed (ACCEPTED), 006208 is REJECTED_COLLINEAR
+        // Verify DB saved scores contain pure intrinsic factor ranks without persistent orthogonal pollution
         GlobalAssetScore score0050 = savedScores.stream().filter(s -> "0050".equals(s.getTicker())).findFirst().orElseThrow();
         GlobalAssetScore score006208 = savedScores.stream().filter(s -> "006208".equals(s.getTicker())).findFirst().orElseThrow();
 
-        assertThat(score0050.getOrthogonalStatus()).isEqualTo(OrthogonalStatus.ACCEPTED);
-        assertThat(score006208.getOrthogonalStatus()).isEqualTo(OrthogonalStatus.REJECTED_COLLINEAR);
-        assertThat(score006208.getCollisionDetail()).contains("Collinear with 0050");
+        assertThat(score0050.getClassRank()).isEqualTo(1);
+        assertThat(score006208.getClassRank()).isEqualTo(2);
+        assertThat(score0050.getOrthogonalStatus()).isNull();
+        assertThat(score006208.getOrthogonalStatus()).isNull();
 
-        // Verify Pairwise Matrix contains 0050 <-> 006208 with R^2 ~ 1.0
+        // Verify Pairwise Matrix contains strictly sorted pair: base_ticker < target_ticker ("0050" < "006208")
         assertThat(savedMatrix).isNotEmpty();
         GlobalAssetPairwiseMatrix pair = savedMatrix.stream()
-                .filter(m -> "006208".equals(m.getBaseTicker()) && "0050".equals(m.getTargetTicker()))
+                .filter(m -> "0050".equals(m.getBaseTicker()) && "006208".equals(m.getTargetTicker()))
                 .findFirst().orElseThrow();
         assertThat(pair.getRSquared().doubleValue()).isGreaterThanOrEqualTo(0.99);
     }
 
     @Test
-    @DisplayName("Stage 3 Mode B: Custom Anchor Seed recalculation via getOrthogonalCandidates")
-    void shouldRecalculateModeBOrthogonalizationWithAnchorSeed() {
+    @DisplayName("Stage 3 Dynamic Orthogonalization: Mode A (Rank 1 Seed) & Mode B (Custom Anchor Seed) via getOrthogonalCandidates")
+    void shouldRecalculateModeAAndModeBOrthogonalizationDynamically() {
         LocalDateTime evalDateTime = LocalDate.now().withDayOfMonth(1).atStartOfDay();
 
         // Simulate 0050 (Rank 1) and 006208 (Rank 2) in Core Pool
@@ -290,26 +291,37 @@ class StageScreeningAndRankingIntegrationTest {
         s2.setAssetClass(CandidateAssetClass.CORE);
         s2.setEvaluationDate(evalDateTime);
 
-        // Pairwise matrix entry: R^2(0050, 006208) = 0.99
+        // Pairwise matrix entry: strictly sorted base < target ("0050", "006208") with R^2 = 0.99
         GlobalAssetPairwiseMatrix m1 = new GlobalAssetPairwiseMatrix(
                 UUID.randomUUID(), evalDateTime, CandidateAssetClass.CORE, "0050", "006208", new BigDecimal("0.9900"), new BigDecimal("0.9950")
-        );
-        GlobalAssetPairwiseMatrix m2 = new GlobalAssetPairwiseMatrix(
-                UUID.randomUUID(), evalDateTime, CandidateAssetClass.CORE, "006208", "0050", new BigDecimal("0.9900"), new BigDecimal("0.9950")
         );
 
         when(scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(eq(CandidateAssetClass.CORE), any()))
                 .thenReturn(Flux.just(s1, s2));
         when(pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(any(), eq(CandidateAssetClass.CORE)))
-                .thenReturn(Flux.just(m1, m2));
+                .thenReturn(Flux.just(m1));
 
-        // When user anchors 006208 as Mode B seed:
+        // 1. Mode A: seedTicker = null -> Defaults to Rank 1 (0050) as Seed, 006208 is REJECTED_COLLINEAR
+        StepVerifier.create(queryService.getOrthogonalCandidates(CandidateAssetClass.CORE, null, null))
+                .assertNext(first -> {
+                    assertThat(first.getTicker()).isEqualTo("0050");
+                    assertThat(first.getOrthogonalStatus()).isEqualTo(OrthogonalStatus.ACCEPTED);
+                    assertThat(first.getCollisionDetail()).contains("Seed (Rank 1)");
+                })
+                .assertNext(second -> {
+                    assertThat(second.getTicker()).isEqualTo("006208");
+                    assertThat(second.getOrthogonalStatus()).isEqualTo(OrthogonalStatus.REJECTED_COLLINEAR);
+                    assertThat(second.getCollisionDetail()).contains("Collinear with 0050");
+                })
+                .verifyComplete();
+
+        // 2. Mode B: When user anchors 006208 as Seed:
         // 006208 becomes Seed (ACCEPTED), and 0050 becomes REJECTED_COLLINEAR!
         StepVerifier.create(queryService.getOrthogonalCandidates(CandidateAssetClass.CORE, "006208", null))
                 .assertNext(first -> {
                     assertThat(first.getTicker()).isEqualTo("006208");
                     assertThat(first.getOrthogonalStatus()).isEqualTo(OrthogonalStatus.ACCEPTED);
-                    assertThat(first.getCollisionDetail()).contains("Anchor Seed");
+                    assertThat(first.getCollisionDetail()).contains("Anchor Seed (Mode B)");
                 })
                 .assertNext(second -> {
                     assertThat(second.getTicker()).isEqualTo("0050");

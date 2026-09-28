@@ -5,6 +5,7 @@ import com.alphaharvester.application.dto.*;
 import com.alphaharvester.domain.entity.*;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import com.alphaharvester.domain.model.OrthogonalStatus;
+import com.alphaharvester.domain.math.FinancialMetricsCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -206,40 +207,46 @@ public class GlobalAssetQueryService {
                     return pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(evalDate, assetClass)
                             .collectList()
                             .flatMapMany(matrix -> {
+                                Map<String, Double> r2Map = new HashMap<>();
+                                for (GlobalAssetPairwiseMatrix m : matrix) {
+                                    r2Map.put(m.getBaseTicker() + ":" + m.getTargetTicker(), m.getRSquared().doubleValue());
+                                }
+
+                                List<GlobalAssetScore> candidates = new ArrayList<>();
+                                boolean isModeB = false;
+
                                 if (seedTicker != null && !seedTicker.isBlank()) {
                                     Optional<GlobalAssetScore> seedOpt = scores.stream()
                                             .filter(s -> s.getTicker().equalsIgnoreCase(seedTicker.trim()))
                                             .findFirst();
                                     if (seedOpt.isPresent()) {
                                         GlobalAssetScore seed = seedOpt.get();
-                                        List<GlobalAssetScore> reordered = new ArrayList<>();
-                                        reordered.add(seed);
+                                        candidates.add(seed);
                                         for (GlobalAssetScore s : scores) {
                                             if (!s.getTicker().equalsIgnoreCase(seed.getTicker())) {
-                                                reordered.add(s);
+                                                candidates.add(s);
                                             }
                                         }
-                                        applyGreedyOrthogonalWithSeed(reordered, matrix);
-                                        return Flux.fromIterable(reordered);
+                                        isModeB = true;
                                     }
                                 }
-                                return Flux.fromIterable(scores);
+
+                                if (!isModeB) {
+                                    candidates.addAll(scores);
+                                }
+
+                                applyGreedyOrthogonal(candidates, r2Map, isModeB);
+                                return Flux.fromIterable(candidates);
                             });
                 });
     }
 
-    private void applyGreedyOrthogonalWithSeed(List<GlobalAssetScore> candidates, List<GlobalAssetPairwiseMatrix> matrix) {
+    private void applyGreedyOrthogonal(List<GlobalAssetScore> candidates, Map<String, Double> r2Map, boolean isModeB) {
         if (candidates.isEmpty()) return;
-
-        Map<String, Map<String, Double>> r2Lookup = new HashMap<>();
-        for (GlobalAssetPairwiseMatrix m : matrix) {
-            r2Lookup.computeIfAbsent(m.getBaseTicker(), k -> new HashMap<>())
-                    .put(m.getTargetTicker(), m.getRSquared().doubleValue());
-        }
 
         GlobalAssetScore seed = candidates.get(0);
         seed.setOrthogonalStatus(OrthogonalStatus.ACCEPTED);
-        seed.setCollisionDetail("Anchor Seed (Mode B)");
+        seed.setCollisionDetail(isModeB ? "Anchor Seed (Mode B)" : "Seed (Rank 1)");
 
         List<GlobalAssetScore> selected = new ArrayList<>();
         selected.add(seed);
@@ -251,8 +258,7 @@ public class GlobalAssetQueryService {
             double conflictR2 = 0.0;
 
             for (GlobalAssetScore s : selected) {
-                double r2 = r2Lookup.getOrDefault(c.getTicker(), Collections.emptyMap())
-                        .getOrDefault(s.getTicker(), 0.0);
+                double r2 = FinancialMetricsCalculator.getPairwiseRSquared(r2Map, c.getTicker(), s.getTicker());
                 if (r2 >= 0.50) {
                     isCollinear = true;
                     conflictTicker = s.getTicker();

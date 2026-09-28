@@ -136,4 +136,27 @@ class FinancialMetricsCalculatorTest {
         assertThat(ranks.get("C")).isCloseTo(0.5, within(1e-4));
         assertThat(ranks.get("E")).isCloseTo(1.0, within(1e-4));
     }
+
+    @Test
+    @DisplayName("Should lookup pairwise R^2 symmetrically by sorting ticker strings")
+    void shouldLookupPairwiseRSquaredSymmetrically() {
+        // Matrix only stores "0050:006208" where base < target
+        Map<String, Double> r2Lookup = Map.of(
+                "0050:006208", 0.9850,
+                "0050:00757", 0.1200
+        );
+
+        // Self-comparison
+        assertThat(FinancialMetricsCalculator.getPairwiseRSquared(r2Lookup, "0050", "0050")).isEqualTo(1.0);
+
+        // Direct order ("0050", "006208")
+        assertThat(FinancialMetricsCalculator.getPairwiseRSquared(r2Lookup, "0050", "006208")).isCloseTo(0.9850, within(1e-4));
+
+        // Swapped order ("006208", "0050") -> should find identical R^2
+        assertThat(FinancialMetricsCalculator.getPairwiseRSquared(r2Lookup, "006208", "0050")).isCloseTo(0.9850, within(1e-4));
+
+        // Missing pair
+        assertThat(FinancialMetricsCalculator.getPairwiseRSquared(r2Lookup, "006208", "00757")).isEqualTo(0.0);
+    }
 }
+

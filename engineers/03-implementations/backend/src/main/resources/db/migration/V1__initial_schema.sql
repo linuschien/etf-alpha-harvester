@@ -63,8 +63,6 @@ CREATE TABLE IF NOT EXISTS global_asset_score (
     class_rank INT NOT NULL,
     composite_score DECIMAL(6,2) NOT NULL,
     fund_size_twd DECIMAL(18,2),
-    orthogonal_status VARCHAR(32) DEFAULT 'ACCEPTED',
-    collision_detail VARCHAR(255),
     r_squared DECIMAL(6,4),
     momentum_12_1 DECIMAL(10,4),
     kaufman_er DECIMAL(6,4),
@@ -84,7 +82,8 @@ CREATE TABLE IF NOT EXISTS global_asset_pairwise_matrix (
     r_squared DECIMAL(6,4) NOT NULL,
     correlation_coefficient DECIMAL(6,4) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_pairwise_matrix UNIQUE (evaluation_date, asset_class, base_ticker, target_ticker)
+    CONSTRAINT uq_pairwise_matrix UNIQUE (evaluation_date, asset_class, base_ticker, target_ticker),
+    CONSTRAINT chk_pairwise_base_target CHECK (base_ticker < target_ticker)
 );
 
 CREATE TABLE IF NOT EXISTS dca_popularity_rank (

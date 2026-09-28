@@ -387,10 +387,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     pairwiseMatrices.addAll(generatePairwiseMatrix(topCore, coreReturns, CandidateAssetClass.CORE, evaluationDateTime));
                     pairwiseMatrices.addAll(generatePairwiseMatrix(topSat, satReturns, CandidateAssetClass.SATELLITE, evaluationDateTime));
 
-                    // Apply Greedy Orthogonal Engine
-                    applyGreedyOrthogonal(topCore, pairwiseMatrices);
-                    applyGreedyOrthogonal(topSat, pairwiseMatrices);
-
                     List<GlobalAssetScore> finalScoresToSave = new ArrayList<>();
                     finalScoresToSave.addAll(topCore);
                     finalScoresToSave.addAll(topSat);
@@ -578,20 +574,25 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         for (int i = 0; i < topList.size(); i++) {
             String tickerA = topList.get(i).getTicker();
             Map<LocalDate, Double> retA = returnMap.get(tickerA);
-            for (int j = 0; j < topList.size(); j++) {
-                if (i == j) continue;
+            for (int j = i + 1; j < topList.size(); j++) {
                 String tickerB = topList.get(j).getTicker();
                 Map<LocalDate, Double> retB = returnMap.get(tickerB);
 
-                FinancialMetricsCalculator.AlignedReturns aligned = FinancialMetricsCalculator.alignReturnSeries(retA, retB, 0);
+                // Enforce base_ticker < target_ticker
+                String baseTicker = (tickerA.compareTo(tickerB) < 0) ? tickerA : tickerB;
+                String targetTicker = (tickerA.compareTo(tickerB) < 0) ? tickerB : tickerA;
+                Map<LocalDate, Double> baseRet = (tickerA.compareTo(tickerB) < 0) ? retA : retB;
+                Map<LocalDate, Double> targetRet = (tickerA.compareTo(tickerB) < 0) ? retB : retA;
+
+                FinancialMetricsCalculator.AlignedReturns aligned = FinancialMetricsCalculator.alignReturnSeries(baseRet, targetRet, 0);
                 FinancialMetricsCalculator.CorrelationResult res = FinancialMetricsCalculator.calculateCorrelationAndRSquared(aligned.returnsA(), aligned.returnsB());
 
                 GlobalAssetPairwiseMatrix entry = new GlobalAssetPairwiseMatrix(
                         UUID.randomUUID(),
                         evaluationDateTime,
                         assetClass,
-                        tickerA,
-                        tickerB,
+                        baseTicker,
+                        targetTicker,
                         BigDecimal.valueOf(res.rSquared()).setScale(4, RoundingMode.HALF_UP),
                         BigDecimal.valueOf(res.correlation()).setScale(4, RoundingMode.HALF_UP)
                 );
@@ -599,51 +600,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             }
         }
         return matrix;
-    }
-
-    public void applyGreedyOrthogonal(List<GlobalAssetScore> topList, List<GlobalAssetPairwiseMatrix> pairwiseMatrix) {
-        if (topList.isEmpty()) return;
-
-        // Mode A: Rank 1 is seed
-        GlobalAssetScore seed = topList.get(0);
-        seed.setOrthogonalStatus(OrthogonalStatus.ACCEPTED);
-        seed.setCollisionDetail("Initial Seed (Rank 1)");
-
-        List<GlobalAssetScore> selected = new ArrayList<>();
-        selected.add(seed);
-
-        Map<String, Map<String, Double>> r2Lookup = new HashMap<>();
-        for (GlobalAssetPairwiseMatrix m : pairwiseMatrix) {
-            r2Lookup.computeIfAbsent(m.getBaseTicker(), k -> new HashMap<>())
-                    .put(m.getTargetTicker(), m.getRSquared().doubleValue());
-        }
-
-        for (int i = 1; i < topList.size(); i++) {
-            GlobalAssetScore candidate = topList.get(i);
-            boolean isCollinear = false;
-            String conflictTicker = null;
-            double conflictR2 = 0.0;
-
-            for (GlobalAssetScore s : selected) {
-                double r2 = r2Lookup.getOrDefault(candidate.getTicker(), Collections.emptyMap())
-                        .getOrDefault(s.getTicker(), 0.0);
-                if (r2 >= ORTHOGONAL_R2_THRESHOLD) {
-                    isCollinear = true;
-                    conflictTicker = s.getTicker();
-                    conflictR2 = r2;
-                    break;
-                }
-            }
-
-            if (isCollinear) {
-                candidate.setOrthogonalStatus(OrthogonalStatus.REJECTED_COLLINEAR);
-                candidate.setCollisionDetail(String.format("Collinear with %s (R^2 = %.2f)", conflictTicker, conflictR2));
-            } else {
-                candidate.setOrthogonalStatus(OrthogonalStatus.ACCEPTED);
-                candidate.setCollisionDetail("Natural Orthogonal");
-                selected.add(candidate);
-            }
-        }
     }
 
     private Mono<Void> updateMonthlyWatermark(LocalDateTime evaluationDateTime, int recordsCount) {

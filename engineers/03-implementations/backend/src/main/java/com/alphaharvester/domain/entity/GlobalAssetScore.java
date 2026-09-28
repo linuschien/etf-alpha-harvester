@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -50,10 +51,10 @@ public class GlobalAssetScore {
     @Column("fund_size_twd")
     private BigDecimal fundSizeTwd;
 
-    @Column("orthogonal_status")
-    private OrthogonalStatus orthogonalStatus = OrthogonalStatus.ACCEPTED;
+    @Transient
+    private OrthogonalStatus orthogonalStatus;
 
-    @Column("collision_detail")
+    @Transient
     private String collisionDetail;
 
     @Column("r_squared")
@@ -88,6 +89,5 @@ public class GlobalAssetScore {
         this.classRank = classRank;
         this.compositeScore = compositeScore;
         this.fundSizeTwd = fundSizeTwd;
-        this.orthogonalStatus = OrthogonalStatus.ACCEPTED;
     }
 }
