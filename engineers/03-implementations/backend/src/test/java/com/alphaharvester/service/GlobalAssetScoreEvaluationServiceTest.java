@@ -1,5 +1,6 @@
 package com.alphaharvester.service;
 
+import com.alphaharvester.adapter.out.persistence.CorporateActionRepository;
 import com.alphaharvester.adapter.out.persistence.DcaPopularityRankRepository;
 import com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
@@ -7,11 +8,13 @@ import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
+import com.alphaharvester.domain.entity.CorporateAction;
 import com.alphaharvester.domain.entity.DividendAnnouncement;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.domain.model.CorporateActionType;
 import com.alphaharvester.domain.model.DistributionFrequency;
 import com.alphaharvester.domain.model.TaxTag;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +28,7 @@ import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -59,6 +63,9 @@ class GlobalAssetScoreEvaluationServiceTest {
     private DividendAnnouncementRepository dividendRepository;
 
     @Mock
+    private CorporateActionRepository corporateActionRepository;
+
+    @Mock
     private ExternalMarketDataPort externalMarketDataPort;
 
     private GlobalAssetScoreEvaluationService service;
@@ -68,9 +75,10 @@ class GlobalAssetScoreEvaluationServiceTest {
         lenient().when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Collections.emptyMap()));
         lenient().when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         lenient().when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
+        lenient().when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any())).thenReturn(Flux.empty());
         lenient().when(quoteRepository.findByTickerOrderByTradeDateDesc(any())).thenReturn(Flux.empty());
         lenient().when(scoreRepository.deleteByEvaluationDate(any())).thenReturn(Mono.empty());
-        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, null, null, externalMarketDataPort);
+        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, null, null, externalMarketDataPort, corporateActionRepository);
     }
 
     private List<MarketDailyQuote> generateQuotesForWindow(String ticker, double startPrice, double growthRate, double noiseFactor, int pattern) {
@@ -433,6 +441,64 @@ class GlobalAssetScoreEvaluationServiceTest {
         );
         assertThat(GlobalAssetScoreEvaluationService.deriveDistributionFrequency(singleDiv40d, listingDate40d, now))
                 .isEqualTo(DistributionFrequency.MONTHLY);
+    }
+
+    @Test
+    @DisplayName("Should adjust stock split prices in memory during evaluation to ensure continuity")
+    void shouldAdjustStockSplitPricesDuringEvaluation() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime longAgo = now.minusYears(5);
+
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0050", "元大台灣50", longAgo, "臺灣50",
+                1, now, now, null
+        );
+
+        List<MarketDailyQuote> twiiQuotes = generateQuotesForWindow("^TWII", 20000.0, 0.0005, 0.008, 0);
+
+        YearMonth ym = YearMonth.from(LocalDate.now());
+        LocalDate evalDate = ym.atDay(1);
+        LocalDate splitDate = evalDate.minusMonths(6);
+
+        // Pre-split price 160.0, post-split price 40.0
+        List<MarketDailyQuote> quotes = generateQuotesForWindow("0050", 160.0, 0.0005, 0.008, 0);
+        // Simulate a 1-to-4 split on splitDate: post-split raw prices drop to ~40
+        List<MarketDailyQuote> rawQuotesWithSplit = new ArrayList<>();
+        for (MarketDailyQuote q : quotes) {
+            if (!q.getTradeDate().toLocalDate().isBefore(splitDate)) {
+                BigDecimal postSplitPrice = q.getClosePrice().divide(BigDecimal.valueOf(4), 4, RoundingMode.HALF_UP);
+                rawQuotesWithSplit.add(new MarketDailyQuote(
+                        q.getId(), q.getAssetId(), q.getBenchmarkId(), q.getTicker(), q.getTradeDate(),
+                        postSplitPrice, postSplitPrice, postSplitPrice, postSplitPrice,
+                        q.getVolumeShares() * 4, q.getTradeValueTwd(), postSplitPrice, BigDecimal.ZERO
+                ));
+            } else {
+                rawQuotesWithSplit.add(q);
+            }
+        }
+
+        CorporateAction splitAction = new CorporateAction(
+                UUID.randomUUID(), asset.getId(), "0050", CorporateActionType.SPLIT,
+                splitDate.atStartOfDay(), 4, 1
+        );
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(rawQuotesWithSplit));
+        when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any()))
+                .thenReturn(Flux.just(splitAction));
+        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of("0050", new BigDecimal("400000000000"))));
+        when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
+
+        StepVerifier.create(service.evaluateGlobalAssetScores(ym.toString(), true))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.evaluatedCandidatesCount()).isEqualTo(1);
+                    // R^2 with TWII should remain high (>= 0.80) because split was adjusted in memory,
+                    // so 0050 correctly qualifies for CORE pool!
+                    assertThat(res.coreCount()).isEqualTo(1);
+                })
+                .verifyComplete();
     }
 }
 

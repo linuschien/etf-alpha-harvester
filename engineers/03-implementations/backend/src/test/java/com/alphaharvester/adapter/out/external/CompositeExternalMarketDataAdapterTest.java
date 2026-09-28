@@ -21,9 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.alphaharvester.application.port.out.ExternalMarketDataPort.DividendsAndSplits;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -79,7 +82,7 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
-    @DisplayName("Should combine quotes, recover missing ETF from Yahoo Finance, include CNN Fear & Greed, and enrich NAV")
+    @DisplayName("Should combine quotes, recover missing ETF from Yahoo Finance, and include CNN Fear & Greed without daily NAV calls")
     void shouldCombineQuotesAndRecoverMissingAndIncludeFearGreed() {
         LocalDateTime now = LocalDateTime.now();
         MarketDailyQuote twseQuote = new MarketDailyQuote(
@@ -121,16 +124,11 @@ class CompositeExternalMarketDataAdapterTest {
         // CNN Fear & Greed
         when(cnnSentimentClient.fetchFearAndGreedIndex()).thenReturn(Mono.just(fearGreedQuote));
 
-        Map<String, TwseMarketDataClient.NavSnapshot> navMap = Map.of(
-                "0050", new TwseMarketDataClient.NavSnapshot(new BigDecimal("188.20"), new BigDecimal("-0.11"), 2200000000L)
-        );
-        when(twseClient.fetchMisNavData()).thenReturn(Mono.just(navMap));
-
         // Pass monitored tickers: ["0050", "00679B", "006208"]
         StepVerifier.create(adapter.fetchDailyQuotes(List.of("0050", "00679B", "006208")))
                 .assertNext(q -> {
                     assertThat(q.getTicker()).isEqualTo("0050");
-                    assertThat(q.getNetAssetValue()).isEqualTo(new BigDecimal("188.20"));
+                    assertThat(q.getClosePrice()).isEqualTo(new BigDecimal("188.0"));
                 })
                 .assertNext(q -> assertThat(q.getTicker()).isEqualTo("00679B"))
                 .assertNext(q -> assertThat(q.getTicker()).isEqualTo("006208")) // successfully recovered from Yahoo!
@@ -140,6 +138,9 @@ class CompositeExternalMarketDataAdapterTest {
                     assertThat(q.getClosePrice()).isEqualTo(new BigDecimal("45.5"));
                 })
                 .verifyComplete();
+
+        // Verify twseClient.fetchMisNavData() is NOT called during daily quote processing
+        verify(twseClient, never()).fetchMisNavData();
     }
 
     @Test
@@ -177,6 +178,16 @@ class CompositeExternalMarketDataAdapterTest {
 
         StepVerifier.create(adapter.fetchCorporateActions("0050"))
                 .assertNext(s -> assertThat(s.getSplitToShares()).isEqualTo(4))
+                .verifyComplete();
+
+        when(yahooFinanceClient.fetchDividendsAndSplits("0050"))
+                .thenReturn(Mono.just(new DividendsAndSplits(List.of(div), List.of(split))));
+
+        StepVerifier.create(adapter.fetchDividendsAndSplits("0050"))
+                .assertNext(ds -> {
+                    assertThat(ds.dividends()).hasSize(1);
+                    assertThat(ds.splits()).hasSize(1);
+                })
                 .verifyComplete();
     }
 }

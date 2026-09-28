@@ -1,6 +1,8 @@
 package com.alphaharvester.domain.math;
 
+import com.alphaharvester.domain.entity.CorporateAction;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
+import com.alphaharvester.domain.model.CorporateActionType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -157,6 +159,81 @@ class FinancialMetricsCalculatorTest {
 
         // Missing pair
         assertThat(FinancialMetricsCalculator.getPairwiseRSquared(r2Lookup, "006208", "00757")).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("Should adjust quotes for stock split (1:4 split) and eliminate fake -75% price crash")
+    void shouldAdjustQuotesForSplitsCorrectly() {
+        LocalDateTime d1 = LocalDateTime.of(2025, 6, 13, 13, 30);
+        LocalDateTime d2 = LocalDateTime.of(2025, 6, 14, 13, 30);
+        LocalDateTime d3SplitDay = LocalDateTime.of(2025, 6, 15, 9, 0);
+        LocalDateTime d4 = LocalDateTime.of(2025, 6, 16, 13, 30);
+
+        MarketDailyQuote q1 = new MarketDailyQuote(null, null, null, "0050", d1,
+                new BigDecimal("159.00"), new BigDecimal("161.00"), new BigDecimal("158.50"), new BigDecimal("160.00"),
+                1000L, new BigDecimal("160000"), null, null);
+        MarketDailyQuote q2 = new MarketDailyQuote(null, null, null, "0050", d2,
+                new BigDecimal("160.00"), new BigDecimal("164.00"), new BigDecimal("160.00"), new BigDecimal("164.00"),
+                1200L, new BigDecimal("196800"), null, null);
+        MarketDailyQuote q3 = new MarketDailyQuote(null, null, null, "0050", d3SplitDay,
+                new BigDecimal("41.00"), new BigDecimal("42.00"), new BigDecimal("40.50"), new BigDecimal("41.00"),
+                4800L, new BigDecimal("196800"), null, null);
+        MarketDailyQuote q4 = new MarketDailyQuote(null, null, null, "0050", d4,
+                new BigDecimal("41.00"), new BigDecimal("42.50"), new BigDecimal("41.00"), new BigDecimal("42.00"),
+                4500L, new BigDecimal("189000"), null, null);
+
+        CorporateAction split1to4 = new CorporateAction(
+                null, null, "0050", CorporateActionType.SPLIT, d3SplitDay, 4, 1
+        );
+
+        List<MarketDailyQuote> rawQuotes = List.of(q1, q2, q3, q4);
+
+        // Before adjustment: return between d2 and d3 is (41 - 164) / 164 = -75%
+        Map<LocalDate, Double> rawReturns = FinancialMetricsCalculator.calculateDailyReturns(rawQuotes);
+        assertThat(rawReturns.get(d3SplitDay.toLocalDate())).isCloseTo(-0.75, within(1e-4));
+
+        // After adjustment
+        List<MarketDailyQuote> adjusted = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, List.of(split1to4));
+        assertThat(adjusted).hasSize(4);
+
+        // Pre-split quotes adjusted by 1/4 = 0.25
+        assertThat(adjusted.get(0).getClosePrice()).isEqualByComparingTo(new BigDecimal("40.0000"));
+        assertThat(adjusted.get(1).getClosePrice()).isEqualByComparingTo(new BigDecimal("41.0000"));
+        // Post-split quotes remain unchanged
+        assertThat(adjusted.get(2).getClosePrice()).isEqualByComparingTo(new BigDecimal("41.00"));
+        assertThat(adjusted.get(3).getClosePrice()).isEqualByComparingTo(new BigDecimal("42.00"));
+
+        // Daily returns on adjusted quotes: return on split day is (41 - 41) / 41 = 0.0 (no crash!)
+        Map<LocalDate, Double> adjustedReturns = FinancialMetricsCalculator.calculateDailyReturns(adjusted);
+        assertThat(adjustedReturns.get(d3SplitDay.toLocalDate())).isCloseTo(0.0, within(1e-4));
+        // Return on day 4: (42 - 41) / 41 ~ +2.439%
+        assertThat(adjustedReturns.get(d4.toLocalDate())).isCloseTo(0.02439, within(1e-4));
+    }
+
+    @Test
+    @DisplayName("Should compound multiple splits chronologically")
+    void shouldCompoundMultipleSplitsChronologically() {
+        LocalDateTime d1 = LocalDateTime.of(2024, 1, 15, 9, 0);
+        LocalDateTime splitDate1 = LocalDateTime.of(2024, 6, 1, 9, 0); // 1 to 2
+        LocalDateTime d2 = LocalDateTime.of(2024, 8, 15, 9, 0);
+        LocalDateTime splitDate2 = LocalDateTime.of(2024, 12, 1, 9, 0); // 1 to 3
+        LocalDateTime d3 = LocalDateTime.of(2025, 1, 15, 9, 0);
+
+        MarketDailyQuote q1 = new MarketDailyQuote(null, null, null, "TEST", d1, null, null, null, new BigDecimal("120.00"), null, null, null, null);
+        MarketDailyQuote q2 = new MarketDailyQuote(null, null, null, "TEST", d2, null, null, null, new BigDecimal("60.00"), null, null, null, null);
+        MarketDailyQuote q3 = new MarketDailyQuote(null, null, null, "TEST", d3, null, null, null, new BigDecimal("25.00"), null, null, null, null);
+
+        CorporateAction split1 = new CorporateAction(null, null, "TEST", CorporateActionType.SPLIT, splitDate1, 2, 1);
+        CorporateAction split2 = new CorporateAction(null, null, "TEST", CorporateActionType.SPLIT, splitDate2, 3, 1);
+
+        List<MarketDailyQuote> adjusted = FinancialMetricsCalculator.adjustQuotesForSplits(List.of(q1, q2, q3), List.of(split1, split2));
+
+        // q1 is before split1 and split2 -> factor = (1/2) * (1/3) = 1/6 -> 120 * 1/6 = 20.00
+        assertThat(adjusted.get(0).getClosePrice()).isEqualByComparingTo(new BigDecimal("20.0000"));
+        // q2 is between split1 and split2 -> factor = 1/3 -> 60 * 1/3 = 20.00
+        assertThat(adjusted.get(1).getClosePrice()).isEqualByComparingTo(new BigDecimal("20.0000"));
+        // q3 is after split2 -> unchanged = 25.00
+        assertThat(adjusted.get(2).getClosePrice()).isEqualByComparingTo(new BigDecimal("25.00"));
     }
 }
 

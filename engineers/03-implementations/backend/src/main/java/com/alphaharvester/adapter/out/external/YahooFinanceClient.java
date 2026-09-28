@@ -6,6 +6,7 @@ import com.alphaharvester.domain.entity.MacroYieldSnapshot;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CorporateActionType;
 import com.alphaharvester.domain.model.TaxTag;
+import com.alphaharvester.application.port.out.ExternalMarketDataPort.DividendsAndSplits;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,92 +135,88 @@ public class YahooFinanceClient {
 
 
     /**
-     * Fetches historical splits for a ticker from Yahoo Finance events.
+     * Concurrently fetches dividend announcements and stock split corporate actions
+     * in a single external request from Yahoo Finance chart events.
      */
-    public Flux<CorporateAction> fetchSplits(String ticker) {
+    public Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker) {
         String url = YAHOO_CHART_BASE + ticker + "?interval=1d&range=1y&events=div,split";
         return webClient.get()
                 .uri(url)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .<CorporateAction>flatMapMany(root -> {
-                    try {
-                        JsonNode result = root.path("chart").path("result").get(0);
-                        if (result == null) return Flux.<CorporateAction>empty();
-                        JsonNode splitsNode = result.path("events").path("splits");
-                        if (splitsNode.isMissingNode() || !splitsNode.isObject()) {
-                            return Flux.<CorporateAction>empty();
-                        }
-
-                        List<CorporateAction> actions = new ArrayList<>();
-                        Iterator<Map.Entry<String, JsonNode>> fields = splitsNode.fields();
-                        while (fields.hasNext()) {
-                            Map.Entry<String, JsonNode> entry = fields.next();
-                            JsonNode item = entry.getValue();
-                            long epoch = item.path("date").asLong();
-                            LocalDateTime effectiveDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.systemDefault());
-                            int toShares = (int) Math.round(item.path("numerator").asDouble(1.0));
-                            int fromShares = (int) Math.round(item.path("denominator").asDouble(1.0));
-
-                            actions.add(new CorporateAction(
-                                    null, null, ticker, CorporateActionType.SPLIT,
-                                    effectiveDate, toShares, fromShares
-                            ));
-                        }
-                        return Flux.fromIterable(actions);
-                    } catch (Exception e) {
-                        log.error("Error parsing Yahoo splits for '{}': {}", ticker, e.getMessage());
-                        return Flux.<CorporateAction>empty();
-                    }
-                })
+                .map(root -> parseDividendsAndSplits(root, ticker))
                 .onErrorResume(e -> {
-                    log.error("Error fetching Yahoo splits for '{}': {}", ticker, e.getMessage(), e);
-                    return Flux.empty();
+                    log.error("Error fetching Yahoo dividends & splits for '{}': {}", ticker, e.getMessage());
+                    return Mono.just(new DividendsAndSplits(List.of(), List.of()));
                 });
+    }
+
+    private DividendsAndSplits parseDividendsAndSplits(JsonNode root, String ticker) {
+        try {
+            JsonNode result = root.path("chart").path("result").get(0);
+            if (result == null) return new DividendsAndSplits(List.of(), List.of());
+
+            JsonNode eventsNode = result.path("events");
+            if (eventsNode.isMissingNode() || !eventsNode.isObject()) {
+                return new DividendsAndSplits(List.of(), List.of());
+            }
+
+            List<DividendAnnouncement> dividends = new ArrayList<>();
+            JsonNode divNode = eventsNode.path("dividends");
+            if (!divNode.isMissingNode() && divNode.isObject()) {
+                Iterator<Map.Entry<String, JsonNode>> fields = divNode.fields();
+                while (fields.hasNext()) {
+                    Map.Entry<String, JsonNode> entry = fields.next();
+                    JsonNode item = entry.getValue();
+                    long epoch = item.path("date").asLong();
+                    LocalDateTime exDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.systemDefault());
+                    BigDecimal amount = BigDecimal.valueOf(item.path("amount").asDouble(0.0)).setScale(4, RoundingMode.HALF_UP);
+
+                    dividends.add(new DividendAnnouncement(
+                            null, null, ticker, exDate, exDate.plusDays(30),
+                            amount, TaxTag.DOMESTIC_54C
+                    ));
+                }
+            }
+
+            List<CorporateAction> actions = new ArrayList<>();
+            JsonNode splitsNode = eventsNode.path("splits");
+            if (!splitsNode.isMissingNode() && splitsNode.isObject()) {
+                Iterator<Map.Entry<String, JsonNode>> fields = splitsNode.fields();
+                while (fields.hasNext()) {
+                    Map.Entry<String, JsonNode> entry = fields.next();
+                    JsonNode item = entry.getValue();
+                    long epoch = item.path("date").asLong();
+                    LocalDateTime effectiveDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.systemDefault());
+                    int toShares = (int) Math.round(item.path("numerator").asDouble(1.0));
+                    int fromShares = (int) Math.round(item.path("denominator").asDouble(1.0));
+
+                    actions.add(new CorporateAction(
+                            null, null, ticker, CorporateActionType.SPLIT,
+                            effectiveDate, toShares, fromShares
+                    ));
+                }
+            }
+
+            return new DividendsAndSplits(dividends, actions);
+        } catch (Exception e) {
+            log.error("Error parsing Yahoo dividends and splits for '{}': {}", ticker, e.getMessage());
+            return new DividendsAndSplits(List.of(), List.of());
+        }
+    }
+
+    /**
+     * Fetches historical splits for a ticker from Yahoo Finance events.
+     */
+    public Flux<CorporateAction> fetchSplits(String ticker) {
+        return fetchDividendsAndSplits(ticker).flatMapMany(res -> Flux.fromIterable(res.splits()));
     }
 
     /**
      * Fetches historical dividend announcements for a ticker from Yahoo Finance events.
      */
     public Flux<DividendAnnouncement> fetchDividends(String ticker) {
-        String url = YAHOO_CHART_BASE + ticker + "?interval=1d&range=1y&events=div,split";
-        return webClient.get()
-                .uri(url)
-                .retrieve()
-                .bodyToMono(JsonNode.class)
-                .<DividendAnnouncement>flatMapMany(root -> {
-                    try {
-                        JsonNode result = root.path("chart").path("result").get(0);
-                        if (result == null) return Flux.<DividendAnnouncement>empty();
-                        JsonNode divNode = result.path("events").path("dividends");
-                        if (divNode.isMissingNode() || !divNode.isObject()) {
-                            return Flux.<DividendAnnouncement>empty();
-                        }
-
-                        List<DividendAnnouncement> dividends = new ArrayList<>();
-                        Iterator<Map.Entry<String, JsonNode>> fields = divNode.fields();
-                        while (fields.hasNext()) {
-                            Map.Entry<String, JsonNode> entry = fields.next();
-                            JsonNode item = entry.getValue();
-                            long epoch = item.path("date").asLong();
-                            LocalDateTime exDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.systemDefault());
-                            BigDecimal amount = BigDecimal.valueOf(item.path("amount").asDouble(0.0)).setScale(4, RoundingMode.HALF_UP);
-
-                            dividends.add(new DividendAnnouncement(
-                                    null, null, ticker, exDate, exDate.plusDays(30),
-                                    amount, TaxTag.DOMESTIC_54C
-                            ));
-                        }
-                        return Flux.fromIterable(dividends);
-                    } catch (Exception e) {
-                        log.error("Error parsing Yahoo dividends for '{}': {}", ticker, e.getMessage());
-                        return Flux.<DividendAnnouncement>empty();
-                    }
-                })
-                .onErrorResume(e -> {
-                    log.error("Error fetching Yahoo dividends for '{}': {}", ticker, e.getMessage(), e);
-                    return Flux.empty();
-                });
+        return fetchDividendsAndSplits(ticker).flatMapMany(res -> Flux.fromIterable(res.dividends()));
     }
 
     private BigDecimal parseBigDecimalSafe(JsonNode node) {

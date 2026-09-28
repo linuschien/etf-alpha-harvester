@@ -26,6 +26,7 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +34,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -70,6 +73,16 @@ class MarketDataSyncServiceTest {
         );
         when(watermarkRepository.findByFeedName(anyString())).thenReturn(Mono.empty());
         when(watermarkRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
+        when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.empty());
+        when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchDividendAnnouncements(anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchCorporateActions(anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchDividendsAndSplits(anyString())).thenCallRealMethod();
+        when(metadataRepository.findAll()).thenReturn(Flux.empty());
     }
 
     @Test
@@ -265,6 +278,57 @@ class MarketDataSyncServiceTest {
                     assertThat(res.message()).contains("安全暫停");
                     assertThat(res.gatekeeperReport()).isNotNull();
                     assertThat(res.gatekeeperReport().isPassed()).isFalse();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should skip dividends and splits synchronization when already synced in current month (Scope ALL)")
+    void shouldSkipDividendsAndSplitsWhenAlreadySyncedInCurrentMonth() {
+        LocalDateTime now = LocalDateTime.now();
+        DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_DIVIDENDS_AND_SPLITS,
+                now.minusDays(2), now.minusDays(2), 25, "SUCCESS", null, now.minusDays(2)
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_DIVIDENDS_AND_SPLITS))
+                .thenReturn(Mono.just(watermark));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    // Dividends and splits should be 0 because watermark indicates already synced this month
+                    assertThat(res.syncedRecords().dividendAnnouncementsCount()).isEqualTo(0);
+                    assertThat(res.syncedRecords().corporateActionsCount()).isEqualTo(0);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should execute dividends and splits synchronization unconditionally when scope is DIVIDENDS_AND_SPLITS")
+    void shouldExecuteDividendsAndSplitsWhenScopeExplicit() {
+        LocalDateTime now = LocalDateTime.now();
+        UUID id = UUID.randomUUID();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null, 1, now, now, null);
+        DividendAnnouncement div = new DividendAnnouncement(null, null, "0050", now.plusDays(5), now.plusDays(30), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C);
+        CorporateAction split = new CorporateAction(null, null, "0050", com.alphaharvester.domain.model.CorporateActionType.SPLIT, now, 4, 1);
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
+        when(externalMarketDataPort.fetchDividendAnnouncements("0050")).thenReturn(Flux.just(div));
+        when(externalMarketDataPort.fetchCorporateActions("0050")).thenReturn(Flux.just(split));
+        when(dividendRepository.findByTickerAndExDate(any(), any())).thenReturn(Mono.empty());
+        when(dividendRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(corporateActionRepository.findByTickerAndEffectiveDate(any(), any())).thenReturn(Mono.empty());
+        when(corporateActionRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.DIVIDENDS_AND_SPLITS, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().dividendAnnouncementsCount()).isEqualTo(1);
+                    assertThat(res.syncedRecords().corporateActionsCount()).isEqualTo(1);
                 })
                 .verifyComplete();
     }

@@ -1,5 +1,6 @@
 package com.alphaharvester.domain.math;
 
+import com.alphaharvester.domain.entity.CorporateAction;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 
 import java.math.BigDecimal;
@@ -20,6 +21,88 @@ public final class FinancialMetricsCalculator {
 
     public record AlignedReturns(List<Double> returnsA, List<Double> returnsB) {}
     public record CorrelationResult(double correlation, double rSquared) {}
+
+    /**
+     * Adjusts market daily quotes for historical stock splits.
+     * Pure function returning new quote instances with split-adjusted close prices
+     * without mutating raw quotes or touching persistent storage.
+     *
+     * Split formula for date t:
+     * P_adjusted(t) = P_raw(t) * Product_{s in Splits, effectiveDate_s > t} (splitFromShares / splitToShares)
+     */
+    public static List<MarketDailyQuote> adjustQuotesForSplits(List<MarketDailyQuote> quotes, List<CorporateAction> splits) {
+        if (quotes == null || quotes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (splits == null || splits.isEmpty()) {
+            return quotes;
+        }
+
+        List<CorporateAction> validSplits = splits.stream()
+                .filter(s -> s != null && s.getEffectiveDate() != null
+                        && s.getSplitFromShares() != null && s.getSplitToShares() != null
+                        && s.getSplitToShares() > 0)
+                .toList();
+
+        if (validSplits.isEmpty()) {
+            return quotes;
+        }
+
+        List<MarketDailyQuote> adjustedQuotes = new ArrayList<>(quotes.size());
+        for (MarketDailyQuote q : quotes) {
+            if (q == null || q.getTradeDate() == null || q.getClosePrice() == null) {
+                adjustedQuotes.add(q);
+                continue;
+            }
+
+            LocalDate tradeDate = q.getTradeDate().toLocalDate();
+            BigDecimal factor = BigDecimal.ONE;
+
+            for (CorporateAction s : validSplits) {
+                LocalDate splitDate = s.getEffectiveDate().toLocalDate();
+                // If quote is strictly before the split effective date, adjust its price
+                if (tradeDate.isBefore(splitDate)) {
+                    BigDecimal splitRatio = BigDecimal.valueOf(s.getSplitFromShares())
+                            .divide(BigDecimal.valueOf(s.getSplitToShares()), 8, RoundingMode.HALF_UP);
+                    factor = factor.multiply(splitRatio);
+                }
+            }
+
+            if (factor.compareTo(BigDecimal.ONE) == 0) {
+                adjustedQuotes.add(q);
+            } else {
+                BigDecimal adjClose = q.getClosePrice().multiply(factor).setScale(4, RoundingMode.HALF_UP);
+                BigDecimal adjOpen = (q.getOpenPrice() != null)
+                        ? q.getOpenPrice().multiply(factor).setScale(4, RoundingMode.HALF_UP)
+                        : null;
+                BigDecimal adjHigh = (q.getHighPrice() != null)
+                        ? q.getHighPrice().multiply(factor).setScale(4, RoundingMode.HALF_UP)
+                        : null;
+                BigDecimal adjLow = (q.getLowPrice() != null)
+                        ? q.getLowPrice().multiply(factor).setScale(4, RoundingMode.HALF_UP)
+                        : null;
+
+                MarketDailyQuote adjQuote = new MarketDailyQuote(
+                        q.getId(),
+                        q.getAssetId(),
+                        q.getBenchmarkId(),
+                        q.getTicker(),
+                        q.getTradeDate(),
+                        adjOpen,
+                        adjHigh,
+                        adjLow,
+                        adjClose,
+                        q.getVolumeShares(),
+                        q.getTradeValueTwd(),
+                        q.getNetAssetValue(),
+                        q.getDiscountPremiumPercentage()
+                );
+                adjustedQuotes.add(adjQuote);
+            }
+        }
+
+        return adjustedQuotes;
+    }
 
     /**
      * Calculates daily percentage returns from a sequence of daily quotes.

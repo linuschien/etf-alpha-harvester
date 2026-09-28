@@ -47,6 +47,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     private final DataFeedSyncWatermarkRepository watermarkRepository;
     private final GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
     private final ExternalMarketDataPort externalMarketDataPort;
+    private final CorporateActionRepository corporateActionRepository;
 
     @Autowired
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
@@ -56,7 +57,8 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                              @Autowired(required = false) DividendAnnouncementRepository dividendRepository,
                                              @Autowired(required = false) DataFeedSyncWatermarkRepository watermarkRepository,
                                              @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository,
-                                             @Autowired(required = false) ExternalMarketDataPort externalMarketDataPort) {
+                                             @Autowired(required = false) ExternalMarketDataPort externalMarketDataPort,
+                                             @Autowired(required = false) CorporateActionRepository corporateActionRepository) {
         this.metadataRepository = metadataRepository;
         this.scoreRepository = scoreRepository;
         this.quoteRepository = quoteRepository;
@@ -65,6 +67,18 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         this.watermarkRepository = watermarkRepository;
         this.pairwiseMatrixRepository = pairwiseMatrixRepository;
         this.externalMarketDataPort = externalMarketDataPort;
+        this.corporateActionRepository = corporateActionRepository;
+    }
+
+    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
+                                             GlobalAssetScoreRepository scoreRepository,
+                                             MarketDailyQuoteRepository quoteRepository,
+                                             DcaPopularityRankRepository dcaRankRepository,
+                                             DividendAnnouncementRepository dividendRepository,
+                                             DataFeedSyncWatermarkRepository watermarkRepository,
+                                             GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository,
+                                             ExternalMarketDataPort externalMarketDataPort) {
+        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository, externalMarketDataPort, null);
     }
 
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
@@ -74,7 +88,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                              DividendAnnouncementRepository dividendRepository,
                                              DataFeedSyncWatermarkRepository watermarkRepository,
                                              GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository) {
-        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository, null);
+        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository, null, null);
     }
 
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
@@ -174,15 +188,17 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                             prefetchBenchmarks(queryStartDateTime, cutoffDateTime),
                             prefetchDcaRanks(),
                             prefetchDividends(window365dStart.atStartOfDay(), cutoffDateTime),
-                            prefetchAumMap()
+                            prefetchAumMap(),
+                            prefetchCorporateActions(window365dStart.atStartOfDay(), cutoffDateTime)
                     ).flatMap(tuple -> {
                         Map<String, Map<LocalDate, Double>> benchmarkReturnsMap = tuple.getT1();
                         Map<String, Integer> dcaRankMap = tuple.getT2();
                         Map<String, List<DividendAnnouncement>> dividendMap = tuple.getT3();
                         Map<String, BigDecimal> aumMap = tuple.getT4();
+                        Map<String, List<CorporateAction>> corporateActionMap = tuple.getT5();
 
                         return runScoringAndOrthogonalization(
-                                assets, benchmarkReturnsMap, dcaRankMap, dividendMap, aumMap,
+                                assets, benchmarkReturnsMap, dcaRankMap, dividendMap, corporateActionMap, aumMap,
                                 evaluationDateTime, cutoffDateTime, queryStartDateTime,
                                 window365dStart, window90dStart, window30dStart
                         );
@@ -246,6 +262,24 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                 .defaultIfEmpty(Collections.emptyMap());
     }
 
+    private Mono<Map<String, List<CorporateAction>>> prefetchCorporateActions(LocalDateTime from, LocalDateTime to) {
+        if (corporateActionRepository == null) {
+            return Mono.just(Collections.emptyMap());
+        }
+        return corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(from, to)
+                .collectList()
+                .map(list -> {
+                    Map<String, List<CorporateAction>> map = new HashMap<>();
+                    for (CorporateAction ca : list) {
+                        if (ca.getTicker() != null) {
+                            map.computeIfAbsent(ca.getTicker(), k -> new ArrayList<>()).add(ca);
+                        }
+                    }
+                    return map;
+                })
+                .defaultIfEmpty(Collections.emptyMap());
+    }
+
     private record EvaluatedCandidate(
             GlobalAssetMetadata metadata,
             CandidateAssetClass targetClass,
@@ -267,6 +301,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             Map<String, Map<LocalDate, Double>> benchmarkReturnsMap,
             Map<String, Integer> dcaRankMap,
             Map<String, List<DividendAnnouncement>> dividendMap,
+            Map<String, List<CorporateAction>> corporateActionMap,
             Map<String, BigDecimal> aumMap,
             LocalDateTime evaluationDateTime, LocalDateTime cutoffDateTime, LocalDateTime queryStartDateTime,
             LocalDate window365dStart, LocalDate window90dStart, LocalDate window30dStart) {
@@ -280,14 +315,18 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     return quoteRepository.findByTickerOrderByTradeDateDesc(asset.getTicker())
                             .filter(q -> q.getTradeDate() != null && !q.getTradeDate().isBefore(queryStartDateTime) && !q.getTradeDate().isAfter(cutoffDateTime))
                             .collectList()
-                            .map(allQuotes -> {
+                            .map(rawQuotes -> {
                                 // Universal Gatekeeper 1: Listing age >= 365 calendar days
                                 if (asset.getListingDate() == null || asset.getListingDate().isAfter(cutoffDateTime.minusDays(365))) {
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
 
+                                // In-memory split adjustment to eliminate false price cliff drops
+                                List<CorporateAction> splits = corporateActionMap.getOrDefault(asset.getTicker(), Collections.emptyList());
+                                List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, splits);
+
                                 // Quotes in 365d window
-                                List<MarketDailyQuote> quotes365d = allQuotes.stream()
+                                List<MarketDailyQuote> quotes365d = adjustedQuotes.stream()
                                         .filter(q -> !q.getTradeDate().toLocalDate().isBefore(window365dStart) && !q.getTradeDate().toLocalDate().isAfter(cutoffDateTime.toLocalDate()))
                                         .sorted(Comparator.comparing(MarketDailyQuote::getTradeDate))
                                         .toList();
@@ -319,7 +358,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                 }
 
                                 // Daily returns in 365d
-                                Map<LocalDate, Double> dailyReturns365d = FinancialMetricsCalculator.calculateDailyReturns(allQuotes);
+                                Map<LocalDate, Double> dailyReturns365d = FinancialMetricsCalculator.calculateDailyReturns(adjustedQuotes);
 
                                 // Benchmark regressions
                                 double r2Twii = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^TWII"), 0);

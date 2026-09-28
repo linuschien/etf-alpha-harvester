@@ -70,7 +70,7 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
 
     @Override
     public Flux<MarketDailyQuote> fetchTaiwanEtfDailyQuotes(List<String> monitoredTickers) {
-        log.info("Fetching daily quotes for Taiwan ETFs from TWSE and TPEx with MIS NAV enrichment...");
+        log.info("Fetching daily quotes for Taiwan ETFs from TWSE and TPEx...");
         Flux<MarketDailyQuote> twseQuotes = twseClient.fetchTwseDailyQuotes();
         Flux<MarketDailyQuote> tpexQuotes = tpexClient.fetchTpexDailyQuotes();
         Flux<MarketDailyQuote> primaryQuotes = Flux.concat(twseQuotes, tpexQuotes);
@@ -97,23 +97,13 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
             return Mono.just(List.of());
         });
 
-        Flux<MarketDailyQuote> mergedQuotes = primaryListMono
+        return primaryListMono
                 .flatMapMany(primaryList -> fallbackQuotesMono.flatMapMany(fallbackList ->
                         Flux.concat(
                                 Flux.fromIterable(primaryList),
                                 Flux.fromIterable(fallbackList)
                         )
                 ));
-
-        return twseClient.fetchMisNavData()
-                .flatMapMany(navMap -> mergedQuotes.map(quote -> {
-                    if (navMap.containsKey(quote.getTicker())) {
-                        var nav = navMap.get(quote.getTicker());
-                        quote.setNetAssetValue(nav.nav());
-                        quote.setDiscountPremiumPercentage(nav.discountPremiumPct());
-                    }
-                    return quote;
-                }));
     }
 
     @Override
@@ -175,5 +165,11 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     public Flux<CorporateAction> fetchCorporateActions(String ticker) {
         log.info("Fetching real stock splits from Yahoo Finance for '{}'...", ticker);
         return yahooFinanceClient.fetchSplits(ticker);
+    }
+
+    @Override
+    public Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker) {
+        log.info("Fetching real dividend history and stock splits concurrently from Yahoo Finance for '{}'...", ticker);
+        return yahooFinanceClient.fetchDividendsAndSplits(ticker);
     }
 }
