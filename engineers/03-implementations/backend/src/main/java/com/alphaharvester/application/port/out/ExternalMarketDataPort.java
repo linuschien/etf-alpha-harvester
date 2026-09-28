@@ -9,9 +9,17 @@ import java.util.List;
 public interface ExternalMarketDataPort {
 
     /**
-     * Fetches ETF master universe metadata from TWSE OpenAPI.
+     * Fetches ETF master universe metadata from TWSE OpenAPI and TPEx OpenData.
      */
     Flux<GlobalAssetMetadata> fetchEtfMasterUniverse();
+
+    /**
+     * Fetches current AUM (in TWD) for Taiwan ETFs based on outstanding units and NAV.
+     * Used dynamically when calculating monthly Top List rankings.
+     */
+    default Mono<java.util.Map<String, java.math.BigDecimal>> fetchCurrentAumMap() {
+        return Mono.just(java.util.Map.of());
+    }
 
     /**
      * Fetches daily market closing quotes for TWSE & TPEx ETFs and Yahoo Finance benchmarks.

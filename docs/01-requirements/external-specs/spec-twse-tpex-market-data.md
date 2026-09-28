@@ -24,7 +24,7 @@ This specification defines the integration interfaces for Taiwan Stock Exchange 
 * **URL**: `https://openapi.twse.com.tw/v1/opendata/t187ap47_L`
 * **Method**: `GET`
 * **Headers**: `Accept: application/json`, `User-Agent: Mozilla/5.0`
-* **Update Frequency**: Daily (Post-market)
+* **Update Frequency**: Monthly / Post-market
 * **Live Probe Result**: HTTP 200 (271 active fund/ETF records verified)
 
 #### Response Schema (Key Fields)
@@ -49,14 +49,40 @@ This specification defines the integration interfaces for Taiwan Stock Exchange 
 #### Field Mapping Table
 | Upstream Field | Target Database Column | Data Type | Transformation / Parsing Rule |
 | :--- | :--- | :--- | :--- |
-| `基金代號` | `global_securities.symbol` | `VARCHAR(16)` | Primary Key / Symbol Code (e.g. `0050`, `006208`) |
-| `基金簡稱` | `global_securities.short_name` | `VARCHAR(64)` | UTF-8 String |
-| `基金中文名稱` | `global_securities.full_name` | `VARCHAR(255)` | UTF-8 String |
-| `基金類型` | `global_securities.fund_type` | `VARCHAR(64)` | Classification (Equity, Bond, Active, Commodity) |
-| `標的指數/追蹤指數名稱` | `global_securities.benchmark_index`| `VARCHAR(128)`| Tracked benchmark name |
-| `上市日期` | `global_securities.listing_date` | `DATE` | ROC Year Conversion (`0920630` $\to$ `2003-06-30`, `1150409` $\to$ `2026-04-09`) |
-| `成立日期` | `global_securities.inception_date`| `DATE` | ROC Year Conversion (`0920625` $\to$ `2003-06-25`) |
-| `發行單位數/轉換數` | `global_securities.shares_outstanding`| `BIGINT` | Clean numeric string (remove commas, cast to integer) |
+| `基金代號` | `global_asset_metadata.ticker` | `VARCHAR(32)` | Primary Key / Symbol Code (e.g. `0050`, `006208`) |
+| `基金簡稱` | `global_asset_metadata.name` | `VARCHAR(255)` | Short or full name |
+| `基金中文名稱` | `global_asset_metadata.name` | `VARCHAR(255)` | UTF-8 Full descriptive name |
+| `標的指數/追蹤指數名稱` | `global_asset_metadata.underlying_index`| `VARCHAR(255)`| Tracked benchmark name |
+| `上市日期` | `global_asset_metadata.listing_date` | `TIMESTAMP` | ROC Date Conversion (`0920630` $\to$ `2003-06-30`) |
+| Derived | `global_asset_metadata.fund_size_twd` | `DECIMAL(18,2)` | Nullable in metadata. AUM is evaluated dynamically during monthly Top List calculation and persisted to `global_asset_score.fund_size_twd`. |
+
+---
+
+### 2.1b TPEx ETF Master Universe & Metadata (OTC Market)
+
+* **Source**: MOPS / TPEx Open Data
+* **URL**: `https://mopsfin.twse.com.tw/opendata/t187ap47_O.csv`
+* **Method**: `GET`
+* **Headers**: `Accept: text/csv`, `User-Agent: Mozilla/5.0`
+* **Update Frequency**: Monthly / Post-market
+* **Live Probe Result**: HTTP 200 (154 active TPEx ETF records verified, e.g. `00679B`, `00720B`, `00687B`)
+
+#### Response Schema (Sample Row)
+```csv
+"出表日期","基金代號","基金簡稱","基金類型","基金中文名稱","基金英文名稱","標的指數/追蹤指數名稱","成立日期","上市日期","發行單位數/轉換數",...
+"1150927","00679B","元大美債20年","境外指數股票型基金","元大美國政府20年期(以上)債券ETF傘型證券投資信託基金之元大美國政府20年期(以上)債券證券投資信託基金","Yuanta U.S. Treasury 20+ Year Bond ETF","ICE美國政府20+年期債券指數","1060111","1060117","6174692000",...
+```
+
+#### Field Mapping Table
+| Upstream Field | Target Database Column | Data Type | Transformation / Parsing Rule |
+| :--- | :--- | :--- | :--- |
+| `基金代號` | `global_asset_metadata.ticker` | `VARCHAR(32)` | Symbol Code (e.g. `00679B`, `00720B`) |
+| `基金中文名稱` | `global_asset_metadata.name` | `VARCHAR(255)` | UTF-8 Full descriptive name |
+| `標的指數/追蹤指數名稱` | `global_asset_metadata.underlying_index`| `VARCHAR(255)`| Tracked benchmark name (e.g. `ICE美國政府20+年期債券指數`) |
+| `上市日期` | `global_asset_metadata.listing_date` | `TIMESTAMP` | Authentic ROC Date Conversion (`1060117` $\to$ `2017-01-17`). No fallback or default dates permitted! |
+| `發行單位數/轉換數` | - | `BIGINT` | Used in monthly Top List AUM calculation. |
+
+---
 
 ---
 

@@ -47,85 +47,35 @@ public class TwseMarketDataClient {
     }
 
     /**
-     * Fetches all listed ETF metadata from TWSE OpenAPI and enriches with TPEx OTC ETFs from MIS.
+     * Fetches all TWSE listed ETF metadata from TWSE OpenAPI.
      * Enforces Stage 0 regex short-circuit blocking: filters out U, L, R, A, and 02 ETNs.
+     * Listing dates are parsed directly from authentic TWSE records.
+     * Fund size (AUM) is nullable and evaluated dynamically during monthly Top List calculation.
      */
     public Flux<GlobalAssetMetadata> fetchEtfMasterUniverse() {
         LocalDateTime now = LocalDateTime.now();
-        return fetchMisNavData()
-                .defaultIfEmpty(Map.of())
-                .flatMapMany(navMap -> webClient.get()
-                        .uri(TWSE_MASTER_URL)
-                        .retrieve()
-                        .bodyToFlux(JsonNode.class)
-                        .map(node -> {
-                            String ticker = node.path("基金代號").asText("").trim();
-                            String shortName = node.path("基金簡稱").asText("").trim();
-                            String fullName = node.path("基金中文名稱").asText(shortName).trim();
-                            String underlyingIndex = node.path("標的指數/追蹤指數名稱").asText("").trim();
-                            String listingDateStr = node.path("上市日期").asText("");
-                            LocalDateTime listingDate = RocDateUtil.parseRocDate(listingDateStr);
+        return webClient.get()
+                .uri(TWSE_MASTER_URL)
+                .retrieve()
+                .bodyToFlux(JsonNode.class)
+                .map(node -> {
+                    String ticker = node.path("基金代號").asText("").trim();
+                    String shortName = node.path("基金簡稱").asText("").trim();
+                    String fullName = node.path("基金中文名稱").asText(shortName).trim();
+                    String underlyingIndex = node.path("標的指數/追蹤指數名稱").asText("").trim();
+                    String listingDateStr = node.path("上市日期").asText("");
+                    LocalDateTime listingDate = RocDateUtil.parseRocDate(listingDateStr);
 
-                            long masterShares = parseLongSafe(node.path("發行單位數/轉換數").asText("0"));
-                            NavSnapshot navSnap = navMap.get(ticker);
-                            BigDecimal fundSize = null;
-                            if (navSnap != null && navSnap.nav() != null && navSnap.sharesOutstanding() > 0) {
-                                fundSize = navSnap.nav().multiply(BigDecimal.valueOf(navSnap.sharesOutstanding())).setScale(2, RoundingMode.HALF_UP);
-                            } else if (navSnap != null && navSnap.nav() != null && masterShares > 0) {
-                                fundSize = navSnap.nav().multiply(BigDecimal.valueOf(masterShares)).setScale(2, RoundingMode.HALF_UP);
-                            }
+                    CandidateAssetClass assetClass = classifyAsset(ticker, shortName);
+                    DistributionFrequency frequency = DistributionFrequency.NONE;
 
-                            CandidateAssetClass assetClass = classifyAsset(ticker, shortName);
-                            DistributionFrequency frequency = DistributionFrequency.NONE;
-
-                            return new GlobalAssetMetadata(
-                                    null, ticker, fullName, listingDate, underlyingIndex,
-                                    fundSize, assetClass, frequency,
-                                    1, now, now, null
-                            );
-                        })
-                        .filter(asset -> !asset.getTicker().isBlank())
-                        .collectList()
-                        .flatMapMany(twseList -> {
-                            List<GlobalAssetMetadata> combined = new ArrayList<>();
-                            Set<String> seenTickers = new HashSet<>();
-
-                            // 1. Add TWSE listed ETFs passing Stage 0
-                            for (GlobalAssetMetadata m : twseList) {
-                                if (!STAGE_0_BLOCKING_PATTERN.matcher(m.getTicker()).matches()) {
-                                    combined.add(m);
-                                    seenTickers.add(m.getTicker());
-                                }
-                            }
-
-                            // 2. Enrich with TPEx (OTC) ETFs from MIS NAV snapshot (e.g. 00679B, 00720B)
-                            for (Map.Entry<String, NavSnapshot> entry : navMap.entrySet()) {
-                                String symbol = entry.getKey();
-                                NavSnapshot snap = entry.getValue();
-                                if (!seenTickers.contains(symbol)
-                                        && !STAGE_0_BLOCKING_PATTERN.matcher(symbol).matches()
-                                        && (symbol.startsWith("00") || symbol.endsWith("B"))) {
-                                    BigDecimal aum = null;
-                                    if (snap.nav() != null && snap.sharesOutstanding() > 0) {
-                                        aum = snap.nav().multiply(BigDecimal.valueOf(snap.sharesOutstanding())).setScale(2, RoundingMode.HALF_UP);
-                                    }
-                                    CandidateAssetClass assetClass = classifyAsset(symbol, snap.name());
-                                    // Default listing date to 3 years ago if unknown to avoid unfair elimination
-                                    LocalDateTime defaultListingDate = now.minusYears(3);
-
-                                    GlobalAssetMetadata otcAsset = new GlobalAssetMetadata(
-                                            null, symbol, snap.name(), defaultListingDate, snap.name(),
-                                            aum, assetClass, DistributionFrequency.NONE,
-                                            1, now, now, null
-                                    );
-                                    combined.add(otcAsset);
-                                    seenTickers.add(symbol);
-                                }
-                            }
-
-                            log.info("Total ETF master universe compiled: {} prototype ETFs after Stage 0 filter.", combined.size());
-                            return Flux.fromIterable(combined);
-                        }))
+                    return new GlobalAssetMetadata(
+                            null, ticker, fullName, listingDate, underlyingIndex,
+                            null, assetClass, frequency,
+                            1, now, now, null
+                    );
+                })
+                .filter(asset -> !asset.getTicker().isBlank() && !STAGE_0_BLOCKING_PATTERN.matcher(asset.getTicker()).matches())
                 .onErrorResume(e -> {
                     log.error("Failed to fetch TWSE ETF master universe: {}", e.getMessage(), e);
                     return Flux.empty();

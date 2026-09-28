@@ -41,8 +41,31 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
 
     @Override
     public Flux<GlobalAssetMetadata> fetchEtfMasterUniverse() {
-        log.info("Fetching real ETF master universe from TWSE OpenAPI...");
-        return twseClient.fetchEtfMasterUniverse();
+        log.info("Fetching real ETF master universe from TWSE OpenAPI and TPEx OpenData...");
+        return Flux.concat(
+                twseClient.fetchEtfMasterUniverse(),
+                tpexClient.fetchTpexEtfMasterUniverse()
+        );
+    }
+
+    @Override
+    public Mono<java.util.Map<String, java.math.BigDecimal>> fetchCurrentAumMap() {
+        log.info("Fetching current AUM map from TWSE MIS for monthly Top List evaluation...");
+        return twseClient.fetchMisNavData()
+                .map(navMap -> {
+                    java.util.Map<String, java.math.BigDecimal> aumMap = new java.util.HashMap<>();
+                    for (var entry : navMap.entrySet()) {
+                        var snap = entry.getValue();
+                        if (snap != null && snap.nav() != null && snap.sharesOutstanding() > 0) {
+                            java.math.BigDecimal aum = snap.nav()
+                                    .multiply(java.math.BigDecimal.valueOf(snap.sharesOutstanding()))
+                                    .setScale(2, java.math.RoundingMode.HALF_UP);
+                            aumMap.put(entry.getKey(), aum);
+                        }
+                    }
+                    return aumMap;
+                })
+                .defaultIfEmpty(java.util.Map.of());
     }
 
     @Override

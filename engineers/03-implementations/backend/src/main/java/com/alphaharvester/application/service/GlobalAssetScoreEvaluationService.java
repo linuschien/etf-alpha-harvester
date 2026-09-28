@@ -3,6 +3,7 @@ package com.alphaharvester.application.service;
 import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.port.in.GlobalAssetScoreEvaluationUseCase;
+import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.domain.entity.*;
 import com.alphaharvester.domain.math.FinancialMetricsCalculator;
 import com.alphaharvester.domain.model.CandidateAssetClass;
@@ -45,6 +46,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     private final DividendAnnouncementRepository dividendRepository;
     private final DataFeedSyncWatermarkRepository watermarkRepository;
     private final GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
+    private final ExternalMarketDataPort externalMarketDataPort;
 
     @Autowired
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
@@ -53,7 +55,8 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                              @Autowired(required = false) DcaPopularityRankRepository dcaRankRepository,
                                              @Autowired(required = false) DividendAnnouncementRepository dividendRepository,
                                              @Autowired(required = false) DataFeedSyncWatermarkRepository watermarkRepository,
-                                             @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository) {
+                                             @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository,
+                                             @Autowired(required = false) ExternalMarketDataPort externalMarketDataPort) {
         this.metadataRepository = metadataRepository;
         this.scoreRepository = scoreRepository;
         this.quoteRepository = quoteRepository;
@@ -61,6 +64,17 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         this.dividendRepository = dividendRepository;
         this.watermarkRepository = watermarkRepository;
         this.pairwiseMatrixRepository = pairwiseMatrixRepository;
+        this.externalMarketDataPort = externalMarketDataPort;
+    }
+
+    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
+                                             GlobalAssetScoreRepository scoreRepository,
+                                             MarketDailyQuoteRepository quoteRepository,
+                                             DcaPopularityRankRepository dcaRankRepository,
+                                             DividendAnnouncementRepository dividendRepository,
+                                             DataFeedSyncWatermarkRepository watermarkRepository,
+                                             GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository) {
+        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository, null);
     }
 
     public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
@@ -159,19 +173,28 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     return Mono.zip(
                             prefetchBenchmarks(queryStartDateTime, cutoffDateTime),
                             prefetchDcaRanks(),
-                            prefetchDividends(window365dStart.atStartOfDay(), cutoffDateTime)
+                            prefetchDividends(window365dStart.atStartOfDay(), cutoffDateTime),
+                            prefetchAumMap()
                     ).flatMap(tuple -> {
                         Map<String, Map<LocalDate, Double>> benchmarkReturnsMap = tuple.getT1();
                         Map<String, Integer> dcaRankMap = tuple.getT2();
                         Map<String, List<DividendAnnouncement>> dividendMap = tuple.getT3();
+                        Map<String, BigDecimal> aumMap = tuple.getT4();
 
                         return runScoringAndOrthogonalization(
-                                assets, benchmarkReturnsMap, dcaRankMap, dividendMap,
+                                assets, benchmarkReturnsMap, dcaRankMap, dividendMap, aumMap,
                                 evaluationDateTime, cutoffDateTime, queryStartDateTime,
                                 window365dStart, window90dStart, window30dStart
                         );
                     });
                 });
+    }
+
+    private Mono<Map<String, BigDecimal>> prefetchAumMap() {
+        if (externalMarketDataPort != null) {
+            return externalMarketDataPort.fetchCurrentAumMap().defaultIfEmpty(Collections.emptyMap());
+        }
+        return Mono.just(Collections.emptyMap());
     }
 
     private Mono<Map<String, Map<LocalDate, Double>>> prefetchBenchmarks(LocalDateTime from, LocalDateTime to) {
@@ -235,7 +258,8 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             double sharpe,
             double vol90d,
             double ytm,
-            Integer dcaRank
+            Integer dcaRank,
+            BigDecimal currentAum
     ) {}
 
     private Mono<GlobalAssetScoreEvaluationResponse> runScoringAndOrthogonalization(
@@ -243,6 +267,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             Map<String, Map<LocalDate, Double>> benchmarkReturnsMap,
             Map<String, Integer> dcaRankMap,
             Map<String, List<DividendAnnouncement>> dividendMap,
+            Map<String, BigDecimal> aumMap,
             LocalDateTime evaluationDateTime, LocalDateTime cutoffDateTime, LocalDateTime queryStartDateTime,
             LocalDate window365dStart, LocalDate window90dStart, LocalDate window30dStart) {
 
@@ -273,7 +298,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                 }
 
                                 // Universal Gatekeeper 2: Latest AUM >= 20 億 TWD
-                                if (asset.getFundSizeTwd() == null || asset.getFundSizeTwd().compareTo(UNIVERSAL_MIN_AUM) < 0) {
+                                BigDecimal currentAum = aumMap.get(asset.getTicker());
+                                if (currentAum == null) {
+                                    currentAum = asset.getFundSizeTwd();
+                                }
+                                if (currentAum == null || currentAum.compareTo(UNIVERSAL_MIN_AUM) < 0) {
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
 
@@ -310,14 +339,14 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                     // Qualified for Core Pool
                                     return Optional.of(new EvaluatedCandidate(
                                             asset, CandidateAssetClass.CORE, quotes365d, dailyReturns365d,
-                                            maxR2, r2Twii, 0.0, 0.0, 0.0, 0.0, 0.0, dcaRank
+                                            maxR2, r2Twii, 0.0, 0.0, 0.0, 0.0, 0.0, dcaRank, currentAum
                                     ));
                                 } else if (isBond) {
                                     // Qualified for Defensive Bond Pool
                                     double ytm = calculateDividendYield(asset, quotes365d, dividendMap.get(asset.getTicker()), cutoffDateTime);
                                     return Optional.of(new EvaluatedCandidate(
                                             asset, CandidateAssetClass.DEFENSIVE, quotes365d, dailyReturns365d,
-                                            maxR2, r2Twii, 0.0, 0.0, 0.0, 0.0, ytm, dcaRank
+                                            maxR2, r2Twii, 0.0, 0.0, 0.0, 0.0, ytm, dcaRank, currentAum
                                     ));
                                 } else {
                                     // Check Satellite Gates
@@ -346,7 +375,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
                                     return Optional.of(new EvaluatedCandidate(
                                             asset, CandidateAssetClass.SATELLITE, quotes365d, dailyReturns365d,
-                                            maxR2, r2Twii, mom121, ker, sharpe, vol90d, 0.0, dcaRank
+                                            maxR2, r2Twii, mom121, ker, sharpe, vol90d, 0.0, dcaRank, currentAum
                                     ));
                                 }
                             });
@@ -460,7 +489,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
         Map<EvaluatedCandidate, Double> r2Ranks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, EvaluatedCandidate::maxR2, true);
         Map<EvaluatedCandidate, Double> dcaRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, c -> (c.dcaRank() != null && c.dcaRank() <= 20) ? (21 - c.dcaRank()) : 0.0, true);
-        Map<EvaluatedCandidate, Double> aumRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, c -> c.metadata().getFundSizeTwd() != null ? c.metadata().getFundSizeTwd().doubleValue() : 0.0, true);
+        Map<EvaluatedCandidate, Double> aumRanks = FinancialMetricsCalculator.calculatePercentileRanks(
+                candidates,
+                c -> (c.currentAum() != null ? c.currentAum().doubleValue() : (c.metadata().getFundSizeTwd() != null ? c.metadata().getFundSizeTwd().doubleValue() : 0.0)),
+                true
+        );
 
         List<GlobalAssetScore> scores = new ArrayList<>();
         for (EvaluatedCandidate c : candidates) {
@@ -477,7 +510,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             score.setEvaluationDate(evaluationDateTime);
             score.setAssetClass(CandidateAssetClass.CORE);
             score.setCompositeScore(BigDecimal.valueOf(composite).setScale(2, RoundingMode.HALF_UP));
-            score.setFundSizeTwd(c.metadata().getFundSizeTwd());
+            score.setFundSizeTwd(c.currentAum() != null ? c.currentAum() : c.metadata().getFundSizeTwd());
             score.setRSquared(BigDecimal.valueOf(c.maxR2()).setScale(4, RoundingMode.HALF_UP));
             score.setDcaRank(c.dcaRank());
             scores.add(score);
@@ -514,7 +547,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             score.setEvaluationDate(evaluationDateTime);
             score.setAssetClass(CandidateAssetClass.SATELLITE);
             score.setCompositeScore(BigDecimal.valueOf(composite).setScale(2, RoundingMode.HALF_UP));
-            score.setFundSizeTwd(c.metadata().getFundSizeTwd());
+            score.setFundSizeTwd(c.currentAum() != null ? c.currentAum() : c.metadata().getFundSizeTwd());
             score.setRSquared(BigDecimal.valueOf(c.r2Taiex()).setScale(4, RoundingMode.HALF_UP));
             score.setMomentum121(BigDecimal.valueOf(c.mom121()).setScale(4, RoundingMode.HALF_UP));
             score.setKaufmanEr(BigDecimal.valueOf(c.ker()).setScale(4, RoundingMode.HALF_UP));
@@ -535,7 +568,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         if (candidates.isEmpty()) return Collections.emptyList();
 
         Map<EvaluatedCandidate, Double> ytmRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, EvaluatedCandidate::ytm, true);
-        Map<EvaluatedCandidate, Double> aumRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, c -> c.metadata().getFundSizeTwd() != null ? c.metadata().getFundSizeTwd().doubleValue() : 0.0, true);
+        Map<EvaluatedCandidate, Double> aumRanks = FinancialMetricsCalculator.calculatePercentileRanks(
+                candidates,
+                c -> (c.currentAum() != null ? c.currentAum().doubleValue() : (c.metadata().getFundSizeTwd() != null ? c.metadata().getFundSizeTwd().doubleValue() : 0.0)),
+                true
+        );
 
         List<GlobalAssetScore> scores = new ArrayList<>();
         for (EvaluatedCandidate c : candidates) {
@@ -551,7 +588,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             score.setEvaluationDate(evaluationDateTime);
             score.setAssetClass(CandidateAssetClass.DEFENSIVE);
             score.setCompositeScore(BigDecimal.valueOf(composite).setScale(2, RoundingMode.HALF_UP));
-            score.setFundSizeTwd(c.metadata().getFundSizeTwd());
+            score.setFundSizeTwd(c.currentAum() != null ? c.currentAum() : c.metadata().getFundSizeTwd());
             score.setYtm(BigDecimal.valueOf(c.ytm()).setScale(4, RoundingMode.HALF_UP));
             scores.add(score);
         }
@@ -724,13 +761,24 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                           double trackingR2,
                                           Integer dcaRank,
                                           List<DividendAnnouncement> dividends) {
+        return evaluateAsset(asset, evaluationDate, quotes, trackingR2, dcaRank, dividends, null);
+    }
+
+    public GlobalAssetScore evaluateAsset(GlobalAssetMetadata asset,
+                                          LocalDateTime evaluationDate,
+                                          List<MarketDailyQuote> quotes,
+                                          double trackingR2,
+                                          Integer dcaRank,
+                                          List<DividendAnnouncement> dividends,
+                                          BigDecimal currentAum) {
         boolean isQualified = true;
         String reason = null;
 
-        double aum = asset != null && asset.getFundSizeTwd() != null ? asset.getFundSizeTwd().doubleValue() : 0.0;
+        BigDecimal effectiveAum = currentAum != null ? currentAum : (asset != null ? asset.getFundSizeTwd() : null);
+        double aum = effectiveAum != null ? effectiveAum.doubleValue() : 0.0;
         String ticker = (asset != null && asset.getTicker() != null) ? asset.getTicker().toUpperCase() : "";
 
-        if (asset == null || asset.getFundSizeTwd() == null || asset.getFundSizeTwd().compareTo(BigDecimal.ZERO) <= 0) {
+        if (effectiveAum == null || effectiveAum.compareTo(BigDecimal.ZERO) <= 0) {
             isQualified = false;
             reason = "資產規模 (AUM) 缺失或為非正數，無法確認規模門檻";
         }
@@ -840,7 +888,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         scoreEntity.setEvaluationDate(evaluationDate);
         scoreEntity.setAssetClass(asset.getAssetClass());
         scoreEntity.setCompositeScore(finalScore);
-        scoreEntity.setFundSizeTwd(asset.getFundSizeTwd());
+        scoreEntity.setFundSizeTwd(effectiveAum);
         scoreEntity.setRSquared(BigDecimal.valueOf(trackingR2).setScale(4, RoundingMode.HALF_UP));
         scoreEntity.setDcaRank(dcaRank);
         scoreEntity.setOrthogonalStatus(OrthogonalStatus.ACCEPTED);

@@ -43,18 +43,40 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
-    @DisplayName("Should delegate fetchEtfMasterUniverse to TwseMarketDataClient")
-    void shouldDelegateFetchEtfMasterUniverse() {
-        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+    @DisplayName("Should merge ETF master universe from both TWSE and TPEx clients")
+    void shouldMergeEtfMasterUniverseFromTwseAndTpex() {
+        GlobalAssetMetadata twseAsset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", LocalDateTime.now(),
                 "臺灣50指數",
-                new BigDecimal("420000000000"), CandidateAssetClass.CORE,
+                null, CandidateAssetClass.CORE,
                 DistributionFrequency.SEMI_ANNUAL, 1, LocalDateTime.now(), LocalDateTime.now(), null
         );
-        when(twseClient.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset));
+        GlobalAssetMetadata tpexAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00679B", "元大美債20年", LocalDateTime.now(),
+                "ICE美國政府20+年期債券指數",
+                null, CandidateAssetClass.DEFENSIVE,
+                DistributionFrequency.QUARTERLY, 1, LocalDateTime.now(), LocalDateTime.now(), null
+        );
+        when(twseClient.fetchEtfMasterUniverse()).thenReturn(Flux.just(twseAsset));
+        when(tpexClient.fetchTpexEtfMasterUniverse()).thenReturn(Flux.just(tpexAsset));
 
         StepVerifier.create(adapter.fetchEtfMasterUniverse())
                 .assertNext(res -> assertThat(res.getTicker()).isEqualTo("0050"))
+                .assertNext(res -> assertThat(res.getTicker()).isEqualTo("00679B"))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should fetch current AUM map derived from MIS NAV and shares outstanding")
+    void shouldFetchCurrentAumMap() {
+        TwseMarketDataClient.NavSnapshot snap50 = new TwseMarketDataClient.NavSnapshot("元大台灣50", new BigDecimal("185.00"), BigDecimal.ZERO, 2000000000L);
+        when(twseClient.fetchMisNavData()).thenReturn(Mono.just(Map.of("0050", snap50)));
+
+        StepVerifier.create(adapter.fetchCurrentAumMap())
+                .assertNext(map -> {
+                    assertThat(map).containsKey("0050");
+                    assertThat(map.get("0050")).isEqualByComparingTo(new BigDecimal("370000000000.00"));
+                })
                 .verifyComplete();
     }
 
