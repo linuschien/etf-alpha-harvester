@@ -1,68 +1,106 @@
 # US-G02 模組：全域標的治理與多因子排名 (Global Universe & Factor Ranking Engine)
 
 ## 背景 (Background)
-本模組為 AlphaHarvester 系統全域層（Global Services）之選品核心。投資的成功首先取決於資產池的品質，拒絕劣質、高內扣費用、流動性匱乏或每日槓桿耗損的標的。
+本模組為 AlphaHarvester 系統全域層（Global Services）之選品與正交去共線核心。投資的成功首先取決於資產池的品質，拒絕劣質、高內扣費用、流動性匱乏或相互共線踩踏的標的。
 
-本模組落實**「月度狀態感知 (Monthly State Refresh) ＋ 半年度決策執行 (Semi-Annual Decision Execution)」**架構：
-1. **每月 15 日（配合證交所定期定額排行公告）**：系統自動刷新全市場標的分類（核心/衛星/債券/排除），並對新上市滿 30 個交易日（高斯中心極限定理 $N \ge 30$）之新標的執行「快速通道 (Fast-Track)」篩選，即時更新戰情室客觀候選池；
-2. **每半年（6/30 與 12/31 收盤後）**：正式鎖定多因子總排名，驅動個人投組層 (P-01, P-02) 進行 1.4N 緩衝換倉與工單求解，兼顧市場新陳代謝敏銳度與低交易摩擦。
+本模組嚴格落實**「四階段篩選與評分體系 (Stage 0 ~ Stage 3)」**與**「月度狀態感知 (Monthly State Refresh) ＋ 半年度決策執行 (Semi-Annual Decision Execution)」**架構：
+1. **每月 15 日（配合證交所定期定額排行公告）**：系統自動刷新全市場標的門禁審查（Stage 1）、多因子百分位連續打分（Stage 2）、兩兩正交矩陣計算與貪婪正交去共線（Stage 3），即時更新戰情室客觀候選池；
+2. **每半年（6/30 與 12/31 收盤後）**：正式鎖定多因子總排名與正交結果，驅動個人投組層 (P-01, P-02) 進行 1.4N 緩衝換倉與工單求解，兼顧市場新陳代謝敏銳度與低交易摩擦。
 
 ---
 
-### US-G02-01：三大資產層級硬約束全域自動過濾 (一視同仁統一硬約束)
+## US-G02-01：Stage 1 動態數值門禁與池間互斥分流 (Universal Gatekeepers & Mutual Exclusivity)
 
 **身份**：量化評審引擎 (Quantitative Screening Engine)
 
 > **As a** 量化評審引擎，  
-> **I want to** 對全市場候選 ETF 施加統一的硬約束條件（Hard Constraints），  
-> **So that** 系統能自動過濾次級標的，所有標的一視同仁憑客觀規模與流動性達標通過審查，無需特規通道。
+> **I want to** 對通過 Stage 0 靜態正則阻斷的原型 ETF 施加全域通用硬性門禁與專屬類別互斥分流，  
+> **So that** 系統能自動剔除年資不足、規模過小、流動性匱乏與動能下行的次級標的，且落實核心與衛星池間嚴格互斥，防止風格漂移。
 
 ### 驗收條件 (Acceptance Criteria)
-- **AC1 (核心大盤 Core 判定基準與硬約束)**：
-  - **判定基準**：近 30 交易日走勢回歸與三大市場指數 (TAIEX, S&P 500, NASDAQ) 之決定係數 $R^2 \ge 0.95$ 作為跟蹤大盤的分類判定依據（非硬約束）。
-  - **硬約束條件**：
-    1. 規模門檻：最新規模 $\text{AUM} \ge 100$ 億 TWD。
-  - **淘汰規則**：未通過硬約束即判定不合格淘汰，不進入多因子評分與組內排名，**絕不寫入 `global_asset_score` 資料表**。
-- **AC2 (動能衛星 Satellite 硬約束過濾)**：
-  - 聚焦特定高成長產業、關鍵資源或特定利基主題。
-  - **規模門檻**：最新規模 $\text{AUM} \ge 20$ 億 TWD。
-  - **日均成交金額**：滾動 30 個交易日平均成交金額 $\ge 2,000$ 萬 TWD。
-  - 滾動實現年化波動度 $\sigma \ge 18\%$（具備足夠的夏農波動收割空間）。
-  - **淘汰規則**：未通過硬約束即判定不合格淘汰，不進入評分排名，**絕不寫入 `global_asset_score` 資料表**。
-- **AC3 (防禦債券 Defensive 硬約束過濾)**：
-  - 標的必須為**現券型**投資級公司債或中天期公債 ETF（如 00720B、00725B 等）。
-  - **規模門檻**：最新規模 $\text{AUM} \ge 50$ 億 TWD。
-  - **嚴格無槓桿與反向約束**：槓桿倍數必須嚴格 $= 1.0\times$；標的代碼結尾為 `L` 或 `R` 者判定為槓桿或反向型標的直接淘汰。
-  - **淘汰規則**：未通過硬約束即判定不合格淘汰，不進入評分排名，**絕不寫入 `global_asset_score` 資料表**。
-- **AC4 (核心標的永久豁免條款)**：符合核心大盤之標的，系統永久禁止生成主動全額清倉出清指令。
+- **AC1 (全局通用硬性門禁 - 通用於所有候選標的)**：
+  通過 Stage 0 之原型標的必須同時滿足以下 3 項通用門禁，違者一票否決短路淘汰，不予評分，不寫入 `GlobalAssetScore`：
+  1. **歷史資料長度充足**：掛牌上市 $\ge 365$ 個日曆天（滿 1 年），且近 365 個日曆天內有效交易日數 $N \ge 220$ 天。
+  2. **最新資產規模充足**：最新動態規模 $\text{AUM} = \text{發行單位數} \times \text{最新 NAV} \ge 20$ 億 TWD。
+  3. **次級市場流動性充足**：近 30 個日曆天平均日成交金額 $\ge 2,000$ 萬 TWD。
+- **AC2 (核心大盤池專屬分流門禁與池間互斥鐵律)**：
+  - **旗艦基準同步性**：標的近 365 個日曆天原始日報酬與成熟市場四大旗艦基準（TAIEX, S&P 500 [Shift-1], Nasdaq 100 [Shift-1], Nikkei 225 [^N225]）之最大判定係數滿足：
+    $$\max(R^2_{\text{TAIEX}}, R^2_{\text{SP500}}, R^2_{\text{NDX100}}, R^2_{\text{N225}}) \ge 0.80$$
+    （回歸計算以 365 日曆天內雙邊市場有效交易日交集為準；若相關係數 $\rho \le 0$ 強制歸零）。
+  - **池間互斥鐵律**：通過此門禁之標的分流至【核心候選池】。若在後續 Stage 2 核心評分中落選，直接除名淘汰，**絕不下放至衛星池**。
+- **AC3 (防衛債券池專屬分流門禁)**：
+  - 標的代碼以 `B` 結尾或標的名稱含「債」。
+  - 通過通用硬性門禁後，直接分流至【債券候選池】（依指示忽略信用評級門禁，維持實質現金殖利率客觀評估）。
+- **AC4 (動能衛星池專屬分流門禁)**：
+  - **非核心與非債券屬性**：排除核心大盤標的（$\max(R^2_{\text{bench}}) < 0.80$）與防衛債券標的。
+  - **近一季波動能量硬性門禁**：近 90 個日曆天年化波動度 $\sigma_{90d} \ge 18\%$（$\sigma_{90d} = \text{近 90 日曆天日報酬標準差} \times \sqrt{252}$；$< 18\%$ 一票否決淘汰，秒殺低波高股息標的）。
+  - **純右側動能一票否決**：$\text{MOM}(12-1) = [P(T - 30\text{d}) / P(T - 365\text{d})] - 1 > 0$（$\le 0$ 一票否決，杜絕接刀下行產業陷阱）。
+- **AC5 (核心標的永久豁免條款)**：符合核心大盤之標的，系統永久禁止生成主動全額清倉出清指令。
 
 ---
 
-## US-G02-02：多因子量化評分與總排名 (月度感知 + 半年度決策)
+## US-G02-02：Stage 2 各資產池多因子連續百分位打分與排名 (Percentile Ranking Engine)
 
 **身份**：量化評審引擎 (Quantitative Screening Engine)
 
 > **As a** 量化評審引擎，  
-> **I want to** 每月自動更新標的客觀評分，並在每年 6/30 與 12/31 鎖定最終排名，  
-> **So that** 系統能隨時保持敏銳的市場狀態感知，並在每半年以最具統計說服力的名次指引個人換倉。
+> **I want to** 對通過 Stage 1 分流之標的，在所屬資產池內進行名次導向之連續百分位數（Percentile Rank, 0 ~ 1）打分排序，  
+> **So that** 系統消除極端離群值對權重的扭曲，各池主力因子均衡等權配置，客觀產出核心 Top 10、衛星 Top 20 與債券 Top 5 名單。
 
 ### 驗收條件 (Acceptance Criteria)
-- **AC1 (月度刷新 vs 半年度換倉排程)**：
-  - **月度狀態刷新 (Monthly Refresh)**：每月 15 日 18:00（配合證交所定期定額排行公告），系統自動重算全市場各標的之最新得分與分類標籤，更新戰情室全域看板，但**不發布個人投組換倉指示**。
-  - **半年度決策鎖定 (Semi-Annual Rebalance Execution)**：每年 6 月 30 日 18:00 與 12 月 31 日 18:00，系統以當日最新評分正式鎖定最終名次，觸發個人模組 P-01 的 1.4N 緩衝換倉判定。
-- **AC2 (核心大盤評分公式計算 - 整合定期定額熱門排行)**：
-  $$S_{\text{core}} = 0.40 \times \text{TrackingError\_Score} + 0.35 \times \text{AUM\_Score} + 0.25 \times \text{DCARank\_Score}$$
-  - $\text{TrackingError\_Score} = \max(R^2) \times 100$：與三大指數之最大決定係數貼合度得分。
-  - $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分，反映長期投資人共識與穩定資金池。
-- **AC3 (動能衛星評分公式計算 - 整合定期定額熱門排行與低相關性分散加分)**：
-  $$S_{\text{sat}} = 0.40 \times \text{MOM} + 0.30 \times (1 - \rho_{\text{core}}) \times 100 + 0.30 \times \text{DCARank\_Score}$$
-  - $\rho_{\text{core}} = \sqrt{R^2}$：直接沿用近 30 交易日對大盤指數之決定係數計算結果，與大盤低相關性獲得更高分散性加分。
-  - $\text{MOM}$：採過去 30 交易日動能報酬率換算得分。
-  - $\text{DCARank\_Score}$：證交所定期定額戶數排行線性計分：
-    $$S_{\text{dca}} = \begin{cases} (21 - r) \times 5.0, & r \in [1, 20] \\ 0.0, & \text{未進榜} \end{cases}$$
-    （Top 1 為 100 分，Top 2 為 95 分，...，Top 20 為 5 分，未進榜為 0.0 分）。
-- **AC4 (防禦債券評分公式計算 - 整合近 1 年現金殖利率)**：
-  $$S_{\text{defensive}} = 0.60 \times \text{Yield\_Score} + 0.40 \times \text{AUM\_Score}$$
-  - $\text{Yield\_Score}$：以近一年宣告現金配息總額除以最新收盤價換算殖利率，線性映射得分（$6.0\%$ 殖利率對應 100 分滿分）。掛牌未滿一年者依掛牌天數等比年化。
-- **AC5 (排名存檔與純淨評分表原則)**：評分完成後，僅將**通過硬約束之合格標的**的細項得分與組內名次（`class_rank = 1, 2, 3...`）寫入 `GlobalAssetScore`。不合格標的直接淘汰，絕不寫入評分資料庫，標記計算月份與評審版本號。
+- **AC1 (排程機制：月度感知 vs 半年度鎖定)**：
+  - **月度狀態刷新 (Monthly Refresh)**：每月 15 日 18:00（配合證交所定期定額排行公告），系統自動重算各標的最新得分與排名，更新戰情室全域看板，但**不發布個人投組換倉指示**。
+  - **半年度決策鎖定 (Semi-Annual Rebalance Execution)**：每年 6 月 30 日 18:00 與 12 月 31 日 18:00，系統鎖定最終名次，驅動個人模組 P-01 的 1.4N 緩衝換倉判定。
+- **AC2 (核心大盤池評分公式計算 - 產出 Core Top 10)**：
+  $$S_{\text{core}} = \frac{1}{3}\text{Rank}(R^2_{\text{bench}}) + \frac{1}{3}\text{Rank}(\text{DCA}) + \frac{1}{3}\text{Rank}(\text{AUM})$$
+  - $\text{Rank}(R^2_{\text{bench}})$：與通過門禁所對應基準指數近 365 日曆天 $R^2$ 之百分位排名。
+  - $\text{Rank}(\text{DCA})$：證交所每月定期定額交易戶數百分位排名（定期定額 Top 20 標的皆有正向得分，第 1 名 1.0、第 20 名 > 0，榜外標的戶數為 0，得分 0.0）。
+  - $\text{Rank}(\text{AUM})$：最新動態資產規模百分位排名。
+  - 取前 10 名進入「核心 Top 10」，供 Stage 3 正交去共線。
+- **AC3 (動能衛星池評分公式計算 - 產出 Satellite Top 20)**：
+  $$S_{\text{sat}} = \left( \frac{1}{3}\text{Rank}(\text{MOM}) + \frac{1}{3}\text{Rank}(\text{KER}) + \frac{1}{3}\text{Rank}(\text{Sharpe}) \right) \times (1 - R^2_{\text{TAIEX}})$$
+  - $\text{Rank}(\text{MOM})$：12-1 月經典動能 $\text{MOM}(12-1) = [P(T - 30\text{d}) / P(T - 365\text{d})] - 1$ 百分位排名。
+  - $\text{Rank}(\text{KER})$：365 日曆天考夫曼效率比 $\text{KER} = \frac{|P(t) - P(t-365\text{d})|}{\sum_{i} |P(i) - P(i-1)|}$ 百分位排名。
+  - $\text{Rank}(\text{Sharpe})$：近 365 日曆天純年化夏普值 $\text{Sharpe} = \frac{\text{Mean}(r)}{\text{Std}(r)} \times \sqrt{252}$（不扣除無風險利率，$r_f = 0$）百分位排名。
+  - $(1 - R^2_{\text{TAIEX}})$：台股大盤影子股折價係數（近 365 日曆天原始日報酬判定係數）。
+  - 取前 20 名進入「衛星 Top 20」，供 Stage 3 正交去共線。
+- **AC4 (防衛債券池評分公式計算 - 產出 Bond Top 5)**：
+  $$S_{\text{bond}} = 0.70 \times \text{Rank}(\text{YTM}) + 0.30 \times \text{Rank}(\text{AUM})$$
+  - $\text{Rank}(\text{YTM})$：近一年實質現金殖利率（Trailing 1-Year Cash Dividend Yield）百分位排名。
+  - $\text{Rank}(\text{AUM})$：資產規模百分位排名。
+  - 取前 5 名進入「債券 Top 5」，系統直接選取 Rank 1 標的納入投組配置，不進行 Stage 3 正交去共線。
+- **AC5 (評分表純淨原則)**：評分完成後，僅將**通過 Stage 1 門禁之合格標的**細項得分與組內名次（`class_rank = 1, 2, 3...`）寫入 `GlobalAssetScore`。未通過門禁者於日誌留痕，絕不寫入評分資料表。
+
+---
+
+## US-G02-03：Stage 3 兩兩正交矩陣持久化與通用貪婪正交去共線演算法 (Greedy Orthogonal Engine)
+
+**身份**：正交決策引擎 (Orthogonal Decision Engine)
+
+> **As a** 正交決策引擎，  
+> **I want to** 計算並持久化保存 Top 候選標的的兩兩判定係數矩陣，並執行全量貪婪正交去共線標示（支援預設全局模式 A 與自訂種子錨定模式 B），  
+> **So that** 系統徹底消除核心與衛星池內的共線重疊風險，全量輸出 `ACCEPTED` 與 `REJECTED_COLLINEAR` 狀態，落實寧缺勿濫。
+
+### 驗收條件 (Acceptance Criteria)
+- **AC1 (兩兩正交矩陣計算與持久化儲存 - Pairwise Matrix Persistence)**：
+  系統對 Stage 2 產出之 Top 標的執行全量兩兩近 365 日曆天原始日報酬判定係數 $R^2$ 與相關係數 $\rho$ 運算，持久化寫入 `global_asset_pairwise_matrix` 資料表：
+  1. 核心大盤池：計算 $10 \times 9 = 90$ 筆矩陣資料。
+  2. 動能衛星池：計算 $20 \times 19 = 380$ 筆矩陣資料。
+  每筆記錄包含 `evaluation_date`、`asset_class`、`base_ticker`、`target_ticker`、`r_squared` 與 `correlation_coefficient`。
+- **AC2 (數理正交判定標準)**：
+  兩兩標的之原始日報酬判定係數必須滿足：
+  $$R^2(\text{Candidate}, \text{Selected}) < 0.50$$
+  若皮爾森相關係數 $\rho \le 0$，判定係數強制歸零安全放行。
+- **AC3 (模式 A：預設全局貪婪正交)**：
+  1. **初始種子**：自動鎖定 Stage 2 綜合評分 Rank 1 標的為 Seed，標記為 `ACCEPTED` 成為初始已選集合 $\mathcal{S} = \{\text{Rank 1}\}$。
+  2. **向下遍歷**：由 Rank 2 依序審查至名單末端。若當前候選標的與 $\mathcal{S}$ 中「所有已選標的」之兩兩 $R^2$ 均 $< 0.50$，標記為 `ACCEPTED` 並加入 $\mathcal{S}$；若與 $\mathcal{S}$ 中任一已選標的 $R^2 \ge 0.50$，標記為 `REJECTED_COLLINEAR`，並記錄衝突來源標的代碼與數值。
+- **AC4 (模式 B：自訂種子錨定重算)**：
+  1. **種子約束**：使用者僅可自 Stage 2 的 Top 清單中指定任一標的 S 為錨定種子。
+  2. **強制置頂**：種子 S 優先入選，標記為 `ACCEPTED` 成為初始已選集合 $\mathcal{S} = \{S\}$。
+  3. **依序遍歷**：清單中其餘標的嚴格按照 Stage 2 原始綜合評分由高至低依序比對正交條件，滿足者標記 `ACCEPTED`，衝突者標記 `REJECTED_COLLINEAR`。
+- **AC5 (全量標示與自然飽和終止)**：
+  1. 演算法不設固定截斷檔數 $k$，對 Top 10 核心與 Top 20 衛星全量標示每一檔的審查結果。
+  2. 若向下遍歷無標的滿足 $R^2 < 0.50$，演算法自然飽和終止，嚴禁為湊足檔數而放寬門檻。
+  3. 模式 A 之正交結果與衝突明細同步持久化於 `GlobalAssetScore` 表之 `orthogonal_status` 與 `collision_detail` 欄位。
+
 

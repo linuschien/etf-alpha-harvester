@@ -1,33 +1,67 @@
 # US-G01 模組：市場數據與情報基石 (Global Market Data & Intelligence)
 
 ## 背景 (Background)
-本模組為 AlphaHarvester 系統全域層（Global Services）之核心基石。量化模型的所有計算（多因子評分、波動度求解、宏觀利率狀態機、除息入帳與持倉市值評估）均高度依賴即時、精確且完整的客觀市場資料。若數據缺失或錯誤，整個系統將完全無法運算。本模組負責自動化採集台股 ETF 日行情、FRED 美國公司債殖利率、證交所每月定期定額熱門排行、新上市 ETF 資料與除息日程，並透過「數據齊備性守門員」防禦髒資料污染下游。
+本模組為 AlphaHarvester 系統全域層（Global Services）之核心基石。量化模型的所有計算（多因子評分、波動度求解、宏觀利率狀態機、除息入帳與持倉市值評估）均高度依賴即時、精確且完整的客觀市場資料。若數據缺失或錯誤，整個系統將完全無法運算。本模組負責 Stage 0 靜態代碼正則阻斷、自動化採集台股原型 ETF 日行情、FRED 美國公司債殖利率、證交所每月定期定額熱門排行、新上市 ETF 基本面與除息日程，並透過「數據齊備性守門員」防禦髒資料污染下游。
 
 > **外部技術規格參考 (External Interface Specifications)**：  
 > 詳細上游 API 端點定義、即時連線實測驗證數據與欄位轉換格式，請參閱 [External Specs](../external-specs/README.md)。
 
 ---
 
-## US-G01-01：台股 ETF 與全球五大市場基準指數每日收盤行情採集
+## US-G01-00：Stage 0 靜態代碼與合約門禁阻斷 (Pre-fetch 記憶體短路阻斷)
+
+**身份**：資料採集管線 (Data Pipeline Ingestion Engine)
+
+> **As a** 資料採集管線，  
+> **I want to** 在派發任何日行情爬蟲與報價請求前，先由記憶體進行正則表達式比對，直接阻斷槓反、期貨、主動型與 ETN 標的，  
+> **So that** 系統連 1 筆無效歷史報價都不予抓取與儲存，大幅降低外部頻寬消耗與儲存成本，自源頭杜絕風格漂移與高內耗劣質產品。
+
+### 驗收條件 (Acceptance Criteria)
+- **AC1 (正則阻斷規範)**：系統在比對全市場代碼清單時，嚴格套用阻斷正則表達式：
+  `^(00\d{2,4}[ULRA]|02\d{4})$`
+  以下標的一票否決，直接在記憶體阻斷淘汰，不予請求報價與入庫：
+  1. 代碼結尾為 `U`：商品期貨型 ETF（如 00642U 元大S&P石油）。
+  2. 代碼結尾為 `L`：槓桿型 ETF（如 00631L 元大台灣50正2）。
+  3. 代碼結尾為 `R`：反向型 ETF（如 00632R 元大台灣50反1）。
+  4. 代碼結尾為 `A`：主動式管理型 ETF（排除基金經理人風格漂移風險）。
+  5. 代碼開頭為 `02`：ETN 指數投資證券（排除券商信用違約風險與到期年限限制）。
+- **AC2 (零報價拉取原則)**：未通過 Stage 0 阻斷之標的，系統嚴格禁止對 TWSE/TPEx 或 Yahoo Finance 派發歷史報價爬蟲，資料庫中永久保持 0 筆行情記錄。
+- **AC3 (合格原型標的入庫)**：僅允許通過 Stage 0 之原型標的（全市場約 140~150 檔）進入日常市場行情採集蓄水池。
+
+---
+
+## US-G01-01：台股 ETF 與全球旗艦基準每日原始收盤行情採集 (Raw Close & 日曆天規範)
 
 **身份**：GCP Cloud Scheduler 外部排程器 (攜帶 OIDC 服務身分憑證)
 
 > **As a** 外部系統排程器 (GCP Cloud Scheduler)，  
-> **I want to** 於每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * 1-5`) 攜帶合法 OIDC Token 發送 HTTP POST 請求至 `/api/v1/marketData:sync` 喚醒 Cloud Run，自動向臺灣證券交易所 (TWSE)、櫃買中心 (TPEx) OpenAPI 或 Yahoo Finance 拉取監控 ETF 以及全球五大市場基準指數的前一交易日官方定案收盤行情，  
-> **So that** 系統在無伺服器架構（實例冷卻為 0）下仍能穩定準時觸發採集，擁有最新且準確的收盤價、日 K 線與成交量以支援後續市值計算、回歸擬合 ($R^2$) 與跨週期波動度分析。
+> **I want to** 於每日台北時間 08:00 (UTC 00:00，Cron: `0 0 * * 1-5`) 攜帶合法 OIDC Token 發送 HTTP POST 請求至 `/api/v1/marketData:sync` 喚醒 Cloud Run，自動拉取通過 Stage 0 之原型 ETF 以及全球旗艦基準指數的前一交易日官方定案原始收盤行情 (Raw Close)，  
+> **So that** 系統在無伺服器架構下仍能穩定準時觸發採集，且所有報酬率、波動度與 $R^2$ 回歸一律以真實未還原收盤價為準，杜絕除息動態篡改歷史與 SPOF 單點故障。
 
 ### 驗收條件 (Acceptance Criteria)
-- **AC1 (Happy Path - ETF 與五大基準指數)**：每日台北時間 08:00 (UTC 00:00)，GCP Cloud Scheduler 攜帶專用 Service Account 簽署之 OIDC ID Token（其 Audience 匹配 IAP OAuth Client ID）發送 POST 請求喚醒 Cloud Run，觸發統一數據採集作業。針對納入監控的台股 ETF 之外，**強制同步採集全球五大市場基準指數**：
-  1. `^TWII`：台灣發行量加權股價指數 (台股總體 Beta 基準、回撤監控線)
-  2. `^GSPC`：美國標普 500 指數 (美股/全球廣基大盤基準)
-  3. `^NDX`：美國那斯達克 100 指數 (全球科技巨頭與動能衛星基準)
+- **AC1 (Happy Path - 原型 ETF 與全球旗艦基準指數)**：每日台北時間 08:00 (UTC 00:00)，GCP Cloud Scheduler 攜帶專用 Service Account 簽署之 OIDC ID Token 發送 POST 請求喚醒 Cloud Run，觸發統一數據採集作業。針對通過 Stage 0 審查之原型台股 ETF，**強制同步採集 9 大全球市場基準與情緒雷達指標**：
+  1. `^TWII`：台灣發行量加權股價指數 (台股總體 Beta 基準、回撤監控線，同日曆天對齊)
+  2. `^GSPC`：美國標普 500 指數 (美股廣基大盤基準，美東 $T-1$ 日 Shift-1 對齊)
+  3. `^NDX`：美國那斯達克 100 指數 (全球頂尖科技與動能衛星基準，美東 $T-1$ 日 Shift-1 對齊)
   4. `^SOX`：美國費城半導體指數 (晶片與硬體科技領先循環基準，對標 00830)
-  5. `^N225`：日本日經 225 指數 (亞洲成熟市場對標、日圓利差交易風險風向球)
-  成功拉取包含 `ticker`、`trade_date` (YYYY-MM-DD)、`close_price`、`open_price`、`high_price`、`low_price` 與 `volume` 之數據，並寫入 `MarketDailyQuote` 資料表。
-- **AC2 (歷史日 K 完整度驗證)**：系統需保存各監控標的與五大基準指數至少近 504 個交易日（約 2 年）之連續日 K 資料，以確保滾動年化波動度 ($\sigma_{252}$)、200 EMA 與 252 日回歸分析 ($R^2$, $\beta$, $\rho$) 可穩定計算。
-- **AC3 (假日與非交易日跨市場處置)**：採集服務需分別識別台股、美股與日股之休市行事曆，單一市場休市不影響其他市場的定時拉取。
-- **AC4 (重試與防斷線機制)**：若對外 API 請求遭遇逾時 (Timeout > 10s) 或 HTTP 5xx 錯誤，系統自動實施指數退避（Exponential Backoff）重試（最多 3 次，間隔 30s、60s、120s）；若重試全數失敗，記錄 `ERROR` 等級日誌並觸發守門員異常旗標。
-- **AC5 (斷點歷史自動補漏機制 - Gap Auto-Recovery)**：若系統重啟或前幾日排程中斷導致資料庫存在缺漏交易日（最後入庫日與今日相差 $\text{Gap} > 1$ 營業日），由於證交所 OpenAPI `STOCK_DAY_ALL` 僅提供當日數據，採集服務自動切換調用 Yahoo Finance API（帶參數 `period1`~`period2`）自動回溯補撈缺漏之日 K 線，縫合空缺後再交由守門員放行。
+  5. `^N225`：日本日經 225 指數 (亞洲成熟市場對標、日圓利差交易風險風向球，同日曆天對齊)
+  6. `^VIX`, `^VXN`, `^MOVE`：三大市場恐慌波動率指數
+  7. `FEAR_GREED`：CNN 恐懼與貪婪指數
+  成功拉取包含 `ticker`、`trade_date` (YYYY-MM-DD)、`close_price` (原始收盤價)、`open_price`、`high_price`、`low_price`、`volume_shares`、`trade_value_twd` 與 `net_asset_value` 之數據，並寫入 `MarketDailyQuote` 資料表。
+- **AC2 (原始未還原收盤價真實性原則 - Raw Close)**：
+  - 資料庫中儲存之 `close_price` 必須為交易所官方公布之原始成交市價（Raw Close）。
+  - 嚴禁引入向前復權價格（Adjusted Close），避免每次除息回溯覆寫歷史價格、破壞整數心理關卡，並消除因除息事件簿延遲導致系統中斷的風險。
+  - 判定係數 $R^2$、波動度 $\sigma$ 與動能指標 MOM 運算一律強制採用 Raw Close 日報酬計算。
+- **AC3 (統一「日曆天 (Calendar Days)」視窗與交集對齊)**：
+  - 所有時間視窗嚴格以日曆天（Calendar Days）為基底：
+    - 長期回歸視窗：滾動 365 個日曆天。
+    - 中期波動度視窗：滾動 90 個日曆天。
+    - 短期流動性視窗：滾動 30 個日曆天。
+  - 跨時區回歸對齊：美股（`^GSPC`, `^NDX`）採 Shift-1 天對齊台股交易日；日股（`^N225`）採同日曆天對齊；回歸擬合僅取雙方市場在 365 日曆天內「皆為有效交易日」之交集日期計算。
+- **AC4 (歷史資料長度保護)**：系統需保存各監控標的與全球基準至少近 504 個交易日（約 2 年）之連續原始日行情，確保各日曆天滾動窗口計算無虞。
+- **AC5 (假日與非交易日跨市場處置)**：採集服務需分別識別台股、美股與日股之休市行事曆，單一市場休市不影響其他市場的定時拉取。
+- **AC6 (重試與防斷線機制)**：若對外 API 請求遭遇逾時 (Timeout > 10s) 或 HTTP 5xx 錯誤，系統自動實施指數退避（Exponential Backoff）重試（最多 3 次，間隔 30s、60s、120s）；若重試全數失敗，記錄 `ERROR` 等級日誌並觸發守門員異常旗標。
+- **AC7 (斷點歷史自動補漏機制 - Gap Auto-Recovery)**：若系統重啟或前幾日排程中斷導致資料庫存在缺漏交易日（最後入庫日與今日相差 $\text{Gap} > 1$ 營業日），由於證交所 OpenAPI `STOCK_DAY_ALL` 僅提供當日數據，採集服務自動切換調用 Yahoo Finance API 自動回溯補撈缺漏之日 K 線，縫合空缺後再交由守門員放行。
 
 ---
 
@@ -80,7 +114,7 @@
 - **AC4 (標的分割與反分割事件採集 - Corporate Action Splits)**：
   - 系統每日 08:00 TST 定時自 Yahoo Finance API (`events=split`) 與證交所除權公告檢索標的分割資訊。
   - 一旦檢出分割事件，自動寫入 `CorporateAction` 表，記錄 `ticker`、`action_type` (SPLIT/REVERSE_SPLIT)、`effective_date` (生效日)、`split_ratio`、`numerator` 與 `denominator`。
-  - 同時自動對該標的之歷史價格序列進行向後還原折算，寫入 `adj_close_price`，確保下游均線與波動度模型平滑過渡。
+  - 持久層日行情（`MarketDailyQuote`）一律強制保留原始未還原收盤價（Raw Close）；下游均線計算或圖表展示若需平滑過渡，由記憶體純函數依據 `CorporateAction` 之整數比例動態折算，絕不竄改資料庫中之原始收盤價。
 
 ---
 

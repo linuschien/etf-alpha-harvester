@@ -24,7 +24,8 @@
 | **全域基準指數** | `BenchmarkIndex` | 全球 9 大市場行情、波動度恐慌與綜合情緒基準指標。 | `ticker` (^TWII, ^GSPC, ^NDX, ^SOX, ^N225, ^VIX, ^VXN, ^MOVE, FEAR_GREED), `name`, `region`, `description` |
 | **市場行情快照** | `MarketDailyQuote` | 單一標的或基準在特定交易日的市場成交價量、淨值與折溢價（純客觀成交事實，無除息還原價）。 | `ticker`, `trade_date`, `open_price`, `high_price`, `low_price`, `close_price`, `volume_shares`, `trade_value_twd`, `net_asset_value`, `discount_premium_percentage` |
 | **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率事實（資料庫純資料化，無狀態旗標）。 | `record_date`, `us_corporate_bond_effective_yield`, `us_10_year_treasury_yield`, `us_20_year_treasury_yield`, `yield_spread_10y_minus_2y` |
-| **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每半年對各組候選標的進行客觀評分與組內獨立排名。 | `ticker`, `evaluation_date`, `asset_class` (`CandidateAssetClass`), `class_rank`, `composite_score`, `fund_size_twd` |
+| **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每月/每半年對各組候選標的進行 Stage 2 客觀多因子百分位評分、組內獨立排名，以及 Stage 3 模式 A 正交標記。 | `ticker`, `evaluation_date`, `asset_class` (`CandidateAssetClass`), `class_rank`, `composite_score`, `fund_size_twd`, `orthogonal_status` (`OrthogonalStatus`), `collision_detail` |
+| **兩兩正交矩陣記錄** | `GlobalAssetPairwiseMatrix` | 模組 G-02 持久化儲存之 Top 候選標的兩兩近 365 日曆天原始日報酬判定係數 $R^2$ 與相關係數 $\rho$。 | `evaluation_date`, `asset_class`, `base_ticker`, `target_ticker`, `r_squared`, `correlation_coefficient` |
 | **定期定額熱門排行** | `DcaPopularityRank` | 臺灣證交所每月公告之定期定額交易戶數排行（年份與月份獨立）。 | `ticker`, `ranking_year`, `ranking_month`, `rank_position`, `regular_investor_count` |
 | **全域標的元資料** | `GlobalAssetMetadata` | 標的基本檔案資料，由 `listing_date` 動態推算掛牌天數，收錄法定配息週期。 | `ticker`, `name`, `listing_date`, `underlying_index`, `fund_size_twd`, `asset_class` (`CandidateAssetClass`), `distribution_frequency` (`DistributionFrequency`) |
 | **除息公告資訊** | `DividendAnnouncement` | 發行投信公開公告之 ETF 每期除權息日程。 | `ticker`, `ex_date` (除息日), `payment_date` (發放日), `dividend_per_share`, `tax_tag` (`OVERSEAS_76W` / `DOMESTIC_54C`) |
@@ -56,25 +57,31 @@
 ### 3.2 候選池分組與持倉狀態 (`CandidateAssetClass` vs `PositionAssetClass`)
 | 列舉範圍 | 代碼與所屬分組 | 業務定義 |
 | --- | --- | --- |
-| **全域候選池**<br>`CandidateAssetClass` | **`CORE` (核心大盤)** | 長期資產基石，穩健 Beta 增長（如 0050、006208、00646），組內獨立排名 `class_rank`，永久豁免主動出清。 |
-| **全域候選池**<br>`CandidateAssetClass` | **`SATELLITE` (動能衛星)** | 趨勢動能標的，提供夏農波動收割超額利潤，組內獨立排名 `class_rank`。 |
-| **全域候選池**<br>`CandidateAssetClass` | **`DEFENSIVE` (防禦債券)** | 現券型投資級公司債 ETF（如 00720B），鎖定高息防禦墊，組內獨立排名 `class_rank`。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`CORE` (核心大盤)** | 長期資產基石，成熟市場旗艦基準 $R^2 \ge 0.80$（產出 Core Top 10），永久豁免主動出清，落選絕不下放衛星池。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`SATELLITE` (動能衛星)** | 排除核心與債券，近一季 $\sigma_{90d} \ge 18\%$ 且 $\text{MOM}(12-1) > 0$（產出 Sat Top 20），提供夏農波動收割超額利潤。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`DEFENSIVE` (防禦債券)** | 現券型投資級公司債/公債 ETF（產出 Bond Top 5，Top 1 直接入選），鎖定高息防禦墊。 |
 | **個人專屬狀態**<br>`PositionAssetClass` | **`ORPHAN` (孤兒標的)** | **全域候選池嚴格排除**！僅當個人持有之舊標的跌出半年度 1.4N 緩衝區外時於個人層賦予，系統停止續扣並排定優先出清。 |
 
-### 3.3 扣款排程狀態 (`DcaScheduleStatus`)
+### 3.3 正交審查狀態 (`OrthogonalStatus`)
+| 列舉值 | 英文代碼 | 業務定義與處置行為 |
+| --- | --- | --- |
+| **正交入選** | `ACCEPTED` | 該標的與已選集合中所有標的兩兩原始日報酬 $R^2 < 0.50$（或為初始種子），成功自然正交入選。 |
+| **共線排除** | `REJECTED_COLLINEAR` | 該標的與已選集合中至少一檔標的 $R^2 \ge 0.50$，觸發共線阻斷淘汰，詳細記載衝突來源標的代碼與數值。 |
+
+### 3.4 扣款排程狀態 (`DcaScheduleStatus`)
 | 列舉值 | 英文代碼 | 業務定義 |
 | --- | --- | --- |
 | **正常扣款中** | `ACTIVE` | 每月依約定扣款日由券商自動扣款。 |
 | **暫停扣款** | `PAUSED` | 系統自動暫停扣款（如債券進入低利收割期、或標的被標記為 ORPHAN 時）。 |
 
-### 3.4 工單執行優先序 (`OrderPriority`)
+### 3.5 工單執行優先序 (`OrderPriority`)
 | 列舉值 | 英文代碼 | 優先序等級 | 業務說明 |
 | --- | --- | --- | --- |
 | **第一優先（出清/停利賣單）** | `SELL_FIRST` | 1 | 優先出清孤兒標的與衛星停利賣單，先釋出交割款。 |
 | **第二優先（核心回填買單）** | `BUY_CORE` | 2 | 確保有足夠現金後，執行核心大盤補缺買單。 |
 | **第三優先（債券蓄水買單）** | `BUY_DEFENSIVE` | 3 | 高利蓄水期之防禦債券單筆買單。 |
 
-### 3.5 退休航道偏離狀態 (`TrajectoryState`)
+### 3.6 退休航道偏離狀態 (`TrajectoryState`)
 | 列舉值 | 英文代碼 | 條件門檻 | 系統診斷與指引 |
 | --- | --- | --- | --- |
 | **超前航道** | `AHEAD` | $\text{Gap} \ge +20\%$ | 資產累積超前預期，提示防守獲利鎖定。 |
@@ -88,18 +95,27 @@
 
 | 符號 / 代碼 | 預設值 / 單位 | 定義與業務語意 |
 | --- | --- | --- |
+| $\text{Raw Close}$ | 價格 (TWD) | 交易所原始未還原收盤價，所有日報酬、波動度、動能與 $R^2$ 回歸之強制計算基準（嚴禁 Adjusted Close）。 |
+| $\text{Calendar Days}$ | 天數 | 全時間維度統一窗口：365 日曆天（長期/回歸）、90 日曆天（季波動度）、30 日曆天（月流動性）。 |
+| $\sigma_{90d}$ | 百分比 (%) | 近 90 個日曆天滾動年化實現波動度（有效日報酬標準差 $\times \sqrt{252}$），衛星門禁門檻 $\ge 18\%$。 |
+| $\text{MOM}(12-1)$ | 百分比 (%) | 12-1 月經典動能：$[P(T-30\text{d}) / P(T-365\text{d})] - 1$，剔除近 30 天短線走勢，衛星門禁門檻 $> 0$。 |
+| $\text{KER}$ | 數值 $[0, 1]$ | 365 日曆天考夫曼效率比：$\frac{|\text{淨位移}|}{\text{總路徑長度}} = \frac{|P(t) - P(t-365\text{d})|}{\sum |P(i) - P(i-1)|}$，衡量推進平滑度。 |
+| $\text{Sharpe}$ | 數值 | 近 365 日曆天純年化夏普值：$\frac{\text{Mean}(r)}{\text{Std}(r)} \times \sqrt{252}$（不扣無風險利率，$r_f = 0$）。 |
+| $\text{Rank}(X)$ | 數值 $[0, 1]$ | Percentile Rank 連續變數百分位數排名，各池主力因子組內名次歸一化打分。 |
+| $R^2_{\text{orthogonal}}$ | 0.50 | 兩兩原始日報酬判定係數互斥門檻（等價高維空間夾角 $\theta > 45^\circ$；$\rho \le 0$ 強制歸零安全放行）。 |
 | $C_{\text{monthly}}$ | 變數 (TWD) | 使用者每月新增儲蓄投入金額。 |
 | $C_{\text{min\_lot}}$ | 3,000 TWD | 單筆有效交易門檻，小於此金額不值得多分散一檔標的。 |
 | $N_{\text{core}}$ | $[2, 7]$ 檔 | 核心大盤配置檔數，由資本容量求解器動態計算。 |
 | $N_{\text{satellite}}$ | $[0, 16]$ 檔 | 動能衛星配置檔數，由資本容量求解器動態計算。 |
-| $\sigma_{252}$ | 百分比 (%) | 標的近 252 個交易日滾動年化實現波動度。 |
+| $\sigma_{252}$ | 百分比 (%) | 標的近 252 個交易日滾動年化實現波動度（個人持倉移動停利求解專用）。 |
 | $T_i$ | $[10\%, 30\%]$ | 標的 $i$ 自適應動態停利報酬率門檻 ($T_i = \text{Clamp}(0.75 \times \sigma_{252, i}, 10\%, 30\%)$)。 |
-| $D_i$ | $[5.0\%, 12.0\%]$ | 標的 $i$ 自適應動態高點回撤門檻 ($D_i = \text{Clamp}(0.30 \times \sigma_{252, i}, 5\%, 12\%)$)，取代固定 8.0% 常數。 |
+| $D_i$ | $[5.0\%, 12.0\%]$ | 標的 $i$ 自適應動態高點回撤門檻 ($D_i = \text{Clamp}(0.30 \times \sigma_{252, i}, 5\%, 12\%)$)。 |
 | $\text{XIRR}_{\text{hurdle}}$ | 10.0% | 標普 500 長線年化基準門檻，停利必須超越此基準方可收割純 Alpha。 |
 | $\theta_{\text{drift}}$ | 25.0% | 權重漂移容忍區間，實際權重偏離目標達 $\pm 25\%$ 時觸發再平衡工單。 |
 | $\text{MEAT}$ | 30,000 TWD | 最小有效獲利金額約束 (Minimum Effective Action Threshold)，反推自月定額 1 萬、10 個月本金 10 萬大波段爆發，抑制瑣碎工單。 |
 | $1.4N$ | 乘數 1.4 | 半年度換倉安全緩衝倍率 (Buffer Zone Multiplier)。 |
-| $\text{AUM}$ | TWD | 基金總資產管理規模 (Assets Under Management)。 |
-| $\rho_{\text{core}}$ | 數值 $[-1, 1]$ | 動能衛星與核心大盤 252 日還原總報酬之皮爾森相關係數。 |
+| $\text{AUM}$ | TWD | 最新動態基金總資產管理規模 ($\text{發行單位數} \times \text{最新 NAV}$)。 |
+| $\rho_{\text{core}}$ | 數值 $[-1, 1]$ | 標的與基準指數 365 日曆天原始日報酬之皮爾森相關係數。 |
 | $76\text{W}$ | 稅務標籤 | 台灣稅法「海外利息所得」代碼（海外債券型 ETF 配息專屬免稅標籤）。 |
+
 
