@@ -84,7 +84,7 @@ class RepositoryIntegrationTest {
                 null,
                 null,
                 null,
-                "^TWII",
+                "^TEST",
                 now,
                 new BigDecimal("22500.0"),
                 new BigDecimal("22800.0"),
@@ -103,21 +103,21 @@ class RepositoryIntegrationTest {
                 })
                 .verifyComplete();
 
-        StepVerifier.create(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII"))
+        StepVerifier.create(quoteRepository.findByTickerOrderByTradeDateDesc("^TEST"))
                 .assertNext(found -> {
-                    assertThat(found.getTicker()).isEqualTo("^TWII");
+                    assertThat(found.getTicker()).isEqualTo("^TEST");
                     assertThat(found.getClosePrice()).isEqualByComparingTo(new BigDecimal("22750.0"));
                 })
                 .verifyComplete();
 
         // Verify date-filtered index pushdown methods
         MarketDailyQuote oldQuote = new MarketDailyQuote(
-                null, null, null, "^TWII", now.minusYears(2),
+                null, null, null, "^TEST", now.minusYears(2),
                 new BigDecimal("15000.0"), new BigDecimal("15100.0"), new BigDecimal("14900.0"),
                 new BigDecimal("15050.0"), 500000L, new BigDecimal("200000000"), null, null
         );
         MarketDailyQuote midQuote = new MarketDailyQuote(
-                null, null, null, "^TWII", now.minusMonths(6),
+                null, null, null, "^TEST", now.minusMonths(6),
                 new BigDecimal("19000.0"), new BigDecimal("19200.0"), new BigDecimal("18900.0"),
                 new BigDecimal("19100.0"), 800000L, new BigDecimal("300000000"), null, null
         );
@@ -125,24 +125,24 @@ class RepositoryIntegrationTest {
         quoteRepository.save(midQuote).block();
 
         // 1. findByTickerAndTradeDateBetweenOrderByTradeDateDesc (should return midQuote and quote, excluding oldQuote)
-        StepVerifier.create(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", now.minusYears(1), now.plusDays(1)))
+        StepVerifier.create(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TEST", now.minusYears(1), now.plusDays(1)))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now.minusMonths(6)))
                 .verifyComplete();
 
         // 2. findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc (should return midQuote and quote, excluding oldQuote)
-        StepVerifier.create(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc("^TWII", now.minusYears(1)))
+        StepVerifier.create(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc("^TEST", now.minusYears(1)))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now.minusMonths(6)))
                 .verifyComplete();
 
         // 3. findFirstByTickerOrderByTradeDateDesc (should return latest quote)
-        StepVerifier.create(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^TWII"))
+        StepVerifier.create(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^TEST"))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now))
                 .verifyComplete();
 
         // 4. findTop240ByTickerOrderByTradeDateDesc (should return all 3 quotes descending)
-        StepVerifier.create(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("^TWII"))
+        StepVerifier.create(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("^TEST"))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now.minusMonths(6)))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now.minusYears(2)))

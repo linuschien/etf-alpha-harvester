@@ -8,8 +8,10 @@ import com.alphaharvester.domain.model.CorporateActionType;
 import com.alphaharvester.domain.model.TaxTag;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort.DividendsAndSplits;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -36,29 +38,45 @@ public class YahooFinanceClient {
     private static final String YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart/";
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public YahooFinanceClient(WebClient webClient, @Autowired(required = false) ObjectMapper objectMapper) {
+        this.webClient = webClient;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
 
     public YahooFinanceClient(WebClient webClient) {
-        this.webClient = webClient;
+        this(webClient, new ObjectMapper());
     }
 
     /**
      * Fetches historical daily quotes for any symbol (index or ETF) from Yahoo Finance Chart API.
-     * E.g. range = "1mo", "3mo", "1y", "5d".
+     * E.g. range = "1mo", "3mo", "1y", "2y", "5d".
      */
     public Flux<MarketDailyQuote> fetchHistoricalQuotes(String symbol, String range) {
         String url = YAHOO_CHART_BASE + symbol + "?interval=1d&range=" + range;
         return webClient.get()
                 .uri(url)
                 .retrieve()
-                .bodyToMono(JsonNode.class)
+                .bodyToMono(String.class)
                 .retryWhen(Retry.backoff(3, Duration.ofMillis(500))
                         .maxBackoff(Duration.ofSeconds(3))
                         .filter(t -> t instanceof WebClientResponseException e &&
                                 (e.getStatusCode().value() == 429 || e.getStatusCode().is5xxServerError())))
-                .flatMapMany(root -> {
+                .flatMapMany(jsonStr -> {
                     try {
+                        JsonNode root = objectMapper.readTree(jsonStr);
                         JsonNode result = root.path("chart").path("result").get(0);
                         if (result == null) return Flux.empty();
+
+                        String tzName = result.path("meta").path("exchangeTimezoneName").asText("");
+                        ZoneId zoneId;
+                        try {
+                            zoneId = !tzName.isBlank() ? ZoneId.of(tzName) : ZoneId.systemDefault();
+                        } catch (Exception ex) {
+                            zoneId = ZoneId.systemDefault();
+                        }
 
                         JsonNode timestamps = result.path("timestamp");
                         JsonNode quote = result.path("indicators").path("quote").get(0);
@@ -69,7 +87,7 @@ public class YahooFinanceClient {
                         List<MarketDailyQuote> list = new ArrayList<>();
                         for (int i = 0; i < timestamps.size(); i++) {
                             long epochSec = timestamps.get(i).asLong();
-                            LocalDateTime tradeDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSec), ZoneId.systemDefault());
+                            LocalDateTime tradeDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSec), zoneId).toLocalDate().atStartOfDay();
 
                             BigDecimal open = parseBigDecimalSafe(quote.path("open").get(i));
                             BigDecimal high = parseBigDecimalSafe(quote.path("high").get(i));
@@ -78,9 +96,10 @@ public class YahooFinanceClient {
                             long volume = quote.path("volume").get(i).asLong(0L);
 
                             if (close != null) {
+                                BigDecimal tradeValue = close.multiply(BigDecimal.valueOf(volume)).setScale(2, RoundingMode.HALF_UP);
                                 list.add(new MarketDailyQuote(
                                         null, null, null, symbol, tradeDate,
-                                        open, high, low, close, volume, BigDecimal.ZERO, null, null
+                                        open, high, low, close, volume, tradeValue, null, null
                                 ));
                             }
                         }
@@ -89,6 +108,7 @@ public class YahooFinanceClient {
                         log.error("Failed to parse Yahoo historical chart quotes for symbol '{}': {}", symbol, e.getMessage());
                         return Flux.empty();
                     }
+
                 })
                 .onErrorResume(e -> {
                     log.error("Error fetching Yahoo historical quotes for '{}': {}", symbol, e.getMessage(), e);
@@ -143,8 +163,15 @@ public class YahooFinanceClient {
         return webClient.get()
                 .uri(url)
                 .retrieve()
-                .bodyToMono(JsonNode.class)
-                .map(root -> parseDividendsAndSplits(root, ticker))
+                .bodyToMono(String.class)
+                .map(jsonStr -> {
+                    try {
+                        return parseDividendsAndSplits(objectMapper.readTree(jsonStr), ticker);
+                    } catch (Exception e) {
+                        log.error("Error parsing Yahoo dividends & splits for '{}': {}", ticker, e.getMessage());
+                        return new DividendsAndSplits(List.of(), List.of());
+                    }
+                })
                 .onErrorResume(e -> {
                     log.error("Error fetching Yahoo dividends & splits for '{}': {}", ticker, e.getMessage());
                     return Mono.just(new DividendsAndSplits(List.of(), List.of()));

@@ -85,7 +85,7 @@ public class TwseMarketDataClient {
      * Enforces Stage 0 filter to block leveraged, inverse, futures, active, and ETN symbols.
      */
     public Flux<MarketDailyQuote> fetchTwseDailyQuotes() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now().toLocalDate().atStartOfDay();
         return fetchJsonArray(TWSE_QUOTES_URL)
                 .filter(node -> STAGE_0_ALLOWLIST_PATTERN.matcher(node.path("Code").asText("").trim()).matches())
                 .map(node -> {

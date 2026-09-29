@@ -6,8 +6,10 @@ import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import com.alphaharvester.domain.model.DistributionFrequency;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -30,9 +32,16 @@ public class TpexMarketDataClient {
     private static final String TPEX_MASTER_CSV_URL = "https://mopsfin.twse.com.tw/opendata/t187ap47_O.csv";
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public TpexMarketDataClient(WebClient webClient, @Autowired(required = false) ObjectMapper objectMapper) {
+        this.webClient = webClient;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
 
     public TpexMarketDataClient(WebClient webClient) {
-        this.webClient = webClient;
+        this(webClient, new ObjectMapper());
     }
 
     /**
@@ -145,11 +154,19 @@ public class TpexMarketDataClient {
      * Enforces Stage 0 filter to block leveraged, inverse, futures, active, and ETN symbols.
      */
     public Flux<MarketDailyQuote> fetchTpexDailyQuotes() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now().toLocalDate().atStartOfDay();
         return webClient.get()
                 .uri(TPEX_QUOTES_URL)
                 .retrieve()
-                .bodyToFlux(JsonNode.class)
+                .bodyToMono(String.class)
+                .flatMapMany(jsonStr -> {
+                    try {
+                        JsonNode root = objectMapper.readTree(jsonStr);
+                        return (root != null && root.isArray()) ? Flux.fromIterable(root) : Flux.empty();
+                    } catch (Exception e) {
+                        return Flux.empty();
+                    }
+                })
                 .filter(node -> {
                     String code = node.path("SecuritiesCompanyCode").asText("").trim();
                     return STAGE_0_ALLOWLIST_PATTERN.matcher(code).matches();
@@ -158,6 +175,9 @@ public class TpexMarketDataClient {
                     String ticker = node.path("SecuritiesCompanyCode").asText("").trim();
                     String dateStr = node.path("Date").asText("");
                     LocalDateTime tradeDate = RocDateUtil.parseRocDate(dateStr, now);
+                    if (tradeDate != null) {
+                        tradeDate = tradeDate.toLocalDate().atStartOfDay();
+                    }
 
                     BigDecimal openPrice = parseBigDecimalSafe(node.path("Open").asText(""));
                     BigDecimal highPrice = parseBigDecimalSafe(node.path("High").asText(""));

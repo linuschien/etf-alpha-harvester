@@ -51,11 +51,42 @@ public class R2dbcEntityCallbacksConfig {
         };
     }
 
+    private static final java.util.Map<String, UUID> BENCHMARK_ID_MAP = java.util.Map.of(
+            "^TWII", UUID.fromString("b0000001-0000-0000-0000-000000000001"),
+            "^GSPC", UUID.fromString("b0000001-0000-0000-0000-000000000002"),
+            "^NDX", UUID.fromString("b0000001-0000-0000-0000-000000000003"),
+            "^SOX", UUID.fromString("b0000001-0000-0000-0000-000000000004"),
+            "^N225", UUID.fromString("b0000001-0000-0000-0000-000000000005"),
+            "^VIX", UUID.fromString("b0000001-0000-0000-0000-000000000006"),
+            "^VXN", UUID.fromString("b0000001-0000-0000-0000-000000000007"),
+            "^MOVE", UUID.fromString("b0000001-0000-0000-0000-000000000008"),
+            "FEAR_GREED", UUID.fromString("b0000001-0000-0000-0000-000000000009")
+    );
+
     @Bean
     public BeforeConvertCallback<MarketDailyQuote> marketDailyQuoteCallback() {
         return (entity, table) -> {
-            if (entity.getId() == null) {
+            if (entity.getId() == null && entity.getTicker() != null && entity.getTradeDate() != null) {
+                entity.setId(UUID.nameUUIDFromBytes(
+                        ("ALPHA-QUOTE:" + entity.getTicker().trim() + ":" + entity.getTradeDate().toLocalDate()).getBytes(StandardCharsets.UTF_8)
+                ));
+            } else if (entity.getId() == null) {
                 entity.setId(UUID.randomUUID());
+            }
+
+            if (entity.getTicker() != null) {
+                String ticker = entity.getTicker().trim();
+                if (BENCHMARK_ID_MAP.containsKey(ticker)) {
+                    if (entity.getBenchmarkId() == null) {
+                        entity.setBenchmarkId(BENCHMARK_ID_MAP.get(ticker));
+                    }
+                } else if (!ticker.startsWith("^")) {
+                    if (entity.getAssetId() == null) {
+                        entity.setAssetId(UUID.nameUUIDFromBytes(
+                                ("ALPHA-ETF:" + ticker).getBytes(StandardCharsets.UTF_8)
+                        ));
+                    }
+                }
             }
             return Mono.just(entity);
         };

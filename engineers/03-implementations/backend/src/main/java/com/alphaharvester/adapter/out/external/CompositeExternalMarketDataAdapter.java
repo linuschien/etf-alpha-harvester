@@ -91,7 +91,7 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
                 log.warn("Detected {} monitored ETF(s) missing from TWSE/TPEx daily reports: {}. Recovering from Yahoo Finance...",
                         missingTickers.size(), missingTickers);
                 return Flux.fromIterable(missingTickers)
-                        .flatMap(yahooFinanceClient::fetchTaiwanEtfQuote)
+                        .flatMap(yahooFinanceClient::fetchTaiwanEtfQuote, 4)
                         .collectList();
             }
             return Mono.just(List.of());
@@ -112,7 +112,7 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
         log.info("Fetching quotes for {} global benchmark indices from Yahoo Finance (range: {})...",
                 BENCHMARK_SYMBOLS.size(), effectiveRange);
         return Flux.fromIterable(BENCHMARK_SYMBOLS)
-                .flatMap(symbol -> yahooFinanceClient.fetchHistoricalQuotes(symbol, effectiveRange));
+                .flatMap(symbol -> yahooFinanceClient.fetchHistoricalQuotes(symbol, effectiveRange), 4);
     }
 
     @Override

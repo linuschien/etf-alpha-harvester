@@ -2,8 +2,10 @@ package com.alphaharvester.adapter.out.external;
 
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -20,22 +22,30 @@ public class CnnSentimentClient {
     private static final String CNN_FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata";
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public CnnSentimentClient(WebClient webClient, @Autowired(required = false) ObjectMapper objectMapper) {
+        this.webClient = webClient;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
 
     public CnnSentimentClient(WebClient webClient) {
-        this.webClient = webClient;
+        this(webClient, new ObjectMapper());
     }
 
     /**
      * Fetches CNN Fear & Greed Index score (0 to 100) and maps to MarketDailyQuote for 'FEAR_GREED'.
      */
     public Mono<MarketDailyQuote> fetchFearAndGreedIndex() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now().toLocalDate().atStartOfDay();
         return webClient.get()
                 .uri(CNN_FEAR_GREED_URL)
                 .retrieve()
-                .bodyToMono(JsonNode.class)
-                .flatMap(root -> {
+                .bodyToMono(String.class)
+                .flatMap(jsonStr -> {
                     try {
+                        JsonNode root = objectMapper.readTree(jsonStr);
                         JsonNode scoreNode = root.path("fear_and_greed").path("score");
                         if (scoreNode.isMissingNode() || scoreNode.isNull()) {
                             log.warn("CNN Fear & Greed score missing in response");

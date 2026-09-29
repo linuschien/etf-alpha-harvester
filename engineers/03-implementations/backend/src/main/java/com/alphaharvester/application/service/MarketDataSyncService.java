@@ -20,6 +20,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -365,6 +366,9 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
     }
 
     private Mono<MarketDailyQuote> upsertDailyQuote(MarketDailyQuote q) {
+        if (q.getTradeDate() != null) {
+            q.setTradeDate(q.getTradeDate().toLocalDate().atStartOfDay());
+        }
         boolean isTaiwanEtf = q.getTicker() != null && !q.getTicker().startsWith("^") && !"FEAR_GREED".equalsIgnoreCase(q.getTicker());
         return quoteRepository.findByTickerAndTradeDate(q.getTicker(), q.getTradeDate())
                 .flatMap(existing -> {
@@ -407,7 +411,8 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         if (days <= 90) return "3mo";
         if (days <= 180) return "6mo";
         if (days <= 365) return "1y";
-        return "2y";
+        if (days <= 730) return "2y";
+        return "5y";
     }
 
     private Mono<Integer> syncMacroYields(SyncScope scope, LocalDateTime now) {
