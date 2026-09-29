@@ -38,7 +38,7 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class StageScreeningAndRankingIntegrationTest {
 
-    private static final Pattern STAGE_0_BLOCK_REGEX = Pattern.compile("^(00\\d{2,4}[ULRA]|02\\d{4})$");
+    private static final Pattern STAGE_0_ALLOW_REGEX = Pattern.compile("^00\\d{2,4}B?$");
 
     @Mock private GlobalAssetMetadataRepository metadataRepository;
     @Mock private GlobalAssetScoreRepository scoreRepository;
@@ -123,23 +123,26 @@ class StageScreeningAndRankingIntegrationTest {
     }
 
     @Test
-    @DisplayName("Stage 0: Verify regex blocks Leveraged (L), Inverse (R), Futures (U), Active (A), ETN (02xxxx)")
-    void shouldVerifyStage0RegexBlocking() {
+    @DisplayName("Stage 0: Verify allowlist allows only pure digits and B suffix, blocks Leveraged (L), Inverse (R), Futures (U), Active (A/D), Currency (K/C), Balanced (T), ETN (02xxxx)")
+    void shouldVerifyStage0Allowlist() {
         // Disqualified
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00631L").matches()).isTrue();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00632R").matches()).isTrue();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00642U").matches()).isTrue();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00940A").matches()).isTrue();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("020001").matches()).isTrue();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("020015").matches()).isTrue();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00631L").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00632R").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00642U").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00940A").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00980D").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00668K").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00980T").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("020001").matches()).isFalse();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("020015").matches()).isFalse();
 
-        // Qualified vanilla ETFs
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("0050").matches()).isFalse();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("006208").matches()).isFalse();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00679B").matches()).isFalse();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00757").matches()).isFalse();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00713").matches()).isFalse();
-        assertThat(STAGE_0_BLOCK_REGEX.matcher("00878").matches()).isFalse();
+        // Qualified prototype ETFs (pure digits or ending in B)
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("0050").matches()).isTrue();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("006208").matches()).isTrue();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00679B").matches()).isTrue();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00757").matches()).isTrue();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00713").matches()).isTrue();
+        assertThat(STAGE_0_ALLOW_REGEX.matcher("00878").matches()).isTrue();
     }
 
     @Test

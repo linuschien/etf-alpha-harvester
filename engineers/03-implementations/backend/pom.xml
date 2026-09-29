@@ -24,6 +24,7 @@
         <flyway.version>11.14.1</flyway.version>
         <jacoco.version>0.8.15</jacoco.version>
         <r2dbc-postgresql.version>1.1.1.RELEASE</r2dbc-postgresql.version>
+        <excludedGroups>integration</excludedGroups>
     </properties>
 
     <dependencies>
@@ -177,6 +178,23 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>${excludedGroups}</excludedGroups>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>integration</id>
+            <properties>
+                <excludedGroups></excludedGroups>
+                <groups>integration</groups>
+            </properties>
+        </profile>
+    </profiles>
 </project>

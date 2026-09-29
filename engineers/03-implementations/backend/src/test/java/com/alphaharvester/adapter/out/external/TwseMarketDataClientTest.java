@@ -77,7 +77,7 @@ class TwseMarketDataClientTest {
         when(webClient.get()).thenReturn(requestHeadersUriSpec);
         when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
-        when(responseSpec.bodyToFlux(JsonNode.class)).thenReturn(Flux.fromIterable(node));
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(json));
 
         StepVerifier.create(client.fetchEtfMasterUniverse())
                 .assertNext(asset -> {
@@ -115,7 +115,7 @@ class TwseMarketDataClientTest {
         when(webClient.get()).thenReturn(requestHeadersUriSpec);
         when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
-        when(responseSpec.bodyToMono(JsonNode.class)).thenReturn(Mono.just(node));
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(json));
 
         StepVerifier.create(client.fetchMisNavData())
                 .assertNext(map -> {

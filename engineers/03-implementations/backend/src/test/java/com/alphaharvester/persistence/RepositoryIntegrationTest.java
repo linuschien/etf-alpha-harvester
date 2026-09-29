@@ -48,8 +48,8 @@ class RepositoryIntegrationTest {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 null,
-                "0050",
-                "元大台灣卓越50",
+                "009999",
+                "測試卓越ETF",
                 now,
                 "臺灣50指數",
                 null,
@@ -63,14 +63,14 @@ class RepositoryIntegrationTest {
                     assertThat(saved.getId()).isNotNull();
                     assertThat(saved.getCreatedAt()).isNotNull();
                     assertThat(saved.getUpdatedAt()).isNotNull();
-                    assertThat(saved.getTicker()).isEqualTo("0050");
+                    assertThat(saved.getTicker()).isEqualTo("009999");
                     assertThat(saved.getUnderlyingIndex()).isEqualTo("臺灣50指數");
                 })
                 .verifyComplete();
 
-        StepVerifier.create(metadataRepository.findByTicker("0050"))
+        StepVerifier.create(metadataRepository.findByTicker("009999"))
                 .assertNext(found -> {
-                    assertThat(found.getName()).isEqualTo("元大台灣卓越50");
+                    assertThat(found.getName()).isEqualTo("測試卓越ETF");
                     assertThat(found.getListingDate()).isNotNull();
                 })
                 .verifyComplete();

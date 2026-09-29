@@ -5,8 +5,10 @@ import com.alphaharvester.domain.entity.DcaPopularityRank;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -24,14 +26,12 @@ public class TwseMarketDataClient {
     private static final Logger log = LoggerFactory.getLogger(TwseMarketDataClient.class);
 
     /**
-     * Stage 0 regex blocking:
-     * - Ends with U (Commodity futures)
-     * - Ends with L (Leveraged 2x)
-     * - Ends with R (Inverse -1x)
-     * - Ends with A (Active management)
-     * - Starts with 02 (ETN Exchange Traded Notes)
+     * Stage 0 positive allowlist pattern:
+     * Only accepts pure digit tickers (00\d{2,4}) or bond ETFs ending with 'B' (00\d{2,4}B).
+     * Automatically filters out leveraged (L), inverse (R), futures (U), active (A/D),
+     * balanced (T), foreign currency counters (K/C), and ETNs (02...).
      */
-    public static final Pattern STAGE_0_BLOCKING_PATTERN = Pattern.compile("^(00\\d{2,4}[ULRA]|02\\d{4})$");
+    public static final Pattern STAGE_0_ALLOWLIST_PATTERN = Pattern.compile("^00\\d{2,4}B?$");
 
     private static final String TWSE_MASTER_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap47_L";
     private static final String TWSE_QUOTES_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL";
@@ -39,9 +39,16 @@ public class TwseMarketDataClient {
     private static final String TWSE_DCA_URL = "https://openapi.twse.com.tw/v1/ETFReport/ETFRank";
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public TwseMarketDataClient(WebClient webClient, @Autowired(required = false) ObjectMapper objectMapper) {
+        this.webClient = webClient;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
 
     public TwseMarketDataClient(WebClient webClient) {
-        this.webClient = webClient;
+        this(webClient, new ObjectMapper());
     }
 
     /**
@@ -52,10 +59,7 @@ public class TwseMarketDataClient {
      */
     public Flux<GlobalAssetMetadata> fetchEtfMasterUniverse() {
         LocalDateTime now = LocalDateTime.now();
-        return webClient.get()
-                .uri(TWSE_MASTER_URL)
-                .retrieve()
-                .bodyToFlux(JsonNode.class)
+        return fetchJsonArray(TWSE_MASTER_URL)
                 .map(node -> {
                     String ticker = node.path("基金代號").asText("").trim();
                     String shortName = node.path("基金簡稱").asText("").trim();
@@ -69,7 +73,7 @@ public class TwseMarketDataClient {
                             1, now, now, null
                     );
                 })
-                .filter(asset -> !asset.getTicker().isBlank() && !STAGE_0_BLOCKING_PATTERN.matcher(asset.getTicker()).matches())
+                .filter(asset -> !asset.getTicker().isBlank() && STAGE_0_ALLOWLIST_PATTERN.matcher(asset.getTicker()).matches())
                 .onErrorResume(e -> {
                     log.error("Failed to fetch TWSE ETF master universe: {}", e.getMessage(), e);
                     return Flux.empty();
@@ -82,14 +86,8 @@ public class TwseMarketDataClient {
      */
     public Flux<MarketDailyQuote> fetchTwseDailyQuotes() {
         LocalDateTime now = LocalDateTime.now();
-        return webClient.get()
-                .uri(TWSE_QUOTES_URL)
-                .retrieve()
-                .bodyToFlux(JsonNode.class)
-                .filter(node -> {
-                    String code = node.path("Code").asText("").trim();
-                    return code.startsWith("00") && !STAGE_0_BLOCKING_PATTERN.matcher(code).matches();
-                })
+        return fetchJsonArray(TWSE_QUOTES_URL)
+                .filter(node -> STAGE_0_ALLOWLIST_PATTERN.matcher(node.path("Code").asText("").trim()).matches())
                 .map(node -> {
                     String ticker = node.path("Code").asText("").trim();
                     BigDecimal openPrice = parseBigDecimalSafe(node.path("OpeningPrice").asText(""));
@@ -119,25 +117,30 @@ public class TwseMarketDataClient {
         return webClient.get()
                 .uri(TWSE_MIS_NAV_URL)
                 .retrieve()
-                .bodyToMono(JsonNode.class)
-                .map(root -> {
+                .bodyToMono(String.class)
+                .map(json -> {
                     Map<String, NavSnapshot> map = new HashMap<>();
-                    JsonNode groups = root.path("a1");
-                    if (groups.isArray()) {
-                        for (JsonNode group : groups) {
-                            JsonNode msgArray = group.path("msgArray");
-                            if (msgArray.isArray()) {
-                                for (JsonNode item : msgArray) {
-                                    String symbol = item.path("a").asText("").trim();
-                                    String name = item.path("b").asText("").trim();
-                                    if (symbol.isBlank()) continue;
-                                    BigDecimal nav = parseBigDecimalSafe(item.path("f").asText(""));
-                                    BigDecimal discountPrem = parseBigDecimalSafe(item.path("g").asText(""));
-                                    long shares = parseLongSafe(item.path("c").asText("0").split("\\.")[0]);
-                                    map.put(symbol, new NavSnapshot(name, nav, discountPrem, shares));
+                    try {
+                        JsonNode root = objectMapper.readTree(json);
+                        JsonNode groups = root.path("a1");
+                        if (groups.isArray()) {
+                            for (JsonNode group : groups) {
+                                JsonNode msgArray = group.path("msgArray");
+                                if (msgArray.isArray()) {
+                                    for (JsonNode item : msgArray) {
+                                        String symbol = item.path("a").asText("").trim();
+                                        String name = item.path("b").asText("").trim();
+                                        if (symbol.isBlank()) continue;
+                                        BigDecimal nav = parseBigDecimalSafe(item.path("f").asText(""));
+                                        BigDecimal discountPrem = parseBigDecimalSafe(item.path("g").asText(""));
+                                        long shares = parseLongSafe(item.path("c").asText("0").split("\\.")[0]);
+                                        map.put(symbol, new NavSnapshot(name, nav, discountPrem, shares));
+                                    }
                                 }
                             }
                         }
+                    } catch (Exception e) {
+                        log.warn("Failed to parse TWSE MIS NAV: {}", e.getMessage());
                     }
                     return map;
                 })
@@ -151,10 +154,7 @@ public class TwseMarketDataClient {
      * Fetches regular quota (DCA) Top 20 ETF rankings from TWSE OpenAPI.
      */
     public Flux<DcaPopularityRank> fetchDcaRankings(int year, int month) {
-        return webClient.get()
-                .uri(TWSE_DCA_URL)
-                .retrieve()
-                .bodyToFlux(JsonNode.class)
+        return fetchJsonArray(TWSE_DCA_URL)
                 .map(node -> {
                     int rank = node.path("No").asInt(0);
                     String etfSymbol = node.path("ETFsSecurityCode").asText("").trim();
@@ -168,6 +168,21 @@ public class TwseMarketDataClient {
                 .onErrorResume(e -> {
                     log.error("Failed to fetch TWSE DCA rankings: {}", e.getMessage(), e);
                     return Flux.empty();
+                });
+    }
+
+    private Flux<JsonNode> fetchJsonArray(String url) {
+        return webClient.get()
+                .uri(url)
+                .retrieve()
+                .bodyToMono(String.class)
+                .flatMapMany(json -> {
+                    try {
+                        JsonNode root = objectMapper.readTree(json);
+                        return (root != null && root.isArray()) ? Flux.fromIterable(root) : Flux.empty();
+                    } catch (Exception e) {
+                        return Flux.error(e);
+                    }
                 });
     }
 

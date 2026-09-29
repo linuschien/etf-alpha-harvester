@@ -24,7 +24,7 @@ public class TpexMarketDataClient {
 
     private static final Logger log = LoggerFactory.getLogger(TpexMarketDataClient.class);
 
-    public static final Pattern STAGE_0_BLOCKING_PATTERN = Pattern.compile("^(00\\d{2,4}[ULRA]|02\\d{4})$");
+    public static final Pattern STAGE_0_ALLOWLIST_PATTERN = Pattern.compile("^00\\d{2,4}B?$");
 
     private static final String TPEX_QUOTES_URL = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes";
     private static final String TPEX_MASTER_CSV_URL = "https://mopsfin.twse.com.tw/opendata/t187ap47_O.csv";
@@ -89,7 +89,7 @@ public class TpexMarketDataClient {
             if (tickerCol < 0 || tickerCol >= row.size()) continue;
 
             String ticker = row.get(tickerCol).trim();
-            if (ticker.isBlank() || STAGE_0_BLOCKING_PATTERN.matcher(ticker).matches()) {
+            if (ticker.isBlank() || !STAGE_0_ALLOWLIST_PATTERN.matcher(ticker).matches()) {
                 continue;
             }
 
@@ -152,7 +152,7 @@ public class TpexMarketDataClient {
                 .bodyToFlux(JsonNode.class)
                 .filter(node -> {
                     String code = node.path("SecuritiesCompanyCode").asText("").trim();
-                    return code.startsWith("00") && !STAGE_0_BLOCKING_PATTERN.matcher(code).matches();
+                    return STAGE_0_ALLOWLIST_PATTERN.matcher(code).matches();
                 })
                 .map(node -> {
                     String ticker = node.path("SecuritiesCompanyCode").asText("").trim();
