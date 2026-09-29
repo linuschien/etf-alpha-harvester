@@ -17,6 +17,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -55,19 +56,12 @@ public class MacroYieldEvaluationService {
                     if (quoteRepository == null) {
                         return Mono.just(calculateAssessment(snapshot, null, null));
                     }
-                    LocalDateTime fromDate = LocalDateTime.now().minusYears(1).minusDays(15);
-                    Mono<List<MarketDailyQuote>> coreQuotesMono = queryRecentQuotes("^TWII", fromDate)
-                            .take(300)
-                            .collectList()
-                            .map(this::filterQuotesInOneCalendarYear)
+                    Mono<List<MarketDailyQuote>> coreQuotesMono = fetchOneYearCoreQuotes("^TWII")
                             .flatMap(twiiList -> {
                                 if (!twiiList.isEmpty()) {
                                     return Mono.just(twiiList);
                                 }
-                                return queryRecentQuotes("0050", fromDate)
-                                        .take(300)
-                                        .collectList()
-                                        .map(this::filterQuotesInOneCalendarYear)
+                                return fetchOneYearCoreQuotes("0050")
                                         .flatMap(quotes0050 -> {
                                             if (quotes0050.isEmpty() || corporateActionRepository == null) {
                                                 return Mono.just(quotes0050);
@@ -79,13 +73,7 @@ public class MacroYieldEvaluationService {
                             })
                             .defaultIfEmpty(Collections.emptyList());
 
-                    Mono<MarketDailyQuote> firstVix = quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX");
-                    Flux<MarketDailyQuote> vixFallback = quoteRepository.findByTickerOrderByTradeDateDesc("^VIX");
-                    Flux<MarketDailyQuote> vixFlux = (firstVix != null)
-                            ? firstVix.flux().switchIfEmpty(vixFallback != null ? vixFallback.take(1) : Flux.empty())
-                            : (vixFallback != null ? vixFallback.take(1) : Flux.empty());
-
-                    Mono<Optional<MarketDailyQuote>> vixQuoteMono = vixFlux.next()
+                    Mono<Optional<MarketDailyQuote>> vixQuoteMono = quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")
                             .map(Optional::of)
                             .defaultIfEmpty(Optional.empty());
 
@@ -197,12 +185,10 @@ public class MacroYieldEvaluationService {
         return filterQuotesInOneCalendarYear(quotes);
     }
 
-    private Flux<MarketDailyQuote> queryRecentQuotes(String ticker, LocalDateTime fromDate) {
-        Flux<MarketDailyQuote> pushdownFlux = quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(ticker, fromDate);
-        Flux<MarketDailyQuote> fallback = quoteRepository.findByTickerOrderByTradeDateDesc(ticker);
-        if (pushdownFlux != null) {
-            return pushdownFlux.switchIfEmpty(fallback != null ? fallback : Flux.empty());
-        }
-        return fallback != null ? fallback : Flux.empty();
+    private Mono<List<MarketDailyQuote>> fetchOneYearCoreQuotes(String ticker) {
+        LocalDateTime windowStart = LocalDate.now().minusYears(1).atStartOfDay();
+        return quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(ticker, windowStart)
+                .collectList()
+                .defaultIfEmpty(Collections.emptyList());
     }
 }

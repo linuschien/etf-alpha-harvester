@@ -76,7 +76,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         lenient().when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         lenient().when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
         lenient().when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any())).thenReturn(Flux.empty());
-        lenient().when(quoteRepository.findByTickerOrderByTradeDateDesc(any())).thenReturn(Flux.empty());
+        lenient().when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(any(), any(), any())).thenReturn(Flux.empty());
         lenient().when(scoreRepository.deleteByEvaluationDate(any())).thenReturn(Mono.empty());
         service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, null, null, externalMarketDataPort, corporateActionRepository);
     }
@@ -250,11 +250,11 @@ class GlobalAssetScoreEvaluationServiceTest {
                 "00679B", new BigDecimal("250000000000")
         )));
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset1, asset2, asset3, asset4));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(highCorrQuotes1));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("006208")).thenReturn(Flux.fromIterable(highCorrQuotes2));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00757")).thenReturn(Flux.fromIterable(lowCorrQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00679B")).thenReturn(Flux.fromIterable(bondQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(highCorrQuotes1));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("006208"), any(), any())).thenReturn(Flux.fromIterable(highCorrQuotes2));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00757"), any(), any())).thenReturn(Flux.fromIterable(lowCorrQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00679B"), any(), any())).thenReturn(Flux.fromIterable(bondQuotes));
 
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
@@ -288,8 +288,8 @@ class GlobalAssetScoreEvaluationServiceTest {
                 "00646", new BigDecimal("35000000000")
         )));
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^GSPC")).thenReturn(Flux.fromIterable(gspcQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00646")).thenReturn(Flux.fromIterable(etfQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^GSPC"), any(), any())).thenReturn(Flux.fromIterable(gspcQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00646"), any(), any())).thenReturn(Flux.fromIterable(etfQuotes));
 
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
@@ -342,8 +342,8 @@ class GlobalAssetScoreEvaluationServiceTest {
                 "00680L", new BigDecimal("10000000000")
         )));
         when(metadataRepository.findAll()).thenReturn(Flux.just(qualifiedCore, smallCore, smallSatellite, leveragedBond));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(corrQuotes1));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(corrQuotes1));
 
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
@@ -483,8 +483,8 @@ class GlobalAssetScoreEvaluationServiceTest {
         );
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(rawQuotesWithSplit));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(rawQuotesWithSplit));
         when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any()))
                 .thenReturn(Flux.just(splitAction));
         when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of("0050", new BigDecimal("400000000000"))));

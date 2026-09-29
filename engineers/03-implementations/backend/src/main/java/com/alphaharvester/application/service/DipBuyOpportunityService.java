@@ -36,14 +36,7 @@ public class DipBuyOpportunityService {
     }
 
     public Mono<DipBuyOpportunityScore> calculateDipBuyOpportunity(String ticker) {
-        LocalDateTime fromDate = LocalDateTime.now().minusYears(1).minusMonths(3);
-        Flux<MarketDailyQuote> repoFlux = quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(ticker, fromDate);
-        Flux<MarketDailyQuote> effectiveQuotes = (repoFlux != null)
-                ? repoFlux.switchIfEmpty(quoteRepository.findByTickerOrderByTradeDateDesc(ticker))
-                : quoteRepository.findByTickerOrderByTradeDateDesc(ticker);
-
-        Mono<List<MarketDailyQuote>> quotesMono = (effectiveQuotes != null ? effectiveQuotes : Flux.<MarketDailyQuote>empty())
-                .take(260)
+        Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findTop240ByTickerOrderByTradeDateDesc(ticker)
                 .collectList()
                 .filter(quotes -> !quotes.isEmpty())
                 .flatMap(rawQuotes -> {
@@ -55,18 +48,12 @@ public class DipBuyOpportunityService {
                             .map(splits -> FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, splits));
                 });
 
-        Mono<MarketDailyQuote> firstVix = quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX");
-        Flux<MarketDailyQuote> vixFallback = quoteRepository.findByTickerOrderByTradeDateDesc("^VIX");
-        Flux<MarketDailyQuote> vixFlux = (firstVix != null)
-                ? firstVix.flux().switchIfEmpty(vixFallback != null ? vixFallback.take(1) : Flux.empty())
-                : (vixFallback != null ? vixFallback.take(1) : Flux.empty());
+        Mono<Double> vixMono = quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")
+                .filter(q -> q.getClosePrice() != null && q.getClosePrice().compareTo(BigDecimal.ZERO) > 0)
+                .map(q -> q.getClosePrice().doubleValue());
 
         return quotesMono
-                .zipWith(
-                        vixFlux.next()
-                                .filter(q -> q.getClosePrice() != null && q.getClosePrice().compareTo(BigDecimal.ZERO) > 0)
-                                .map(q -> q.getClosePrice().doubleValue())
-                )
+                .zipWith(vixMono)
                 .map(tuple -> evaluatePure(ticker, tuple.getT1(), tuple.getT2()))
                 .doOnError(e -> log.error("Error calculating dip-buying score for ticker {}: {}", ticker, e.getMessage(), e));
     }

@@ -21,6 +21,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -240,8 +242,9 @@ class MacroYieldEvaluationServiceTest {
         vixQuote.setTradeDate(now);
 
         when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(snapshot));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(reactor.core.publisher.Flux.just(twiiQuote));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(reactor.core.publisher.Flux.just(vixQuote));
+        when(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(eq("^TWII"), any()))
+                .thenReturn(reactor.core.publisher.Flux.just(twiiQuote));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Mono.just(vixQuote));
 
         StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
                 .assertNext(assessment -> {
@@ -283,10 +286,12 @@ class MacroYieldEvaluationServiceTest {
         vixQuote.setTradeDate(now);
 
         when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(snapshot));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(reactor.core.publisher.Flux.empty());
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(reactor.core.publisher.Flux.just(postSplitQuote, preSplitQuote));
+        when(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(eq("^TWII"), any()))
+                .thenReturn(reactor.core.publisher.Flux.empty());
+        when(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(eq("0050"), any()))
+                .thenReturn(reactor.core.publisher.Flux.just(postSplitQuote, preSplitQuote));
         when(corporateActionRepository.findByTicker("0050")).thenReturn(reactor.core.publisher.Flux.just(splitAction));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(reactor.core.publisher.Flux.just(vixQuote));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Mono.just(vixQuote));
 
         // When split is adjusted: preSplitQuote becomes 200.0 * (1/4) = 50.0 -> drawdown = 0% -> NORMAL crisis level
         StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
@@ -333,10 +338,10 @@ class MacroYieldEvaluationServiceTest {
         vixQuote.setTradeDate(now);
 
         when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(snapshot));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII"))
+        when(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(eq("^TWII"), any()))
                 .thenReturn(reactor.core.publisher.Flux.just(currentQuote, quote100d, quote380d));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX"))
-                .thenReturn(reactor.core.publisher.Flux.just(vixQuote));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX"))
+                .thenReturn(Mono.just(vixQuote));
 
         // When 365 calendar days rule is enforced:
         // quote380d is excluded from maxPrice!

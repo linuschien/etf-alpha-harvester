@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
@@ -115,8 +116,8 @@ class DipBuyOpportunityServiceTest {
                 new BigDecimal("22.5"), 0L, BigDecimal.ZERO, null, null);
 
         when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.empty());
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(quote));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Flux.just(vixQuote));
+        when(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(quote));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Mono.just(vixQuote));
 
         StepVerifier.create(service.calculateDipBuyOpportunity("0050"))
                 .assertNext(score -> {
@@ -150,9 +151,9 @@ class DipBuyOpportunityServiceTest {
                 now.minusDays(5), 4, 1
         );
 
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(postSplitQuote, preSplitQuote));
+        when(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(postSplitQuote, preSplitQuote));
         when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.just(splitAction));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Flux.just(vixQuote));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Mono.just(vixQuote));
 
         // When split adjustment is applied:
         // preSplitQuote is adjusted: 200.0 * (1/4) = 50.0
@@ -191,9 +192,9 @@ class DipBuyOpportunityServiceTest {
                 new BigDecimal("15.0"), new BigDecimal("16.0"), new BigDecimal("14.5"),
                 new BigDecimal("15.0"), 0L, BigDecimal.ZERO, null, null);
 
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(currentQuote, quote180d, quote380d));
+        when(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(currentQuote, quote180d, quote380d));
         when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.empty());
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Flux.just(vixQuote));
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Mono.just(vixQuote));
 
         // When 365 calendar days rule is enforced:
         // quote380d is excluded from max52w!

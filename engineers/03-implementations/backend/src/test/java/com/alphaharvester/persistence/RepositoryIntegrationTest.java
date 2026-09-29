@@ -140,6 +140,13 @@ class RepositoryIntegrationTest {
         StepVerifier.create(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^TWII"))
                 .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now))
                 .verifyComplete();
+
+        // 4. findTop240ByTickerOrderByTradeDateDesc (should return all 3 quotes descending)
+        StepVerifier.create(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("^TWII"))
+                .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now))
+                .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now.minusMonths(6)))
+                .assertNext(q -> assertThat(q.getTradeDate()).isEqualTo(now.minusYears(2)))
+                .verifyComplete();
     }
 
     @Autowired

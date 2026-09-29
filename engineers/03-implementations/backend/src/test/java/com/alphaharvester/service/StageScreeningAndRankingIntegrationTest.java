@@ -73,7 +73,7 @@ class StageScreeningAndRankingIntegrationTest {
 
         when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
-        when(quoteRepository.findByTickerOrderByTradeDateDesc(any())).thenReturn(Flux.empty());
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(any(), any(), any())).thenReturn(Flux.empty());
         when(metadataRepository.findAll()).thenReturn(Flux.empty());
         when(watermarkRepository.findByFeedName(any())).thenReturn(Mono.empty());
         when(watermarkRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -184,14 +184,14 @@ class StageScreeningAndRankingIntegrationTest {
 
         // 20 quotes only (< 220) for lowTradingDaysAsset
         List<MarketDailyQuote> shortQuotes = generateCalendarQuotes("00997", targetYm, 50.0, 0.0005, 0.01, 0).subList(0, 50);
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00997")).thenReturn(Flux.fromIterable(shortQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00997"), any(), any())).thenReturn(Flux.fromIterable(shortQuotes));
 
         // Low turnover quotes for lowTurnoverAsset
         List<MarketDailyQuote> illiquidQuotes = generateCalendarQuotes("00996", targetYm, 50.0, 0.0005, 0.01, 0).stream()
                 .map(q -> new MarketDailyQuote(q.getId(), q.getAssetId(), q.getBenchmarkId(), q.getTicker(), q.getTradeDate(),
                         q.getOpenPrice(), q.getHighPrice(), q.getLowPrice(), q.getClosePrice(), 100_000L, BigDecimal.valueOf(5_000_000L), q.getNetAssetValue(), BigDecimal.ZERO))
                 .toList();
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00996")).thenReturn(Flux.fromIterable(illiquidQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00996"), any(), any())).thenReturn(Flux.fromIterable(illiquidQuotes));
 
         StepVerifier.create(evaluationService.evaluateGlobalAssetScores("2026-09", true))
                 .assertNext(res -> {
@@ -248,11 +248,11 @@ class StageScreeningAndRankingIntegrationTest {
                 "00679B", new BigDecimal("250000000000")
         )));
         when(metadataRepository.findAll()).thenReturn(Flux.just(core1, core2, sat1, bond1));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(Flux.fromIterable(twiiQuotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.fromIterable(core1Quotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("006208")).thenReturn(Flux.fromIterable(core2Quotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00757")).thenReturn(Flux.fromIterable(sat1Quotes));
-        when(quoteRepository.findByTickerOrderByTradeDateDesc("00679B")).thenReturn(Flux.fromIterable(bond1Quotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(core1Quotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("006208"), any(), any())).thenReturn(Flux.fromIterable(core2Quotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00757"), any(), any())).thenReturn(Flux.fromIterable(sat1Quotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00679B"), any(), any())).thenReturn(Flux.fromIterable(bond1Quotes));
 
         ArgumentCaptor<List<GlobalAssetScore>> scoreCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<GlobalAssetPairwiseMatrix>> matrixCaptor = ArgumentCaptor.forClass(List.class);
