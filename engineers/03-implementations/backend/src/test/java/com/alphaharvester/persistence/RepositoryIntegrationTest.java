@@ -157,10 +157,11 @@ class RepositoryIntegrationTest {
     void shouldVerifyFlywaySeededWatermarks() {
         StepVerifier.create(watermarkRepository.findAll().collectList())
                 .assertNext(list -> {
-                    assertThat(list).hasSize(7);
+                    assertThat(list).hasSize(8);
                     assertThat(list).extracting("feedName")
                             .contains("TAIWAN_ETF_QUOTES", "GLOBAL_BENCHMARKS", "CNN_FEAR_GREED",
-                                    "MACRO_YIELD_SNAPSHOT", "TWSE_DCA_RANKINGS", "TWSE_ETF_METADATA", "MONTHLY_TOP_LIST");
+                                    "MACRO_YIELD_SNAPSHOT", "TWSE_DCA_RANKINGS", "TWSE_ETF_METADATA",
+                                    "MONTHLY_TOP_LIST", "DIVIDENDS_AND_SPLITS");
                 })
                 .verifyComplete();
 
@@ -174,6 +175,13 @@ class RepositoryIntegrationTest {
         StepVerifier.create(watermarkRepository.findByFeedName("TWSE_DCA_RANKINGS"))
                 .assertNext(wm -> {
                     assertThat(wm.getFeedName()).isEqualTo("TWSE_DCA_RANKINGS");
+                    assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
+                })
+                .verifyComplete();
+
+        StepVerifier.create(watermarkRepository.findByFeedName("DIVIDENDS_AND_SPLITS"))
+                .assertNext(wm -> {
+                    assertThat(wm.getFeedName()).isEqualTo("DIVIDENDS_AND_SPLITS");
                     assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
                 })
                 .verifyComplete();
