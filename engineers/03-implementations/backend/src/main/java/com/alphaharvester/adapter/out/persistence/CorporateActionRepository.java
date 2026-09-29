@@ -16,5 +16,6 @@ public interface CorporateActionRepository extends R2dbcRepository<CorporateActi
     Flux<CorporateAction> findByEffectiveDateBetweenOrderByEffectiveDateAsc(LocalDateTime startDate, LocalDateTime endDate);
     Flux<CorporateAction> findByAssetIdOrderByEffectiveDateDesc(UUID assetId);
     Flux<CorporateAction> findByTickerOrderByEffectiveDateDesc(String ticker);
+    Flux<CorporateAction> findByTicker(String ticker);
 }
 

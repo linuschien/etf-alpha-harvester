@@ -151,7 +151,7 @@ public class YahooFinanceClient {
                 });
     }
 
-    private DividendsAndSplits parseDividendsAndSplits(JsonNode root, String ticker) {
+    DividendsAndSplits parseDividendsAndSplits(JsonNode root, String ticker) {
         try {
             JsonNode result = root.path("chart").path("result").get(0);
             if (result == null) return new DividendsAndSplits(List.of(), List.of());
@@ -171,10 +171,13 @@ public class YahooFinanceClient {
                     long epoch = item.path("date").asLong();
                     LocalDateTime exDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.systemDefault());
                     BigDecimal amount = BigDecimal.valueOf(item.path("amount").asDouble(0.0)).setScale(4, RoundingMode.HALF_UP);
+                    TaxTag taxTag = (ticker != null && ticker.endsWith("B"))
+                            ? TaxTag.OVERSEAS_76W
+                            : TaxTag.DOMESTIC_54C;
 
                     dividends.add(new DividendAnnouncement(
                             null, null, ticker, exDate, exDate.plusDays(30),
-                            amount, TaxTag.DOMESTIC_54C
+                            amount, taxTag
                     ));
                 }
             }

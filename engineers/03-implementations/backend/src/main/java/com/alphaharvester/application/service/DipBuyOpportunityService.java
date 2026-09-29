@@ -1,10 +1,13 @@
 package com.alphaharvester.application.service;
 
+import com.alphaharvester.adapter.out.persistence.CorporateActionRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.dto.DipBuyOpportunityScore;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
+import com.alphaharvester.domain.math.FinancialMetricsCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -17,16 +20,34 @@ public class DipBuyOpportunityService {
     private static final Logger log = LoggerFactory.getLogger(DipBuyOpportunityService.class);
 
     private final MarketDailyQuoteRepository quoteRepository;
+    private final CorporateActionRepository corporateActionRepository;
+
+    @Autowired
+    public DipBuyOpportunityService(MarketDailyQuoteRepository quoteRepository,
+                                   @Autowired(required = false) CorporateActionRepository corporateActionRepository) {
+        this.quoteRepository = quoteRepository;
+        this.corporateActionRepository = corporateActionRepository;
+    }
 
     public DipBuyOpportunityService(MarketDailyQuoteRepository quoteRepository) {
-        this.quoteRepository = quoteRepository;
+        this(quoteRepository, null);
     }
 
     public Mono<DipBuyOpportunityScore> calculateDipBuyOpportunity(String ticker) {
-        return quoteRepository.findByTickerOrderByTradeDateDesc(ticker)
+        Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerOrderByTradeDateDesc(ticker)
                 .take(252)
                 .collectList()
                 .filter(quotes -> !quotes.isEmpty())
+                .flatMap(rawQuotes -> {
+                    if (corporateActionRepository == null) {
+                        return Mono.just(rawQuotes);
+                    }
+                    return corporateActionRepository.findByTicker(ticker)
+                            .collectList()
+                            .map(splits -> FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, splits));
+                });
+
+        return quotesMono
                 .zipWith(
                         quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")
                                 .take(1)

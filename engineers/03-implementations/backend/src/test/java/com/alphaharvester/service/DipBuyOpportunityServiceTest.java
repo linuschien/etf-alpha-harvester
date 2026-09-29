@@ -1,9 +1,12 @@
 package com.alphaharvester.service;
 
+import com.alphaharvester.adapter.out.persistence.CorporateActionRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.dto.DipBuyOpportunityScore;
 import com.alphaharvester.application.service.DipBuyOpportunityService;
+import com.alphaharvester.domain.entity.CorporateAction;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
+import com.alphaharvester.domain.model.CorporateActionType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,11 +30,14 @@ class DipBuyOpportunityServiceTest {
     @Mock
     private MarketDailyQuoteRepository quoteRepository;
 
+    @Mock
+    private CorporateActionRepository corporateActionRepository;
+
     private DipBuyOpportunityService service;
 
     @BeforeEach
     void setUp() {
-        service = new DipBuyOpportunityService(quoteRepository);
+        service = new DipBuyOpportunityService(quoteRepository, corporateActionRepository);
     }
 
     @Test
@@ -108,6 +114,7 @@ class DipBuyOpportunityServiceTest {
                 new BigDecimal("21.0"), new BigDecimal("23.0"), new BigDecimal("20.5"),
                 new BigDecimal("22.5"), 0L, BigDecimal.ZERO, null, null);
 
+        when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.empty());
         when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(quote));
         when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Flux.just(vixQuote));
 
@@ -115,6 +122,47 @@ class DipBuyOpportunityServiceTest {
                 .assertNext(score -> {
                     assertThat(score.ticker()).isEqualTo("0050");
                     assertThat(score.compositeScore()).isGreaterThan(0.0);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should adjust quotes for stock splits and prevent false 5-star golden pit alarm")
+    void shouldAdjustQuotesForStockSplits() {
+        LocalDateTime now = LocalDateTime.now();
+        // Suppose current quote is post-split at 50.0 TWD
+        MarketDailyQuote postSplitQuote = new MarketDailyQuote(null, null, null, "0050", now,
+                new BigDecimal("50.0"), new BigDecimal("51.0"), new BigDecimal("49.5"),
+                new BigDecimal("50.0"), 1000000L, new BigDecimal("50000000"), null, null);
+
+        // Pre-split quote from 10 days ago at 200.0 TWD
+        MarketDailyQuote preSplitQuote = new MarketDailyQuote(null, null, null, "0050", now.minusDays(10),
+                new BigDecimal("200.0"), new BigDecimal("205.0"), new BigDecimal("198.0"),
+                new BigDecimal("200.0"), 1000000L, new BigDecimal("200000000"), null, null);
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote(null, null, null, "^VIX", now,
+                new BigDecimal("15.0"), new BigDecimal("16.0"), new BigDecimal("14.5"),
+                new BigDecimal("15.0"), 0L, BigDecimal.ZERO, null, null);
+
+        // 1-to-4 split: splitToShares=4, splitFromShares=1, effective 5 days ago
+        CorporateAction splitAction = new CorporateAction(
+                null, null, "0050", CorporateActionType.SPLIT,
+                now.minusDays(5), 4, 1
+        );
+
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(postSplitQuote, preSplitQuote));
+        when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.just(splitAction));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Flux.just(vixQuote));
+
+        // When split adjustment is applied:
+        // preSplitQuote is adjusted: 200.0 * (1/4) = 50.0
+        // max52w = 51.25 (from 205.0 * 1/4), current = 50.0 -> drawdown = (50 - 51.25)/51.25 ~ -2.4% (< 14.6%)
+        // fibonacciScore should be 0.0 (instead of 25.0 from -75% unadjusted drawdown!)
+        StepVerifier.create(service.calculateDipBuyOpportunity("0050"))
+                .assertNext(score -> {
+                    assertThat(score.ticker()).isEqualTo("0050");
+                    assertThat(score.fibonacciScore()).isEqualTo(0.0);
+                    assertThat(score.starRating()).doesNotContain("五星黃金坑");
                 })
                 .verifyComplete();
     }

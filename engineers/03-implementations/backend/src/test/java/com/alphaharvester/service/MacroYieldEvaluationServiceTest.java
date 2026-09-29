@@ -29,6 +29,12 @@ class MacroYieldEvaluationServiceTest {
     @Mock
     private MacroYieldSnapshotRepository macroYieldSnapshotRepository;
 
+    @Mock
+    private com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository quoteRepository;
+
+    @Mock
+    private com.alphaharvester.adapter.out.persistence.CorporateActionRepository corporateActionRepository;
+
     private MacroYieldEvaluationService macroYieldEvaluationService;
 
     @BeforeEach
@@ -208,6 +214,86 @@ class MacroYieldEvaluationServiceTest {
         when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.empty());
 
         StepVerifier.create(macroYieldEvaluationService.evaluateCurrentRegime())
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should prioritize ^TWII over 0050 in evaluateCurrentRegime")
+    void shouldPrioritizeTwiiOver0050InEvaluateCurrentRegime() {
+        MacroYieldEvaluationService serviceWithRepos = new MacroYieldEvaluationService(
+                macroYieldSnapshotRepository, quoteRepository, corporateActionRepository
+        );
+
+        LocalDateTime now = LocalDateTime.now();
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
+                null, now, new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
+        );
+
+        MarketDailyQuote twiiQuote = new MarketDailyQuote();
+        twiiQuote.setTicker("^TWII");
+        twiiQuote.setClosePrice(new BigDecimal("22000.0"));
+        twiiQuote.setTradeDate(now);
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote();
+        vixQuote.setTicker("^VIX");
+        vixQuote.setClosePrice(new BigDecimal("18.0"));
+        vixQuote.setTradeDate(now);
+
+        when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(snapshot));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(reactor.core.publisher.Flux.just(twiiQuote));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(reactor.core.publisher.Flux.just(vixQuote));
+
+        StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
+                .assertNext(assessment -> {
+                    assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.NORMAL);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should fallback to 0050 and adjust splits to prevent false CRISIS_LEVEL_2")
+    void shouldFallbackTo0050AndAdjustSplitsToPreventFalseCrisis() {
+        MacroYieldEvaluationService serviceWithRepos = new MacroYieldEvaluationService(
+                macroYieldSnapshotRepository, quoteRepository, corporateActionRepository
+        );
+
+        LocalDateTime now = LocalDateTime.now();
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
+                null, now, new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
+        );
+
+        // Post-split 0050 quote at 50.0 TWD
+        MarketDailyQuote postSplitQuote = new MarketDailyQuote(null, null, null, "0050", now,
+                new BigDecimal("50.0"), new BigDecimal("50.0"), new BigDecimal("50.0"),
+                new BigDecimal("50.0"), 1000000L, new BigDecimal("50000000"), null, null);
+
+        // Pre-split 0050 quote from 10 days ago at 200.0 TWD
+        MarketDailyQuote preSplitQuote = new MarketDailyQuote(null, null, null, "0050", now.minusDays(10),
+                new BigDecimal("200.0"), new BigDecimal("200.0"), new BigDecimal("200.0"),
+                new BigDecimal("200.0"), 1000000L, new BigDecimal("200000000"), null, null);
+
+        com.alphaharvester.domain.entity.CorporateAction splitAction = new com.alphaharvester.domain.entity.CorporateAction(
+                null, null, "0050", com.alphaharvester.domain.model.CorporateActionType.SPLIT,
+                now.minusDays(5), 4, 1
+        );
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote();
+        vixQuote.setTicker("^VIX");
+        vixQuote.setClosePrice(new BigDecimal("18.0"));
+        vixQuote.setTradeDate(now);
+
+        when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(snapshot));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")).thenReturn(reactor.core.publisher.Flux.empty());
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(reactor.core.publisher.Flux.just(postSplitQuote, preSplitQuote));
+        when(corporateActionRepository.findByTicker("0050")).thenReturn(reactor.core.publisher.Flux.just(splitAction));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(reactor.core.publisher.Flux.just(vixQuote));
+
+        // When split is adjusted: preSplitQuote becomes 200.0 * (1/4) = 50.0 -> drawdown = 0% -> NORMAL crisis level
+        StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
+                .assertNext(assessment -> {
+                    assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.NORMAL);
+                    assertThat(assessment.assessmentSummary()).doesNotContain("CRISIS_LEVEL_2");
+                })
                 .verifyComplete();
     }
 }

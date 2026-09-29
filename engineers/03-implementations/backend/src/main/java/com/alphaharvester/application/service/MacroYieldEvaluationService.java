@@ -1,10 +1,12 @@
 package com.alphaharvester.application.service;
 
+import com.alphaharvester.adapter.out.persistence.CorporateActionRepository;
 import com.alphaharvester.adapter.out.persistence.MacroYieldSnapshotRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.dto.MacroRegimeAssessment;
 import com.alphaharvester.domain.entity.MacroYieldSnapshot;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
+import com.alphaharvester.domain.math.FinancialMetricsCalculator;
 import com.alphaharvester.domain.model.CrisisLevel;
 import com.alphaharvester.domain.model.MacroState;
 import org.slf4j.Logger;
@@ -25,16 +27,24 @@ public class MacroYieldEvaluationService {
 
     private final MacroYieldSnapshotRepository macroYieldSnapshotRepository;
     private final MarketDailyQuoteRepository quoteRepository;
+    private final CorporateActionRepository corporateActionRepository;
 
     @Autowired
     public MacroYieldEvaluationService(MacroYieldSnapshotRepository macroYieldSnapshotRepository,
-                                       @Autowired(required = false) MarketDailyQuoteRepository quoteRepository) {
+                                       @Autowired(required = false) MarketDailyQuoteRepository quoteRepository,
+                                       @Autowired(required = false) CorporateActionRepository corporateActionRepository) {
         this.macroYieldSnapshotRepository = macroYieldSnapshotRepository;
         this.quoteRepository = quoteRepository;
+        this.corporateActionRepository = corporateActionRepository;
+    }
+
+    public MacroYieldEvaluationService(MacroYieldSnapshotRepository macroYieldSnapshotRepository,
+                                       MarketDailyQuoteRepository quoteRepository) {
+        this(macroYieldSnapshotRepository, quoteRepository, null);
     }
 
     public MacroYieldEvaluationService(MacroYieldSnapshotRepository macroYieldSnapshotRepository) {
-        this(macroYieldSnapshotRepository, null);
+        this(macroYieldSnapshotRepository, null, null);
     }
 
     public Mono<MacroRegimeAssessment> evaluateCurrentRegime() {
@@ -43,16 +53,24 @@ public class MacroYieldEvaluationService {
                     if (quoteRepository == null) {
                         return Mono.just(calculateAssessment(snapshot, null, null));
                     }
-                    Mono<List<MarketDailyQuote>> coreQuotesMono = quoteRepository.findByTickerOrderByTradeDateDesc("0050")
+                    Mono<List<MarketDailyQuote>> coreQuotesMono = quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")
                             .take(252)
                             .collectList()
-                            .flatMap(list -> {
-                                if (list.isEmpty()) {
-                                    return quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")
-                                            .take(252)
-                                            .collectList();
+                            .flatMap(twiiList -> {
+                                if (!twiiList.isEmpty()) {
+                                    return Mono.just(twiiList);
                                 }
-                                return Mono.just(list);
+                                return quoteRepository.findByTickerOrderByTradeDateDesc("0050")
+                                        .take(252)
+                                        .collectList()
+                                        .flatMap(quotes0050 -> {
+                                            if (quotes0050.isEmpty() || corporateActionRepository == null) {
+                                                return Mono.just(quotes0050);
+                                            }
+                                            return corporateActionRepository.findByTicker("0050")
+                                                    .collectList()
+                                                    .map(splits -> FinancialMetricsCalculator.adjustQuotesForSplits(quotes0050, splits));
+                                        });
                             })
                             .defaultIfEmpty(Collections.emptyList());
 
