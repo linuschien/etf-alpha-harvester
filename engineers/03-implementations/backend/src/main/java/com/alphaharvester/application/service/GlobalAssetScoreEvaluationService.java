@@ -360,15 +360,24 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                 // Daily returns in 365d
                                 Map<LocalDate, Double> dailyReturns365d = FinancialMetricsCalculator.calculateDailyReturns(adjustedQuotes);
 
-                                // Benchmark regressions
+                                Integer dcaRank = dcaRankMap.get(asset.getTicker());
+                                boolean isBond = asset.getTicker().endsWith("B");
+
+                                if (isBond) {
+                                    // Qualified for Defensive Bond Pool: bypass equity benchmark regressions
+                                    double ytm = calculateDividendYield(asset, quotes365d, dividendMap.get(asset.getTicker()), cutoffDateTime);
+                                    return Optional.of(new EvaluatedCandidate(
+                                            asset, CandidateAssetClass.DEFENSIVE, quotes365d, dailyReturns365d,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ytm, dcaRank, currentAum
+                                    ));
+                                }
+
+                                // Benchmark regressions for equity ETFs (Core vs Satellite routing)
                                 double r2Twii = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^TWII"), 0);
                                 double r2Gspc = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^GSPC"), 1);
                                 double r2Ndx  = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^NDX"), 1);
                                 double r2N225 = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^N225"), 0);
                                 double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
-
-                                Integer dcaRank = dcaRankMap.get(asset.getTicker());
-                                boolean isBond = asset.getTicker().endsWith("B") || (asset.getName() != null && asset.getName().contains("債"));
 
                                 // Routing logic
                                 if (maxR2 >= CORE_R2_THRESHOLD) {
@@ -376,13 +385,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                     return Optional.of(new EvaluatedCandidate(
                                             asset, CandidateAssetClass.CORE, quotes365d, dailyReturns365d,
                                             maxR2, r2Twii, 0.0, 0.0, 0.0, 0.0, 0.0, dcaRank, currentAum
-                                    ));
-                                } else if (isBond) {
-                                    // Qualified for Defensive Bond Pool
-                                    double ytm = calculateDividendYield(asset, quotes365d, dividendMap.get(asset.getTicker()), cutoffDateTime);
-                                    return Optional.of(new EvaluatedCandidate(
-                                            asset, CandidateAssetClass.DEFENSIVE, quotes365d, dailyReturns365d,
-                                            maxR2, r2Twii, 0.0, 0.0, 0.0, 0.0, ytm, dcaRank, currentAum
                                     ));
                                 } else {
                                     // Check Satellite Gates
