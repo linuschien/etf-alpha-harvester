@@ -82,7 +82,7 @@ public class MarketDailyQuoteDumpIntegrationTest {
         assertThat(allQuotes.size()).isGreaterThanOrEqualTo(30000);
 
         // 5. Group quotes by Year-Month (e.g., "202410", "202411", ..., "202609")
-        Map<String, List<MarketDailyQuote>> quotesByMonth = allQuotes.stream()
+        TreeMap<String, List<MarketDailyQuote>> quotesByMonth = allQuotes.stream()
                 .filter(q -> q.getTradeDate() != null && q.getClosePrice() != null)
                 .collect(Collectors.groupingBy(
                         q -> q.getTradeDate().format(MONTH_KEY_FMT),
@@ -132,6 +132,39 @@ public class MarketDailyQuoteDumpIntegrationTest {
                         sql.append(";\n\n");
                     }
                 }
+            }
+
+            // Append watermark updates to the latest month migration file
+            if (monthKey.equals(quotesByMonth.lastKey())) {
+                sql.append("\n-- Update watermarks for market daily quotes\n");
+                MarketDailyQuote latest = allQuotes.get(allQuotes.size() - 1);
+                String latestDateStr = latest.getTradeDate().format(SQL_TIMESTAMP_FMT);
+                long etfCount = allQuotes.stream().filter(q -> q.getBenchmarkId() == null).count();
+                long benchCount = allQuotes.stream().filter(q -> q.getBenchmarkId() != null && !"FEAR_GREED".equals(q.getTicker())).count();
+                long cnnCount = allQuotes.stream().filter(q -> "FEAR_GREED".equals(q.getTicker())).count();
+
+                sql.append(String.format("""
+                        UPDATE data_feed_sync_watermark
+                        SET latest_record_date = TIMESTAMP '%s',
+                            records_synced_count = %d,
+                            status = 'SUCCESS',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE feed_name = 'TAIWAN_ETF_QUOTES';
+
+                        UPDATE data_feed_sync_watermark
+                        SET latest_record_date = TIMESTAMP '%s',
+                            records_synced_count = %d,
+                            status = 'SUCCESS',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE feed_name = 'GLOBAL_BENCHMARKS';
+
+                        UPDATE data_feed_sync_watermark
+                        SET latest_record_date = TIMESTAMP '%s',
+                            records_synced_count = %d,
+                            status = 'SUCCESS',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE feed_name = 'CNN_FEAR_GREED';
+                        """, latestDateStr, etfCount, latestDateStr, benchCount, latestDateStr, cnnCount));
             }
 
             Files.writeString(filePath, sql.toString(), StandardCharsets.UTF_8);

@@ -320,3 +320,11 @@ VALUES
     ('467ad710-151d-362f-bfad-bcfa63ca5b8b', '00989B', '台新美國聚焦傘型證券投資信託基金之台新美國優選收益非投資等級債券ETF證券投資信託基金', TIMESTAMP '2026-03-31 00:00:00', 'ICE TPEx 1-5年BB-B級美國優息非投資等級債券指數', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('a562f55e-4c05-3950-bc5d-f9d5ba715cb6', '00990B', '國泰全球多元收益傘型證券投資信託基金之全球收益非投資等級債券ETF證券投資信託基金', TIMESTAMP '2026-07-09 00:00:00', '彭博 TPEx 1-5 年成熟市場明日之星收益優選票息美元非投資等級債券指數', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('ffb4f481-b367-3227-be2a-451d8f76365f', '00991B', '貝萊德iShares安碩10年期以上A級美元公司債ETF證券投資信託基金', TIMESTAMP '2026-08-03 00:00:00', 'ICE TIP 10年期以上 A 級成熟市場美元公司債指數', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- Update watermark for TWSE_ETF_METADATA
+UPDATE data_feed_sync_watermark
+SET latest_record_date = TIMESTAMP '2026-09-29 00:00:00',
+    records_synced_count = 316,
+    status = 'SUCCESS',
+    updated_at = CURRENT_TIMESTAMP
+WHERE feed_name = 'TWSE_ETF_METADATA';

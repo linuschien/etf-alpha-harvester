@@ -5157,3 +5157,25 @@ VALUES
     ('153511d2-51c7-30c2-958f-9c800e4c497e', NULL, 'b0000001-0000-0000-0000-000000000001', '^TWII', TIMESTAMP '2026-09-29 00:00:00', 47873.8906, 48045.1289, 47573.0898, 47631.9609, 0, 0.00, NULL, NULL),
     ('49df5143-9939-3826-a485-7aada64cd024', NULL, 'b0000001-0000-0000-0000-000000000006', '^VIX', TIMESTAMP '2026-09-29 00:00:00', 16.1700, 16.1900, 15.9800, 16.1200, 0, 0.00, NULL, NULL);
 
+-- Update watermarks for market daily quotes
+UPDATE data_feed_sync_watermark
+SET latest_record_date = TIMESTAMP '2026-09-29 00:00:00',
+    records_synced_count = 114734,
+    status = 'SUCCESS',
+    updated_at = CURRENT_TIMESTAMP
+WHERE feed_name = 'TAIWAN_ETF_QUOTES';
+
+UPDATE data_feed_sync_watermark
+SET latest_record_date = TIMESTAMP '2026-09-29 00:00:00',
+    records_synced_count = 3961,
+    status = 'SUCCESS',
+    updated_at = CURRENT_TIMESTAMP
+WHERE feed_name = 'GLOBAL_BENCHMARKS';
+
+UPDATE data_feed_sync_watermark
+SET latest_record_date = TIMESTAMP '2026-09-29 00:00:00',
+    records_synced_count = 499,
+    status = 'SUCCESS',
+    updated_at = CURRENT_TIMESTAMP
+WHERE feed_name = 'CNN_FEAR_GREED';
+

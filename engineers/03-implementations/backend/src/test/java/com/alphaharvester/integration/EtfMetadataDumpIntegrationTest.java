@@ -103,6 +103,17 @@ public class EtfMetadataDumpIntegrationTest {
             }
         }
 
+        // Append watermark update for TWSE_ETF_METADATA
+        sql.append("\n-- Update watermark for TWSE_ETF_METADATA\n");
+        sql.append(String.format("""
+                UPDATE data_feed_sync_watermark
+                SET latest_record_date = TIMESTAMP '%s 00:00:00',
+                    records_synced_count = %d,
+                    status = 'SUCCESS',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE feed_name = 'TWSE_ETF_METADATA';
+                """, java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE), dbAssets.size()));
+
         // 5. Write to src/main/resources/db/migration/V3__seed_etf_metadata.sql
         Path targetDir = Paths.get("src/main/resources/db/migration");
         if (!Files.exists(targetDir)) {

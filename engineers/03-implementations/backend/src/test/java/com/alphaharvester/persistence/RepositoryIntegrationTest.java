@@ -167,6 +167,13 @@ class RepositoryIntegrationTest {
         StepVerifier.create(watermarkRepository.findByFeedName("GLOBAL_BENCHMARKS"))
                 .assertNext(wm -> {
                     assertThat(wm.getFeedName()).isEqualTo("GLOBAL_BENCHMARKS");
+                    assertThat(wm.getStatus()).isEqualTo("SUCCESS");
+                })
+                .verifyComplete();
+
+        StepVerifier.create(watermarkRepository.findByFeedName("TWSE_DCA_RANKINGS"))
+                .assertNext(wm -> {
+                    assertThat(wm.getFeedName()).isEqualTo("TWSE_DCA_RANKINGS");
                     assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
                 })
                 .verifyComplete();
