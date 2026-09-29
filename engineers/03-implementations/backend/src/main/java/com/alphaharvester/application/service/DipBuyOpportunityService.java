@@ -96,22 +96,7 @@ public class DipBuyOpportunityService {
         }
 
         // 2. Fibonacci 52-Week (1 Natural Calendar Year) Drawdown Calculation
-        double max52w = currentPrice;
-        LocalDateTime latestTradeDate = (quotes.get(0).getTradeDate() != null) ? quotes.get(0).getTradeDate() : null;
-        LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusYears(1) : null;
-
-        for (MarketDailyQuote q : quotes) {
-            // Exclude quotes older than 1 natural calendar year (52 weeks, accounting for leap year)
-            if (window52wStart != null && q.getTradeDate() != null && q.getTradeDate().isBefore(window52wStart)) {
-                continue;
-            }
-            if (q.getHighPrice() != null && q.getHighPrice().doubleValue() > max52w) {
-                max52w = q.getHighPrice().doubleValue();
-            } else if (q.getClosePrice().doubleValue() > max52w) {
-                max52w = q.getClosePrice().doubleValue();
-            }
-        }
-        double drawdown = max52w > 0 ? (currentPrice - max52w) / max52w : 0.0;
+        double drawdown = FinancialMetricsCalculator.calculate52WeekDrawdown(quotes);
         double absDrawdown = Math.abs(drawdown);
 
         double fibonacciScore;

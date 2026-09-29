@@ -235,5 +235,66 @@ class FinancialMetricsCalculatorTest {
         // q3 is after split2 -> unchanged = 25.00
         assertThat(adjusted.get(2).getClosePrice()).isEqualByComparingTo(new BigDecimal("25.00"));
     }
+
+    @Test
+    @DisplayName("Should return 0.0 drawdown when quotes are empty or null")
+    void shouldReturnZeroDrawdownWhenQuotesAreEmptyOrNull() {
+        assertThat(FinancialMetricsCalculator.calculate52WeekDrawdown(null)).isEqualTo(0.0);
+        assertThat(FinancialMetricsCalculator.calculate52WeekDrawdown(Collections.emptyList())).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("Should correctly calculate 52-week drawdown comparing both high and close prices")
+    void shouldCalculate52WeekDrawdownCorrectly() {
+        LocalDateTime now = LocalDateTime.of(2026, 9, 1, 13, 30);
+        // Current quote: close = 100.0
+        MarketDailyQuote current = new MarketDailyQuote(null, null, null, "0050", now,
+                null, new BigDecimal("102.0"), null, new BigDecimal("100.0"), null, null, null, null);
+
+        // Peak quote 100 days ago: high = 200.0, close = 195.0
+        MarketDailyQuote peak = new MarketDailyQuote(null, null, null, "0050", now.minusDays(100),
+                null, new BigDecimal("200.0"), null, new BigDecimal("195.0"), null, null, null, null);
+
+        // Drawdown = (100 - 200) / 200 = -0.50 (-50%)
+        double dd = FinancialMetricsCalculator.calculate52WeekDrawdown(List.of(current, peak));
+        assertThat(dd).isCloseTo(-0.50, within(1e-4));
+    }
+
+    @Test
+    @DisplayName("Should respect 1 natural calendar year boundary and exclude older quotes")
+    void shouldExcludeQuotesOlderThanOneNaturalYear() {
+        LocalDateTime now = LocalDateTime.of(2026, 9, 1, 13, 30);
+        MarketDailyQuote current = new MarketDailyQuote(null, null, null, "0050", now,
+                null, new BigDecimal("100.0"), null, new BigDecimal("100.0"), null, null, null, null);
+
+        // Peak within 1 year (180 days ago): high = 120.0
+        MarketDailyQuote peakRecent = new MarketDailyQuote(null, null, null, "0050", now.minusDays(180),
+                null, new BigDecimal("120.0"), null, new BigDecimal("115.0"), null, null, null, null);
+
+        // Peak beyond 1 year (380 days ago): high = 300.0 (must be ignored!)
+        MarketDailyQuote peakOld = new MarketDailyQuote(null, null, null, "0050", now.minusDays(380),
+                null, new BigDecimal("300.0"), null, new BigDecimal("290.0"), null, null, null, null);
+
+        // Drawdown should be based on 120.0, not 300.0: (100 - 120) / 120 = -16.67%
+        double dd = FinancialMetricsCalculator.calculate52WeekDrawdown(List.of(current, peakRecent, peakOld));
+        assertThat(dd).isCloseTo(-0.166667, within(1e-4));
+    }
+
+    @Test
+    @DisplayName("Should handle leap year (366 calendar days) correctly in 52-week drawdown")
+    void shouldHandleLeapYearCorrectlyIn52WeekDrawdown() {
+        // 2024 is a leap year (366 days between 2023-03-01 and 2024-03-01)
+        LocalDateTime leapYearNow = LocalDateTime.of(2024, 3, 1, 13, 30);
+        LocalDateTime oneYearAgo = LocalDateTime.of(2023, 3, 1, 13, 30);
+
+        MarketDailyQuote current = new MarketDailyQuote(null, null, null, "0050", leapYearNow,
+                null, new BigDecimal("100.0"), null, new BigDecimal("100.0"), null, null, null, null);
+        MarketDailyQuote peakLeap = new MarketDailyQuote(null, null, null, "0050", oneYearAgo,
+                null, new BigDecimal("200.0"), null, new BigDecimal("190.0"), null, null, null, null);
+
+        // With minusYears(1), 2023-03-01 is included! Drawdown = (100 - 200) / 200 = -50%
+        double dd = FinancialMetricsCalculator.calculate52WeekDrawdown(List.of(current, peakLeap));
+        assertThat(dd).isCloseTo(-0.50, within(1e-4));
+    }
 }
 

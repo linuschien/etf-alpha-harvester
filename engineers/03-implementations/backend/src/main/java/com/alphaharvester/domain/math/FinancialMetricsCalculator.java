@@ -6,6 +6,7 @@ import com.alphaharvester.domain.entity.MarketDailyQuote;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.ToDoubleFunction;
 
@@ -399,6 +400,39 @@ public final class FinancialMetricsCalculator {
         String base = (tickerA.compareTo(tickerB) < 0) ? tickerA : tickerB;
         String target = (tickerA.compareTo(tickerB) < 0) ? tickerB : tickerA;
         return r2Lookup.getOrDefault(base + ":" + target, 0.0);
+    }
+
+    /**
+     * Calculates the 52-week (1 natural calendar year, leap-year safe) drawdown from a descending quote series.
+     * Evaluates against the highest price (considering both highPrice and closePrice) within [latest - 1 year, latest].
+     * Drawdown = (currentPrice - maxPrice) / maxPrice (<= 0.0).
+     */
+    public static double calculate52WeekDrawdown(List<MarketDailyQuote> quotes) {
+        if (quotes == null || quotes.isEmpty()) {
+            return 0.0;
+        }
+        MarketDailyQuote latest = quotes.get(0);
+        if (latest == null || latest.getClosePrice() == null) {
+            return 0.0;
+        }
+        double currentPrice = latest.getClosePrice().doubleValue();
+        LocalDateTime latestTradeDate = latest.getTradeDate();
+        LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusYears(1) : null;
+
+        double maxPrice = currentPrice;
+        for (MarketDailyQuote q : quotes) {
+            if (q == null) continue;
+            // Exclude quotes older than 1 natural calendar year (52 weeks, accounting for leap year)
+            if (window52wStart != null && q.getTradeDate() != null && q.getTradeDate().isBefore(window52wStart)) {
+                continue;
+            }
+            if (q.getHighPrice() != null && q.getHighPrice().doubleValue() > maxPrice) {
+                maxPrice = q.getHighPrice().doubleValue();
+            } else if (q.getClosePrice() != null && q.getClosePrice().doubleValue() > maxPrice) {
+                maxPrice = q.getClosePrice().doubleValue();
+            }
+        }
+        return maxPrice > 0.0 ? (currentPrice - maxPrice) / maxPrice : 0.0;
     }
 }
 

@@ -120,27 +120,7 @@ public class MacroYieldEvaluationService {
 
         // Determine Crisis Level:
         // 1. Drawdown on 52-week (1 natural calendar year) high of core benchmark
-        double drawdown = 0.0;
-        if (coreQuotes != null && !coreQuotes.isEmpty()) {
-            double currentPrice = coreQuotes.get(0).getClosePrice() != null ? coreQuotes.get(0).getClosePrice().doubleValue() : 0.0;
-            LocalDateTime latestTradeDate = coreQuotes.get(0).getTradeDate();
-            LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusYears(1) : null;
-            double maxPrice = currentPrice;
-            for (MarketDailyQuote q : coreQuotes) {
-                // Strict 1 natural calendar year (52 weeks, accounting for leap year) boundary
-                if (window52wStart != null && q.getTradeDate() != null && q.getTradeDate().isBefore(window52wStart)) {
-                    continue;
-                }
-                if (q.getHighPrice() != null && q.getHighPrice().doubleValue() > maxPrice) {
-                    maxPrice = q.getHighPrice().doubleValue();
-                } else if (q.getClosePrice() != null && q.getClosePrice().doubleValue() > maxPrice) {
-                    maxPrice = q.getClosePrice().doubleValue();
-                }
-            }
-            if (maxPrice > 0) {
-                drawdown = (currentPrice - maxPrice) / maxPrice;
-            }
-        }
+        double drawdown = FinancialMetricsCalculator.calculate52WeekDrawdown(coreQuotes);
 
         double vixValue = (vixQuote != null && vixQuote.getClosePrice() != null)
                 ? vixQuote.getClosePrice().doubleValue()
