@@ -216,8 +216,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     private Mono<Map<String, Map<LocalDate, Double>>> prefetchBenchmarks(LocalDateTime from, LocalDateTime to) {
         List<String> bms = List.of("^TWII", "^GSPC", "^NDX", "^N225");
         return Flux.fromIterable(bms)
-                .flatMap(bm -> quoteRepository.findByTickerOrderByTradeDateDesc(bm)
-                        .filter(q -> q.getTradeDate() != null && !q.getTradeDate().isBefore(from) && !q.getTradeDate().isAfter(to))
+                .flatMap(bm -> queryQuotesBetween(bm, from, to)
                         .collectList()
                         .map(quotes -> {
                             Map<LocalDate, Double> returns = FinancialMetricsCalculator.calculateDailyReturns(quotes);
@@ -312,12 +311,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
         return Flux.fromIterable(assets)
                 .flatMap(asset -> {
-                    return quoteRepository.findByTickerOrderByTradeDateDesc(asset.getTicker())
-                            .filter(q -> q.getTradeDate() != null && !q.getTradeDate().isBefore(queryStartDateTime) && !q.getTradeDate().isAfter(cutoffDateTime))
+                    return queryQuotesBetween(asset.getTicker(), queryStartDateTime, cutoffDateTime)
                             .collectList()
                             .map(rawQuotes -> {
-                                // Universal Gatekeeper 1: Listing age >= 365 calendar days
-                                if (asset.getListingDate() == null || asset.getListingDate().isAfter(cutoffDateTime.minusDays(365))) {
+                                // Universal Gatekeeper 1: Listing age >= 1 natural calendar year (accounting for leap year)
+                                if (asset.getListingDate() == null || asset.getListingDate().isAfter(cutoffDateTime.minusYears(1))) {
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
 
@@ -512,7 +510,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         BigDecimal lastPrice = quotes.get(quotes.size() - 1).getClosePrice();
         if (lastPrice == null || lastPrice.compareTo(BigDecimal.ZERO) <= 0) return 0.0;
 
-        LocalDateTime oneYearAgo = cutoff.minusDays(365);
+        LocalDateTime oneYearAgo = cutoff.minusYears(1);
         double totalDiv = divs.stream()
                 .filter(d -> d.getExDate() != null && !d.getExDate().isBefore(oneYearAgo) && !d.getExDate().isAfter(cutoff))
                 .filter(d -> d.getDividendPerShare() != null)
@@ -761,15 +759,15 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             }
         }
 
+        if (listingDate != null && evaluationDate != null && !listingDate.isAfter(evaluationDate.minusYears(1))) {
+            return DistributionFrequency.ANNUAL;
+        }
+
         long listingDays = (listingDate != null && evaluationDate != null)
                 ? Math.max(1, ChronoUnit.DAYS.between(listingDate, evaluationDate))
                 : 365;
 
-        if (listingDays >= 365) {
-            return DistributionFrequency.ANNUAL;
-        }
-
-        double annualizedCount = 1.0 * (365.0 / Math.max(listingDays, 30));
+        double annualizedCount = 1.0 * (365.25 / Math.max(listingDays, 30));
         if (annualizedCount >= 8.0) {
             return DistributionFrequency.MONTHLY;
         } else if (annualizedCount >= 2.5) {
@@ -779,6 +777,18 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         } else {
             return DistributionFrequency.ANNUAL;
         }
+    }
+
+    private Flux<MarketDailyQuote> queryQuotesBetween(String ticker, LocalDateTime from, LocalDateTime to) {
+        Flux<MarketDailyQuote> pushdownFlux = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(ticker, from, to);
+        Flux<MarketDailyQuote> fallback = quoteRepository.findByTickerOrderByTradeDateDesc(ticker);
+        Flux<MarketDailyQuote> filteredFallback = (fallback != null)
+                ? fallback.filter(q -> q.getTradeDate() != null && !q.getTradeDate().isBefore(from) && !q.getTradeDate().isAfter(to))
+                : Flux.empty();
+        if (pushdownFlux != null) {
+            return pushdownFlux.switchIfEmpty(filteredFallback);
+        }
+        return filteredFallback;
     }
 }
 

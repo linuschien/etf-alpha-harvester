@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -54,18 +55,19 @@ public class MacroYieldEvaluationService {
                     if (quoteRepository == null) {
                         return Mono.just(calculateAssessment(snapshot, null, null));
                     }
-                    Mono<List<MarketDailyQuote>> coreQuotesMono = quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")
+                    LocalDateTime fromDate = LocalDateTime.now().minusYears(1).minusDays(15);
+                    Mono<List<MarketDailyQuote>> coreQuotesMono = queryRecentQuotes("^TWII", fromDate)
                             .take(300)
                             .collectList()
-                            .map(this::filterQuotesIn365CalendarDays)
+                            .map(this::filterQuotesInOneCalendarYear)
                             .flatMap(twiiList -> {
                                 if (!twiiList.isEmpty()) {
                                     return Mono.just(twiiList);
                                 }
-                                return quoteRepository.findByTickerOrderByTradeDateDesc("0050")
+                                return queryRecentQuotes("0050", fromDate)
                                         .take(300)
                                         .collectList()
-                                        .map(this::filterQuotesIn365CalendarDays)
+                                        .map(this::filterQuotesInOneCalendarYear)
                                         .flatMap(quotes0050 -> {
                                             if (quotes0050.isEmpty() || corporateActionRepository == null) {
                                                 return Mono.just(quotes0050);
@@ -77,9 +79,13 @@ public class MacroYieldEvaluationService {
                             })
                             .defaultIfEmpty(Collections.emptyList());
 
-                    Mono<Optional<MarketDailyQuote>> vixQuoteMono = quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")
-                            .take(1)
-                            .next()
+                    Mono<MarketDailyQuote> firstVix = quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX");
+                    Flux<MarketDailyQuote> vixFallback = quoteRepository.findByTickerOrderByTradeDateDesc("^VIX");
+                    Flux<MarketDailyQuote> vixFlux = (firstVix != null)
+                            ? firstVix.flux().switchIfEmpty(vixFallback != null ? vixFallback.take(1) : Flux.empty())
+                            : (vixFallback != null ? vixFallback.take(1) : Flux.empty());
+
+                    Mono<Optional<MarketDailyQuote>> vixQuoteMono = vixFlux.next()
                             .map(Optional::of)
                             .defaultIfEmpty(Optional.empty());
 
@@ -125,15 +131,15 @@ public class MacroYieldEvaluationService {
         }
 
         // Determine Crisis Level:
-        // 1. Drawdown on 52-week (365 calendar days) high of core benchmark
+        // 1. Drawdown on 52-week (1 natural calendar year) high of core benchmark
         double drawdown = 0.0;
         if (coreQuotes != null && !coreQuotes.isEmpty()) {
             double currentPrice = coreQuotes.get(0).getClosePrice() != null ? coreQuotes.get(0).getClosePrice().doubleValue() : 0.0;
             LocalDateTime latestTradeDate = coreQuotes.get(0).getTradeDate();
-            LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusDays(365) : null;
+            LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusYears(1) : null;
             double maxPrice = currentPrice;
             for (MarketDailyQuote q : coreQuotes) {
-                // Strict 365 natural calendar days (52 weeks) boundary
+                // Strict 1 natural calendar year (52 weeks, accounting for leap year) boundary
                 if (window52wStart != null && q.getTradeDate() != null && q.getTradeDate().isBefore(window52wStart)) {
                     continue;
                 }
@@ -173,7 +179,7 @@ public class MacroYieldEvaluationService {
         return new MacroRegimeAssessment(state, equityRatio, bondRatio, yieldValue, summary, crisisLevel);
     }
 
-    private List<MarketDailyQuote> filterQuotesIn365CalendarDays(List<MarketDailyQuote> quotes) {
+    public List<MarketDailyQuote> filterQuotesInOneCalendarYear(List<MarketDailyQuote> quotes) {
         if (quotes == null || quotes.isEmpty()) {
             return Collections.emptyList();
         }
@@ -181,9 +187,22 @@ public class MacroYieldEvaluationService {
         if (latest == null) {
             return quotes;
         }
-        LocalDateTime cutoff = latest.minusDays(365);
+        LocalDateTime cutoff = latest.minusYears(1);
         return quotes.stream()
                 .filter(q -> q.getTradeDate() == null || !q.getTradeDate().isBefore(cutoff))
                 .toList();
+    }
+
+    public List<MarketDailyQuote> filterQuotesIn365CalendarDays(List<MarketDailyQuote> quotes) {
+        return filterQuotesInOneCalendarYear(quotes);
+    }
+
+    private Flux<MarketDailyQuote> queryRecentQuotes(String ticker, LocalDateTime fromDate) {
+        Flux<MarketDailyQuote> pushdownFlux = quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(ticker, fromDate);
+        Flux<MarketDailyQuote> fallback = quoteRepository.findByTickerOrderByTradeDateDesc(ticker);
+        if (pushdownFlux != null) {
+            return pushdownFlux.switchIfEmpty(fallback != null ? fallback : Flux.empty());
+        }
+        return fallback != null ? fallback : Flux.empty();
     }
 }

@@ -206,5 +206,33 @@ class DipBuyOpportunityServiceTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should correctly include exactly 1-year ago quote during leap year (366 calendar days)")
+    void shouldHandleLeapYearCorrectlyWhenCalculating52wDrawdown() {
+        // 2024 is a leap year (February has 29 days, total 366 days between 2023-03-01 and 2024-03-01)
+        LocalDateTime leapYearNow = LocalDateTime.of(2024, 3, 1, 13, 30, 0);
+        LocalDateTime exactlyOneYearAgo = LocalDateTime.of(2023, 3, 1, 13, 30, 0);
+
+        MarketDailyQuote currentQuote = new MarketDailyQuote(null, null, null, "0050", leapYearNow,
+                new BigDecimal("100.0"), new BigDecimal("100.0"), new BigDecimal("99.0"),
+                new BigDecimal("100.0"), 1000000L, new BigDecimal("100000000"), null, null);
+
+        // Peak price 200.0 occurred on 2023-03-01 (366 calendar days ago)
+        MarketDailyQuote peakQuoteOneYearAgo = new MarketDailyQuote(null, null, null, "0050", exactlyOneYearAgo,
+                new BigDecimal("195.0"), new BigDecimal("200.0"), new BigDecimal("190.0"),
+                new BigDecimal("198.0"), 1000000L, new BigDecimal("198000000"), null, null);
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote(null, null, null, "^VIX", leapYearNow,
+                new BigDecimal("15.0"), new BigDecimal("16.0"), new BigDecimal("14.5"),
+                new BigDecimal("15.0"), 0L, BigDecimal.ZERO, null, null);
+
+        // evaluatePure directly tests the pure domain logic
+        DipBuyOpportunityScore score = service.evaluatePure("0050", List.of(currentQuote, peakQuoteOneYearAgo), 15.0);
+
+        // With minusYears(1), 2023-03-01 is within the 1-year boundary -> max52w = 200.0
+        // Drawdown = (100 - 200) / 200 = -50% (abs >= 0.382) -> fibonacciScore = 25.0
+        assertThat(score.fibonacciScore()).isEqualTo(25.0);
+    }
 }
 

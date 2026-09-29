@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface MarketDailyQuoteRepository extends R2dbcRepository<MarketDailyQuote, UUID>, ReactiveQueryByExampleExecutor<MarketDailyQuote> {
     Mono<MarketDailyQuote> findByTickerAndTradeDate(String ticker, LocalDateTime tradeDate);
     Flux<MarketDailyQuote> findByTickerAndTradeDateBetweenOrderByTradeDateAsc(String ticker, LocalDateTime startDate, LocalDateTime endDate);
+    Flux<MarketDailyQuote> findByTickerAndTradeDateBetweenOrderByTradeDateDesc(String ticker, LocalDateTime startDate, LocalDateTime endDate);
+    Flux<MarketDailyQuote> findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(String ticker, LocalDateTime startDate);
     Flux<MarketDailyQuote> findByAssetIdOrderByTradeDateAsc(UUID assetId);
     Flux<MarketDailyQuote> findByAssetIdOrderByTradeDateDesc(UUID assetId);
     Flux<MarketDailyQuote> findByBenchmarkIdOrderByTradeDateAsc(UUID benchmarkId);

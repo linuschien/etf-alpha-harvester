@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -35,7 +36,13 @@ public class DipBuyOpportunityService {
     }
 
     public Mono<DipBuyOpportunityScore> calculateDipBuyOpportunity(String ticker) {
-        Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerOrderByTradeDateDesc(ticker)
+        LocalDateTime fromDate = LocalDateTime.now().minusYears(1).minusMonths(3);
+        Flux<MarketDailyQuote> repoFlux = quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(ticker, fromDate);
+        Flux<MarketDailyQuote> effectiveQuotes = (repoFlux != null)
+                ? repoFlux.switchIfEmpty(quoteRepository.findByTickerOrderByTradeDateDesc(ticker))
+                : quoteRepository.findByTickerOrderByTradeDateDesc(ticker);
+
+        Mono<List<MarketDailyQuote>> quotesMono = (effectiveQuotes != null ? effectiveQuotes : Flux.<MarketDailyQuote>empty())
                 .take(260)
                 .collectList()
                 .filter(quotes -> !quotes.isEmpty())
@@ -48,11 +55,15 @@ public class DipBuyOpportunityService {
                             .map(splits -> FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, splits));
                 });
 
+        Mono<MarketDailyQuote> firstVix = quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX");
+        Flux<MarketDailyQuote> vixFallback = quoteRepository.findByTickerOrderByTradeDateDesc("^VIX");
+        Flux<MarketDailyQuote> vixFlux = (firstVix != null)
+                ? firstVix.flux().switchIfEmpty(vixFallback != null ? vixFallback.take(1) : Flux.empty())
+                : (vixFallback != null ? vixFallback.take(1) : Flux.empty());
+
         return quotesMono
                 .zipWith(
-                        quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")
-                                .take(1)
-                                .next()
+                        vixFlux.next()
                                 .filter(q -> q.getClosePrice() != null && q.getClosePrice().compareTo(BigDecimal.ZERO) > 0)
                                 .map(q -> q.getClosePrice().doubleValue())
                 )
@@ -97,13 +108,13 @@ public class DipBuyOpportunityService {
             bollingerScore = 0.0;
         }
 
-        // 2. Fibonacci 52-Week (365 Calendar Days) Drawdown Calculation
+        // 2. Fibonacci 52-Week (1 Natural Calendar Year) Drawdown Calculation
         double max52w = currentPrice;
         LocalDateTime latestTradeDate = (quotes.get(0).getTradeDate() != null) ? quotes.get(0).getTradeDate() : null;
-        LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusDays(365) : null;
+        LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusYears(1) : null;
 
         for (MarketDailyQuote q : quotes) {
-            // Exclude quotes older than 365 natural calendar days (52 weeks)
+            // Exclude quotes older than 1 natural calendar year (52 weeks, accounting for leap year)
             if (window52wStart != null && q.getTradeDate() != null && q.getTradeDate().isBefore(window52wStart)) {
                 continue;
             }

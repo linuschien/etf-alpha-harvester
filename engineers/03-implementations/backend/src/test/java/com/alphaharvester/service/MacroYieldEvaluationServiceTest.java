@@ -348,5 +348,42 @@ class MacroYieldEvaluationServiceTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should correctly include exactly 1-year ago quote during leap year (366 calendar days) in TAIEX drawdown")
+    void shouldHandleLeapYearCorrectlyInTaiexDrawdown() {
+        MacroYieldEvaluationService service = new MacroYieldEvaluationService(null, null, null);
+
+        LocalDateTime leapYearNow = LocalDateTime.of(2024, 3, 1, 13, 30, 0);
+        LocalDateTime exactlyOneYearAgo = LocalDateTime.of(2023, 3, 1, 13, 30, 0);
+
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
+                null, leapYearNow, new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
+        );
+
+        MarketDailyQuote currentQuote = new MarketDailyQuote();
+        currentQuote.setTicker("^TWII");
+        currentQuote.setClosePrice(new BigDecimal("20000.0"));
+        currentQuote.setTradeDate(leapYearNow);
+
+        MarketDailyQuote peakQuoteOneYearAgo = new MarketDailyQuote();
+        peakQuoteOneYearAgo.setTicker("^TWII");
+        peakQuoteOneYearAgo.setClosePrice(new BigDecimal("30000.0"));
+        peakQuoteOneYearAgo.setTradeDate(exactlyOneYearAgo);
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote();
+        vixQuote.setTicker("^VIX");
+        vixQuote.setClosePrice(new BigDecimal("18.0"));
+        vixQuote.setTradeDate(leapYearNow);
+
+        // evaluate pure assessment
+        MacroRegimeAssessment assessment = service.calculateAssessment(
+                snapshot, List.of(currentQuote, peakQuoteOneYearAgo), vixQuote
+        );
+
+        // Drawdown = (20000 - 30000) / 30000 = -33.3% <= -30% -> triggers CRISIS_LEVEL_2
+        assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.CRISIS_LEVEL_2);
+        assertThat(assessment.assessmentSummary()).contains("CRISIS_LEVEL_2");
+    }
 }
 
