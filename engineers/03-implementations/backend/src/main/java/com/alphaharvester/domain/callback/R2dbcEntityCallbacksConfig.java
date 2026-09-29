@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.r2dbc.mapping.event.BeforeConvertCallback;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -16,7 +17,13 @@ public class R2dbcEntityCallbacksConfig {
     public BeforeConvertCallback<GlobalAssetMetadata> globalAssetMetadataCallback() {
         return (entity, table) -> {
             if (entity.getId() == null) {
-                entity.setId(UUID.randomUUID());
+                if (entity.getTicker() != null && !entity.getTicker().isBlank()) {
+                    entity.setId(UUID.nameUUIDFromBytes(
+                            ("ALPHA-ETF:" + entity.getTicker().trim()).getBytes(StandardCharsets.UTF_8)
+                    ));
+                } else {
+                    entity.setId(UUID.randomUUID());
+                }
             }
             if (entity.getCreatedAt() == null) {
                 entity.setCreatedAt(LocalDateTime.now());

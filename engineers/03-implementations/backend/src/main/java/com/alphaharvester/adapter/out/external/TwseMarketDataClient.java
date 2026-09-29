@@ -70,7 +70,7 @@ public class TwseMarketDataClient {
 
                     return new GlobalAssetMetadata(
                             null, ticker, fullName, listingDate, underlyingIndex,
-                            1, now, now, null
+                            null, now, now, null
                     );
                 })
                 .filter(asset -> !asset.getTicker().isBlank() && STAGE_0_ALLOWLIST_PATTERN.matcher(asset.getTicker()).matches())

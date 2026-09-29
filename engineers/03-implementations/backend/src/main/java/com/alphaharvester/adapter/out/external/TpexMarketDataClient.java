@@ -105,7 +105,7 @@ public class TpexMarketDataClient {
 
             list.add(new GlobalAssetMetadata(
                     null, ticker, fullName, listingDate, underlyingIndex,
-                    1, now, now, null
+                    null, now, now, null
             ));
         }
         log.info("Parsed {} qualified TPEx OTC ETFs from MOPS CSV catalog.", list.size());

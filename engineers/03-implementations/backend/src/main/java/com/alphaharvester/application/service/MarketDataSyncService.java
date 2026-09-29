@@ -100,7 +100,10 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
         return executeSync(scope, now, request.backfillDays())
                 .flatMap(counts -> {
-                    if (gatekeeperService != null) {
+                    boolean requiresCompletenessCheck = gatekeeperService != null
+                            && (Boolean.TRUE.equals(request.evaluateAfterSync()) || scope == SyncScope.ALL || scope == SyncScope.QUOTES);
+
+                    if (requiresCompletenessCheck) {
                         return gatekeeperService.checkCompleteness()
                                 .flatMap(report -> {
                                     if (!report.isPassed()) {
@@ -206,6 +209,9 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             existing.setName(asset.getName());
                             if (asset.getUnderlyingIndex() != null) {
                                 existing.setUnderlyingIndex(asset.getUnderlyingIndex());
+                            }
+                            if (asset.getListingDate() != null) {
+                                existing.setListingDate(asset.getListingDate());
                             }
                             existing.setUpdatedAt(now);
                             return metadataRepository.save(existing);
