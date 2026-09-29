@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.alphaharvester.domain.entity.DataFeedSyncWatermark;
 import com.alphaharvester.domain.entity.DividendAnnouncement;
+import com.alphaharvester.domain.entity.MacroYieldSnapshot;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -22,6 +23,7 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -165,7 +167,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
     private Mono<SyncedRecordsCount> executeSync(SyncScope scope, LocalDateTime now, Integer backfillDays) {
         return syncMetadata(scope, now)
                 .flatMap(metaCount -> syncQuotes(scope, now, backfillDays)
-                        .flatMap(quotesCount -> syncMacroYields(scope, now)
+                        .flatMap(quotesCount -> syncMacroYields(scope, now, backfillDays)
                                 .flatMap(yieldCount -> syncDcaRanks(scope, now)
                                         .flatMap(dcaCount -> syncDividendsAndSplits(scope, now)
                                                 .map(divSplits -> new SyncedRecordsCount(
@@ -427,27 +429,53 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         return "5y";
     }
 
-    private Mono<Integer> syncMacroYields(SyncScope scope, LocalDateTime now) {
+    private Mono<Integer> syncMacroYields(SyncScope scope, LocalDateTime now, Integer backfillDays) {
         if (scope != SyncScope.ALL && scope != SyncScope.MACRO_YIELDS) {
             return Mono.just(0);
         }
-        log.info("Fetching and syncing macroeconomic treasury yields from Yahoo Finance...");
+        log.info("Fetching and syncing macroeconomic yields from FRED...");
         return watermarkRepository.findByFeedName(WATERMARK_MACRO_YIELD_SNAPSHOT)
                 .map(DataFeedSyncWatermark::getLatestRecordDate)
                 .defaultIfEmpty(now.minusDays(1))
-                .flatMap(latestRecordDate -> externalMarketDataPort.fetchLatestMacroYield()
-                        .flatMap(snapshot -> macroYieldRepository.findByRecordDate(snapshot.getRecordDate())
-                                .flatMap(existing -> {
-                                    existing.setUsCorporateBondEffectiveYield(snapshot.getUsCorporateBondEffectiveYield());
-                                    existing.setUs10YearTreasuryYield(snapshot.getUs10YearTreasuryYield());
-                                    existing.setUs20YearTreasuryYield(snapshot.getUs20YearTreasuryYield());
-                                    existing.setYieldSpread10yMinus2y(snapshot.getYieldSpread10yMinus2y());
-                                    return macroYieldRepository.save(existing);
-                                })
-                                .switchIfEmpty(macroYieldRepository.save(snapshot))
-                                .flatMap(saved -> updateWatermark(WATERMARK_MACRO_YIELD_SNAPSHOT, now, saved.getRecordDate(), 1)
-                                        .thenReturn(1)))
-                        .defaultIfEmpty(0));
+                .flatMap(latestRecordDate -> {
+                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
+                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
+                    boolean hasGap = daysMissed > allowedGap;
+                    boolean force = backfillDays != null && backfillDays > 0;
+
+                    if (hasGap || force) {
+                        int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
+                        LocalDate startDate = now.toLocalDate().minusDays(effectiveDays);
+                        LocalDate endDate = now.toLocalDate();
+                        log.warn("Macro yield watermark indicates gap or backfill requested (missed {} days, backfillDays={}). Syncing historical FRED yields from {} to {}...",
+                                daysMissed, backfillDays, startDate, endDate);
+
+                        return externalMarketDataPort.fetchHistoricalMacroYields(startDate, endDate)
+                                .flatMap(this::upsertMacroYieldSnapshot)
+                                .count()
+                                .map(Long::intValue)
+                                .flatMap(count -> updateWatermark(WATERMARK_MACRO_YIELD_SNAPSHOT, now, now, count)
+                                        .thenReturn(count));
+                    }
+
+                    return externalMarketDataPort.fetchLatestMacroYield()
+                            .flatMap(this::upsertMacroYieldSnapshot)
+                            .flatMap(saved -> updateWatermark(WATERMARK_MACRO_YIELD_SNAPSHOT, now, saved.getRecordDate(), 1)
+                                    .thenReturn(1))
+                            .defaultIfEmpty(0);
+                });
+    }
+
+    private Mono<MacroYieldSnapshot> upsertMacroYieldSnapshot(MacroYieldSnapshot snapshot) {
+        return macroYieldRepository.findByRecordDate(snapshot.getRecordDate())
+                .flatMap(existing -> {
+                    existing.setUsCorporateBondEffectiveYield(snapshot.getUsCorporateBondEffectiveYield());
+                    existing.setUs10YearTreasuryYield(snapshot.getUs10YearTreasuryYield());
+                    existing.setUs20YearTreasuryYield(snapshot.getUs20YearTreasuryYield());
+                    existing.setYieldSpread10yMinus2y(snapshot.getYieldSpread10yMinus2y());
+                    return macroYieldRepository.save(existing);
+                })
+                .switchIfEmpty(Mono.defer(() -> macroYieldRepository.save(snapshot)));
     }
 
     private Mono<Integer> syncDcaRanks(SyncScope scope, LocalDateTime now) {

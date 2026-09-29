@@ -72,6 +72,7 @@ class FredPublicMarketDataClientTest {
     void shouldFetchLatestMacroYield() {
         when(webClient.get()).thenReturn(requestHeadersUriSpec);
         when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.header(anyString(), anyString())).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
 
         String bamlcCsv = "observation_date,BAMLC0A0CMEY\n2026-09-22,5.69\n";
@@ -93,6 +94,55 @@ class FredPublicMarketDataClientTest {
                     assertThat(snapshot.getUs20YearTreasuryYield()).isEqualByComparingTo(new BigDecimal("5.33"));
                     assertThat(snapshot.getYieldSpread10yMinus2y()).isEqualByComparingTo(new BigDecimal("0.25"));
                     assertThat(snapshot.getRecordDate().toLocalDate()).isEqualTo(LocalDate.of(2026, 9, 22));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should parse all valid observations from CSV into Map")
+    void shouldParseAllObservationsFromCsv() {
+        String csv = """
+                observation_date,DGS10
+                2026-09-21,4.96
+                2026-09-22,4.96
+                2026-09-23,.
+                2026-09-24,5.18
+                """;
+        var map = client.parseAllObservationsFromCsv(csv);
+        assertThat(map).hasSize(3);
+        assertThat(map.get(LocalDate.of(2026, 9, 21))).isEqualByComparingTo(new BigDecimal("4.96"));
+        assertThat(map.get(LocalDate.of(2026, 9, 22))).isEqualByComparingTo(new BigDecimal("4.96"));
+        assertThat(map.get(LocalDate.of(2026, 9, 24))).isEqualByComparingTo(new BigDecimal("5.18"));
+    }
+
+    @Test
+    @DisplayName("Should fetch and assemble historical macro yields from FRED")
+    void shouldFetchHistoricalMacroYields() {
+        when(webClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.header(anyString(), anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+
+        String bamlcCsv = "observation_date,BAMLC0A0CMEY\n2026-09-22,5.69\n2026-09-23,5.83\n";
+        String dgs10Csv = "observation_date,DGS10\n2026-09-22,4.96\n2026-09-23,5.11\n";
+        String dgs20Csv = "observation_date,DGS20\n2026-09-22,5.33\n2026-09-23,5.45\n";
+        String t10y2yCsv = "observation_date,T10Y2Y\n2026-09-22,0.25\n2026-09-23,0.26\n";
+
+        when(responseSpec.bodyToMono(String.class)).thenReturn(
+                Mono.just(bamlcCsv),
+                Mono.just(dgs10Csv),
+                Mono.just(dgs20Csv),
+                Mono.just(t10y2yCsv)
+        );
+
+        StepVerifier.create(client.fetchHistoricalMacroYields(LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 23)))
+                .assertNext(s1 -> {
+                    assertThat(s1.getRecordDate().toLocalDate()).isEqualTo(LocalDate.of(2026, 9, 22));
+                    assertThat(s1.getUsCorporateBondEffectiveYield()).isEqualByComparingTo(new BigDecimal("5.69"));
+                })
+                .assertNext(s2 -> {
+                    assertThat(s2.getRecordDate().toLocalDate()).isEqualTo(LocalDate.of(2026, 9, 23));
+                    assertThat(s2.getUsCorporateBondEffectiveYield()).isEqualByComparingTo(new BigDecimal("5.83"));
                 })
                 .verifyComplete();
     }

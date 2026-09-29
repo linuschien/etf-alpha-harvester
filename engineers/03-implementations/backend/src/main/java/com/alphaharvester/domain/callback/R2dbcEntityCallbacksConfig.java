@@ -95,7 +95,11 @@ public class R2dbcEntityCallbacksConfig {
     @Bean
     public BeforeConvertCallback<MacroYieldSnapshot> macroYieldSnapshotCallback() {
         return (entity, table) -> {
-            if (entity.getId() == null) {
+            if (entity.getId() == null && entity.getRecordDate() != null) {
+                entity.setId(UUID.nameUUIDFromBytes(
+                        ("ALPHA-MACRO-YIELD:" + entity.getRecordDate().toLocalDate()).getBytes(StandardCharsets.UTF_8)
+                ));
+            } else if (entity.getId() == null) {
                 entity.setId(UUID.randomUUID());
             }
             return Mono.just(entity);

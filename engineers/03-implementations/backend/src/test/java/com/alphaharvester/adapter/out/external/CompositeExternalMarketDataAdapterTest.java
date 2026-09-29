@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +154,22 @@ class CompositeExternalMarketDataAdapterTest {
         when(fredClient.fetchLatestMacroYield()).thenReturn(Mono.just(snap));
 
         StepVerifier.create(adapter.fetchLatestMacroYield())
+                .assertNext(res -> assertThat(res.getUsCorporateBondEffectiveYield()).isEqualTo(new BigDecimal("5.69")))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should delegate fetchHistoricalMacroYields to FredPublicMarketDataClient")
+    void shouldDelegateFetchHistoricalMacroYields() {
+        MacroYieldSnapshot snap = new MacroYieldSnapshot(
+                UUID.randomUUID(), LocalDateTime.now(), new BigDecimal("5.69"),
+                new BigDecimal("4.96"), new BigDecimal("5.33"), new BigDecimal("0.25")
+        );
+        LocalDate start = LocalDate.now().minusDays(30);
+        LocalDate end = LocalDate.now();
+        when(fredClient.fetchHistoricalMacroYields(start, end)).thenReturn(Flux.just(snap));
+
+        StepVerifier.create(adapter.fetchHistoricalMacroYields(start, end))
                 .assertNext(res -> assertThat(res.getUsCorporateBondEffectiveYield()).isEqualTo(new BigDecimal("5.69")))
                 .verifyComplete();
     }

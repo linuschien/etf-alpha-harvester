@@ -162,6 +162,12 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     }
 
     @Override
+    public Flux<MacroYieldSnapshot> fetchHistoricalMacroYields(LocalDate startDate, LocalDate endDate) {
+        log.info("Fetching real historical macroeconomic yields from St. Louis Fed FRED ({} to {})...", startDate, endDate);
+        return fredClient.fetchHistoricalMacroYields(startDate, endDate);
+    }
+
+    @Override
     public Flux<DcaPopularityRank> fetchDcaPopularityRanks(int year, int month) {
         log.info("Fetching real DCA Top 20 rankings from TWSE OpenAPI for {}-{}...", year, month);
         return twseClient.fetchDcaRankings(year, month);

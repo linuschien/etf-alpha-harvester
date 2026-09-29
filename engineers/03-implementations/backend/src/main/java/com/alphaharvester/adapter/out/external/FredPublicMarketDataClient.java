@@ -3,17 +3,20 @@ package com.alphaharvester.adapter.out.external;
 import com.alphaharvester.domain.entity.MacroYieldSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Public client for Federal Reserve Economic Data (FRED), St. Louis Fed.
@@ -44,6 +47,8 @@ public class FredPublicMarketDataClient {
         String url = FRED_CSV_BASE + seriesId;
         return webClient.get()
                 .uri(url)
+                .header(HttpHeaders.USER_AGENT, "curl/8.5.0")
+                .header(HttpHeaders.ACCEPT, "*/*")
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(this::parseLatestObservationFromCsv)
@@ -91,6 +96,111 @@ public class FredPublicMarketDataClient {
         }).onErrorResume(e -> {
             log.error("Failed to fetch FRED macro yields: {}", e.getMessage(), e);
             return Mono.empty();
+        });
+    }
+
+    /**
+     * Fetches all observations for a given series in the given date range [startDate, endDate].
+     */
+    public Mono<Map<LocalDate, BigDecimal>> fetchHistoricalObservations(String seriesId, LocalDate startDate, LocalDate endDate) {
+        String url = FRED_CSV_BASE + seriesId + "&cosd=" + startDate + "&coed=" + endDate;
+        return webClient.get()
+                .uri(url)
+                .header(HttpHeaders.USER_AGENT, "curl/8.5.0")
+                .header(HttpHeaders.ACCEPT, "*/*")
+                .retrieve()
+                .bodyToMono(String.class)
+                .map(this::parseAllObservationsFromCsv)
+                .retryWhen(Retry.backoff(3, Duration.ofMillis(500)).maxBackoff(Duration.ofSeconds(3)))
+                .onErrorResume(e -> {
+                    log.error("Failed to fetch historical FRED series '{}': {}", seriesId, e.getMessage());
+                    return Mono.just(Collections.emptyMap());
+                });
+    }
+
+    /**
+     * Parses all valid observations from FRED CSV output into a sorted Map.
+     */
+    public Map<LocalDate, BigDecimal> parseAllObservationsFromCsv(String csvContent) {
+        if (csvContent == null || csvContent.isBlank()) {
+            return Collections.emptyMap();
+        }
+        Map<LocalDate, BigDecimal> result = new TreeMap<>();
+        String[] lines = csvContent.split("\r?\n");
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty()) continue;
+            String[] parts = line.split(",");
+            if (parts.length >= 2) {
+                String valStr = parts[1].trim();
+                if (!valStr.equals(".") && !valStr.isBlank()) {
+                    try {
+                        LocalDate date = LocalDate.parse(parts[0].trim());
+                        BigDecimal val = new BigDecimal(valStr).setScale(4, RoundingMode.HALF_UP);
+                        result.put(date, val);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Fetches complete 2-year (or specified range) historical macroeconomic treasury and corporate bond yields from FRED.
+     */
+    public Flux<MacroYieldSnapshot> fetchHistoricalMacroYields(LocalDate startDate, LocalDate endDate) {
+        log.info("Fetching historical macro yields from FRED between {} and {}...", startDate, endDate);
+        return Mono.zip(
+                fetchHistoricalObservations("BAMLC0A0CMEY", startDate, endDate),
+                fetchHistoricalObservations("DGS10", startDate, endDate),
+                fetchHistoricalObservations("DGS20", startDate, endDate),
+                fetchHistoricalObservations("T10Y2Y", startDate, endDate)
+        ).flatMapMany(tuple -> {
+            Map<LocalDate, BigDecimal> corpMap = tuple.getT1();
+            Map<LocalDate, BigDecimal> y10Map = tuple.getT2();
+            Map<LocalDate, BigDecimal> y20Map = tuple.getT3();
+            Map<LocalDate, BigDecimal> spreadMap = tuple.getT4();
+
+            TreeSet<LocalDate> allDates = new TreeSet<>();
+            allDates.addAll(corpMap.keySet());
+            allDates.addAll(y10Map.keySet());
+            allDates.addAll(y20Map.keySet());
+            allDates.addAll(spreadMap.keySet());
+
+            List<MacroYieldSnapshot> snapshots = new ArrayList<>();
+            BigDecimal lastCorp = null;
+            BigDecimal lastY10 = null;
+            BigDecimal lastY20 = null;
+            BigDecimal lastSpread = null;
+
+            for (LocalDate date : allDates) {
+                BigDecimal corp = corpMap.get(date);
+                BigDecimal y10 = y10Map.get(date);
+                BigDecimal y20 = y20Map.get(date);
+                BigDecimal spread = spreadMap.get(date);
+
+                if (corp != null) lastCorp = corp;
+                if (y10 != null) lastY10 = y10;
+                if (y20 != null) lastY20 = y20;
+                if (spread != null) lastSpread = spread;
+
+                // Trading days are dates where at least one treasury rate is observed
+                boolean isTradingDay = (y10 != null || y20 != null || spread != null);
+                if (isTradingDay && lastCorp != null && lastY10 != null && lastY20 != null && lastSpread != null) {
+                    snapshots.add(new MacroYieldSnapshot(
+                            null,
+                            date.atStartOfDay(),
+                            corp != null ? corp : lastCorp,
+                            y10 != null ? y10 : lastY10,
+                            y20 != null ? y20 : lastY20,
+                            spread != null ? spread : lastSpread
+                    ));
+                }
+            }
+
+            log.info("Successfully assembled {} historical MacroYieldSnapshots between {} and {}", snapshots.size(), startDate, endDate);
+            return Flux.fromIterable(snapshots);
         });
     }
 

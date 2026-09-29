@@ -4,6 +4,7 @@ import com.alphaharvester.domain.entity.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface ExternalMarketDataPort {
@@ -57,9 +58,14 @@ public interface ExternalMarketDataPort {
     Mono<MarketDailyQuote> fetchCnnSentimentQuote();
 
     /**
-     * Fetches macroeconomic treasury yields from Yahoo Finance (Zero API key required).
+     * Fetches macroeconomic treasury yields from Yahoo Finance / FRED (Zero API key required).
      */
     Mono<MacroYieldSnapshot> fetchLatestMacroYield();
+
+    /**
+     * Fetches historical macroeconomic yields for a given date range [startDate, endDate].
+     */
+    Flux<MacroYieldSnapshot> fetchHistoricalMacroYields(LocalDate startDate, LocalDate endDate);
 
     /**
      * Fetches regular quota (DCA) Top 20 ETF rankings from TWSE OpenAPI.
