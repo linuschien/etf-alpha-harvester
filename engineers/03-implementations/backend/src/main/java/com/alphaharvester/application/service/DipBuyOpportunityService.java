@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -35,7 +36,7 @@ public class DipBuyOpportunityService {
 
     public Mono<DipBuyOpportunityScore> calculateDipBuyOpportunity(String ticker) {
         Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerOrderByTradeDateDesc(ticker)
-                .take(252)
+                .take(260)
                 .collectList()
                 .filter(quotes -> !quotes.isEmpty())
                 .flatMap(rawQuotes -> {
@@ -96,9 +97,16 @@ public class DipBuyOpportunityService {
             bollingerScore = 0.0;
         }
 
-        // 2. Fibonacci 52-Week Drawdown Calculation
+        // 2. Fibonacci 52-Week (365 Calendar Days) Drawdown Calculation
         double max52w = currentPrice;
+        LocalDateTime latestTradeDate = (quotes.get(0).getTradeDate() != null) ? quotes.get(0).getTradeDate() : null;
+        LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusDays(365) : null;
+
         for (MarketDailyQuote q : quotes) {
+            // Exclude quotes older than 365 natural calendar days (52 weeks)
+            if (window52wStart != null && q.getTradeDate() != null && q.getTradeDate().isBefore(window52wStart)) {
+                continue;
+            }
             if (q.getHighPrice() != null && q.getHighPrice().doubleValue() > max52w) {
                 max52w = q.getHighPrice().doubleValue();
             } else if (q.getClosePrice().doubleValue() > max52w) {

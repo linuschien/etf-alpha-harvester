@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -54,15 +55,17 @@ public class MacroYieldEvaluationService {
                         return Mono.just(calculateAssessment(snapshot, null, null));
                     }
                     Mono<List<MarketDailyQuote>> coreQuotesMono = quoteRepository.findByTickerOrderByTradeDateDesc("^TWII")
-                            .take(252)
+                            .take(300)
                             .collectList()
+                            .map(this::filterQuotesIn365CalendarDays)
                             .flatMap(twiiList -> {
                                 if (!twiiList.isEmpty()) {
                                     return Mono.just(twiiList);
                                 }
                                 return quoteRepository.findByTickerOrderByTradeDateDesc("0050")
-                                        .take(252)
+                                        .take(300)
                                         .collectList()
+                                        .map(this::filterQuotesIn365CalendarDays)
                                         .flatMap(quotes0050 -> {
                                             if (quotes0050.isEmpty() || corporateActionRepository == null) {
                                                 return Mono.just(quotes0050);
@@ -122,12 +125,18 @@ public class MacroYieldEvaluationService {
         }
 
         // Determine Crisis Level:
-        // 1. Drawdown on 52-week high of core benchmark
+        // 1. Drawdown on 52-week (365 calendar days) high of core benchmark
         double drawdown = 0.0;
         if (coreQuotes != null && !coreQuotes.isEmpty()) {
             double currentPrice = coreQuotes.get(0).getClosePrice() != null ? coreQuotes.get(0).getClosePrice().doubleValue() : 0.0;
+            LocalDateTime latestTradeDate = coreQuotes.get(0).getTradeDate();
+            LocalDateTime window52wStart = (latestTradeDate != null) ? latestTradeDate.minusDays(365) : null;
             double maxPrice = currentPrice;
             for (MarketDailyQuote q : coreQuotes) {
+                // Strict 365 natural calendar days (52 weeks) boundary
+                if (window52wStart != null && q.getTradeDate() != null && q.getTradeDate().isBefore(window52wStart)) {
+                    continue;
+                }
                 if (q.getHighPrice() != null && q.getHighPrice().doubleValue() > maxPrice) {
                     maxPrice = q.getHighPrice().doubleValue();
                 } else if (q.getClosePrice() != null && q.getClosePrice().doubleValue() > maxPrice) {
@@ -162,5 +171,19 @@ public class MacroYieldEvaluationService {
         }
 
         return new MacroRegimeAssessment(state, equityRatio, bondRatio, yieldValue, summary, crisisLevel);
+    }
+
+    private List<MarketDailyQuote> filterQuotesIn365CalendarDays(List<MarketDailyQuote> quotes) {
+        if (quotes == null || quotes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LocalDateTime latest = quotes.get(0).getTradeDate();
+        if (latest == null) {
+            return quotes;
+        }
+        LocalDateTime cutoff = latest.minusDays(365);
+        return quotes.stream()
+                .filter(q -> q.getTradeDate() == null || !q.getTradeDate().isBefore(cutoff))
+                .toList();
     }
 }

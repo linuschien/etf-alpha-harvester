@@ -296,5 +296,57 @@ class MacroYieldEvaluationServiceTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should strictly exclude quotes older than 365 calendar days in TAIEX 52-week drawdown")
+    void shouldExcludeQuotesOlderThan365CalendarDaysInTaiexDrawdown() {
+        MacroYieldEvaluationService serviceWithRepos = new MacroYieldEvaluationService(
+                macroYieldSnapshotRepository, quoteRepository, corporateActionRepository
+        );
+
+        LocalDateTime now = LocalDateTime.now();
+        MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
+                null, now, new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
+        );
+
+        // Current TWII quote at 20,000
+        MarketDailyQuote currentQuote = new MarketDailyQuote();
+        currentQuote.setTicker("^TWII");
+        currentQuote.setClosePrice(new BigDecimal("20000.0"));
+        currentQuote.setTradeDate(now);
+
+        // Within 52 weeks (100 days ago) at 21,000 (drawdown ~ -4.7% -> NORMAL)
+        MarketDailyQuote quote100d = new MarketDailyQuote();
+        quote100d.setTicker("^TWII");
+        quote100d.setClosePrice(new BigDecimal("21000.0"));
+        quote100d.setTradeDate(now.minusDays(100));
+
+        // Beyond 52 weeks (380 days ago) at 35,000! (If leaked, drawdown = -42.8% -> would trigger false CRISIS_LEVEL_2!)
+        MarketDailyQuote quote380d = new MarketDailyQuote();
+        quote380d.setTicker("^TWII");
+        quote380d.setClosePrice(new BigDecimal("35000.0"));
+        quote380d.setTradeDate(now.minusDays(380));
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote();
+        vixQuote.setTicker("^VIX");
+        vixQuote.setClosePrice(new BigDecimal("18.0"));
+        vixQuote.setTradeDate(now);
+
+        when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(snapshot));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^TWII"))
+                .thenReturn(reactor.core.publisher.Flux.just(currentQuote, quote100d, quote380d));
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX"))
+                .thenReturn(reactor.core.publisher.Flux.just(vixQuote));
+
+        // When 365 calendar days rule is enforced:
+        // quote380d is excluded from maxPrice!
+        // maxPrice is 21,000 -> drawdown = -4.7% -> NORMAL (not CRISIS_LEVEL_2)
+        StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
+                .assertNext(assessment -> {
+                    assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.NORMAL);
+                    assertThat(assessment.assessmentSummary()).doesNotContain("CRISIS_LEVEL_2");
+                })
+                .verifyComplete();
+    }
 }
 

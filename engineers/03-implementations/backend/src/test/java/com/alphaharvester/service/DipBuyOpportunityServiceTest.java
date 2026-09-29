@@ -166,5 +166,45 @@ class DipBuyOpportunityServiceTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should strictly exclude quotes older than 365 calendar days when calculating 52-week drawdown")
+    void shouldExcludeQuotesOlderThan365CalendarDaysWhenCalculating52wDrawdown() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Current price at 100.0 TWD
+        MarketDailyQuote currentQuote = new MarketDailyQuote(null, null, null, "0050", now,
+                new BigDecimal("100.0"), new BigDecimal("102.0"), new BigDecimal("99.0"),
+                new BigDecimal("100.0"), 1000000L, new BigDecimal("100000000"), null, null);
+
+        // Within 52 weeks (180 days ago) at 110.0 TWD
+        MarketDailyQuote quote180d = new MarketDailyQuote(null, null, null, "0050", now.minusDays(180),
+                new BigDecimal("108.0"), new BigDecimal("110.0"), new BigDecimal("107.0"),
+                new BigDecimal("109.0"), 1000000L, new BigDecimal("109000000"), null, null);
+
+        // Beyond 52 weeks (380 days ago, which would be included if taking fixed 252 trading bars) at 200.0 TWD!
+        MarketDailyQuote quote380d = new MarketDailyQuote(null, null, null, "0050", now.minusDays(380),
+                new BigDecimal("195.0"), new BigDecimal("200.0"), new BigDecimal("190.0"),
+                new BigDecimal("198.0"), 1000000L, new BigDecimal("198000000"), null, null);
+
+        MarketDailyQuote vixQuote = new MarketDailyQuote(null, null, null, "^VIX", now,
+                new BigDecimal("15.0"), new BigDecimal("16.0"), new BigDecimal("14.5"),
+                new BigDecimal("15.0"), 0L, BigDecimal.ZERO, null, null);
+
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(currentQuote, quote180d, quote380d));
+        when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.empty());
+        when(quoteRepository.findByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Flux.just(vixQuote));
+
+        // When 365 calendar days rule is enforced:
+        // quote380d is excluded from max52w!
+        // max52w is 110.0 (from quote180d), current is 100.0 -> drawdown = (100 - 110) / 110 = -9.09% (< 14.6%)
+        // fibonacciScore must be 0.0 (not 25.0 from the leaked 200.0 peak of 380 days ago!)
+        StepVerifier.create(service.calculateDipBuyOpportunity("0050"))
+                .assertNext(score -> {
+                    assertThat(score.ticker()).isEqualTo("0050");
+                    assertThat(score.fibonacciScore()).isEqualTo(0.0);
+                })
+                .verifyComplete();
+    }
 }
 
