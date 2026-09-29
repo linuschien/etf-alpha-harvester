@@ -322,13 +322,25 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                 .map(DataFeedSyncWatermark::getLatestRecordDate)
                 .defaultIfEmpty(now.minusDays(1))
                 .flatMap(latestRecordDate -> {
-                    log.info("Syncing CNN Fear & Greed Sentiment (Watermark: '{}', latestRecordDate={})...",
-                            WATERMARK_CNN_FEAR_GREED, latestRecordDate);
+                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
+                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
+                    boolean hasGap = daysMissed > allowedGap;
+                    boolean force = backfillDays != null && backfillDays > 0;
 
-                    return externalMarketDataPort.fetchCnnSentimentQuote()
+                    int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
+                    String range = (hasGap || force) ? deriveRange(effectiveDays) : "5d";
+
+                    log.info("Syncing CNN Fear & Greed Sentiment (Watermark: '{}', latestRecordDate={}, hasGap={}, force={}, range='{}')...",
+                            WATERMARK_CNN_FEAR_GREED, latestRecordDate, hasGap, force, range);
+
+                    Flux<MarketDailyQuote> quotesFlux = (hasGap || force)
+                            ? externalMarketDataPort.fetchHistoricalQuotes("FEAR_GREED", range)
+                            : externalMarketDataPort.fetchCnnSentimentQuote().flux();
+
+                    return quotesFlux
                             .flatMap(this::upsertDailyQuote)
-                            .map(q -> 1)
-                            .defaultIfEmpty(0)
+                            .count()
+                            .map(Long::intValue)
                             .flatMap(count -> updateWatermark(WATERMARK_CNN_FEAR_GREED, now, now, count)
                                     .thenReturn(count));
                 });

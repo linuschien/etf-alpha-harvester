@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -137,7 +138,18 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
         if (ticker.startsWith("^")) {
             return yahooFinanceClient.fetchHistoricalQuotes(ticker, range);
         } else if ("FEAR_GREED".equals(ticker)) {
-            return cnnSentimentClient.fetchFearAndGreedIndex().flux();
+            LocalDate today = LocalDate.now();
+            LocalDate startDate = switch (range != null ? range : "2y") {
+                case "5y" -> today.minusYears(5);
+                case "2y" -> today.minusYears(2);
+                case "1y" -> today.minusYears(1);
+                case "6mo" -> today.minusMonths(6);
+                case "3mo" -> today.minusMonths(3);
+                case "1mo" -> today.minusMonths(1);
+                case "5d" -> today.minusDays(5);
+                default -> today.minusYears(2);
+            };
+            return cnnSentimentClient.fetchHistoricalFearAndGreedIndex(startDate.toString());
         } else {
             return yahooFinanceClient.fetchTaiwanEtfHistoricalQuotes(ticker, range);
         }
