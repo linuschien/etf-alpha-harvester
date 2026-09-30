@@ -157,5 +157,15 @@ public class R2dbcEntityCallbacksConfig {
             return Mono.just(entity);
         };
     }
+
+    @Bean
+    public BeforeConvertCallback<GlobalAssetPairwiseMatrix> globalAssetPairwiseMatrixCallback() {
+        return (entity, table) -> {
+            if (entity.getId() == null) {
+                entity.setId(UUID.randomUUID());
+            }
+            return Mono.just(entity);
+        };
+    }
 }
 

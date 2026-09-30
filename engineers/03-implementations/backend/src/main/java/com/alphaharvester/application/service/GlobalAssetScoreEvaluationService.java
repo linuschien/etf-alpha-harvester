@@ -497,7 +497,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             double composite = ( (1.0 / 3.0) * r2Pct + (1.0 / 3.0) * dcaPct + (1.0 / 3.0) * aumPct ) * 100.0;
 
             GlobalAssetScore score = new GlobalAssetScore();
-            score.setId(UUID.randomUUID());
             score.setAssetId(c.metadata().getId());
             score.setTicker(c.metadata().getTicker());
             score.setEvaluationDate(evaluationDateTime);
@@ -534,7 +533,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             double composite = ( (1.0 / 3.0) * momPct + (1.0 / 3.0) * kerPct + (1.0 / 3.0) * sharpePct ) * shadowDiscount * 100.0;
 
             GlobalAssetScore score = new GlobalAssetScore();
-            score.setId(UUID.randomUUID());
             score.setAssetId(c.metadata().getId());
             score.setTicker(c.metadata().getTicker());
             score.setEvaluationDate(evaluationDateTime);
@@ -575,7 +573,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             double composite = (0.70 * ytmPct + 0.30 * aumPct) * 100.0;
 
             GlobalAssetScore score = new GlobalAssetScore();
-            score.setId(UUID.randomUUID());
             score.setAssetId(c.metadata().getId());
             score.setTicker(c.metadata().getTicker());
             score.setEvaluationDate(evaluationDateTime);
@@ -618,7 +615,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                 FinancialMetricsCalculator.CorrelationResult res = FinancialMetricsCalculator.calculateCorrelationAndRSquared(aligned.returnsA(), aligned.returnsB());
 
                 GlobalAssetPairwiseMatrix entry = new GlobalAssetPairwiseMatrix(
-                        UUID.randomUUID(),
+                        null,
                         evaluationDateTime,
                         assetClass,
                         baseTicker,

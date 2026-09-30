@@ -189,7 +189,7 @@ class RepositoryIntegrationTest {
         StepVerifier.create(watermarkRepository.findByFeedName("MONTHLY_TOP_LIST"))
                 .assertNext(wm -> {
                     assertThat(wm.getFeedName()).isEqualTo("MONTHLY_TOP_LIST");
-                    assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
+                    assertThat(wm.getStatus()).isEqualTo("PASS");
                 })
                 .verifyComplete();
     }
@@ -199,6 +199,12 @@ class RepositoryIntegrationTest {
 
     @Autowired
     private com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository dividendRepository;
+
+    @Autowired
+    private com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository scoreRepository;
+
+    @Autowired
+    private com.alphaharvester.adapter.out.persistence.GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
 
     @Test
     @DisplayName("Should verify Flyway V7 seeded corporate actions (0050, 0052 splits) and dividends")
@@ -212,6 +218,18 @@ class RepositoryIntegrationTest {
 
         StepVerifier.create(dividendRepository.count())
                 .assertNext(count -> assertThat(count).isGreaterThanOrEqualTo(1000L))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should verify Flyway V8 seeded monthly top list scores and pairwise matrices")
+    void shouldVerifyFlywaySeededMonthlyTopListAndPairwiseMatrix() {
+        StepVerifier.create(scoreRepository.count())
+                .assertNext(count -> assertThat(count).isEqualTo(35L))
+                .verifyComplete();
+
+        StepVerifier.create(pairwiseMatrixRepository.count())
+                .assertNext(count -> assertThat(count).isEqualTo(235L))
                 .verifyComplete();
     }
 }
