@@ -49,8 +49,8 @@ public class MacroYieldDumpIntegrationTest {
         // 1. Clear existing snapshots in DB to ensure clean state
         macroYieldRepository.deleteAll().block();
 
-        // 2. Trigger 2-year (760 days, from 2024-09-01) historical macro yields sync via Service layer
-        MarketDataSyncRequest request = new MarketDataSyncRequest(SyncScope.MACRO_YIELDS, false, 760);
+        // 2. Trigger 2-year (730 days) historical macro yields sync via Service layer
+        MarketDataSyncRequest request = new MarketDataSyncRequest(SyncScope.MACRO_YIELDS, false, 730);
         MarketDataSyncResponse response = marketDataSyncUseCase.syncMarketData(request).block();
 
         assertThat(response).isNotNull();
