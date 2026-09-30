@@ -175,13 +175,20 @@ class RepositoryIntegrationTest {
         StepVerifier.create(watermarkRepository.findByFeedName("TWSE_DCA_RANKINGS"))
                 .assertNext(wm -> {
                     assertThat(wm.getFeedName()).isEqualTo("TWSE_DCA_RANKINGS");
-                    assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
+                    assertThat(wm.getStatus()).isEqualTo("SUCCESS");
                 })
                 .verifyComplete();
 
         StepVerifier.create(watermarkRepository.findByFeedName("DIVIDENDS_AND_SPLITS"))
                 .assertNext(wm -> {
                     assertThat(wm.getFeedName()).isEqualTo("DIVIDENDS_AND_SPLITS");
+                    assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
+                })
+                .verifyComplete();
+
+        StepVerifier.create(watermarkRepository.findByFeedName("MONTHLY_TOP_LIST"))
+                .assertNext(wm -> {
+                    assertThat(wm.getFeedName()).isEqualTo("MONTHLY_TOP_LIST");
                     assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
                 })
                 .verifyComplete();

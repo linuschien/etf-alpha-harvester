@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.alphaharvester.domain.entity.DataFeedSyncWatermark;
+import com.alphaharvester.domain.entity.DcaPopularityRank;
 import com.alphaharvester.domain.entity.DividendAnnouncement;
 import com.alphaharvester.domain.entity.MacroYieldSnapshot;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
@@ -488,10 +489,13 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     .flatMap(wm -> {
                         if ("SUCCESS".equalsIgnoreCase(wm.getStatus()) && wm.getLatestRecordDate() != null
                                 && wm.getRecordsSyncedCount() != null && wm.getRecordsSyncedCount() > 0) {
-                            if (wm.getLatestRecordDate().getYear() == now.getYear()
-                                    && wm.getLatestRecordDate().getMonthValue() == now.getMonthValue()) {
+                            java.time.YearMonth reportMonth = (now.getDayOfMonth() >= 11)
+                                    ? java.time.YearMonth.from(now).minusMonths(1)
+                                    : java.time.YearMonth.from(now).minusMonths(2);
+                            if (wm.getLatestRecordDate().getYear() == reportMonth.getYear()
+                                    && wm.getLatestRecordDate().getMonthValue() == reportMonth.getMonthValue()) {
                                 log.info("TWSE DCA rankings for {}-{} have already been synced (Watermark SUCCESS, count={}). Skipping monthly sync.",
-                                        now.getYear(), now.getMonthValue(), wm.getRecordsSyncedCount());
+                                        reportMonth.getYear(), reportMonth.getMonthValue(), wm.getRecordsSyncedCount());
                                 return Mono.just(0);
                             }
                         }
@@ -505,34 +509,41 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
     private Mono<Integer> executeSyncDcaRanks(LocalDateTime now) {
         log.info("Fetching and syncing regular quota (DCA) Top 20 rankings from TWSE...");
-        return externalMarketDataPort.fetchDcaPopularityRanks(now.getYear(), now.getMonthValue())
+        java.time.YearMonth reportMonth = (now.getDayOfMonth() >= 11)
+                ? java.time.YearMonth.from(now).minusMonths(1)
+                : java.time.YearMonth.from(now).minusMonths(2);
+        int reportYear = reportMonth.getYear();
+        int reportMonthVal = reportMonth.getMonthValue();
+        log.info("Target TWSE DCA ranking report month: {}-{}", reportYear, reportMonthVal);
+
+        return externalMarketDataPort.fetchDcaPopularityRanks(reportYear, reportMonthVal)
                 .flatMap(rank -> metadataRepository.findByTicker(rank.getTicker())
                         .flatMap(asset -> {
                             rank.setAssetId(asset.getId());
-                            return dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
-                                            rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
-                                    .flatMap(existing -> {
-                                        existing.setRankPosition(rank.getRankPosition());
-                                        existing.setRegularInvestorCount(rank.getRegularInvestorCount());
-                                        existing.setAssetId(asset.getId());
-                                        return dcaRankRepository.save(existing);
-                                    })
-                                    .switchIfEmpty(Mono.defer(() -> dcaRankRepository.save(rank)));
+                            return saveOrUpdateDcaRank(rank);
                         })
-                        .switchIfEmpty(Mono.defer(() -> 
-                                dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
-                                                rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
-                                        .flatMap(existing -> {
-                                            existing.setRankPosition(rank.getRankPosition());
-                                            existing.setRegularInvestorCount(rank.getRegularInvestorCount());
-                                            return dcaRankRepository.save(existing);
-                                        })
-                                        .switchIfEmpty(Mono.defer(() -> dcaRankRepository.save(rank)))
-                        )))
+                        .switchIfEmpty(Mono.defer(() -> saveOrUpdateDcaRank(rank))))
                 .count()
                 .map(Long::intValue)
-                .flatMap(dcaCount -> updateWatermark(WATERMARK_TWSE_DCA_RANKINGS, now, now, dcaCount)
-                        .thenReturn(dcaCount));
+                .flatMap(dcaCount -> {
+                    LocalDateTime recordDate = reportMonth.atEndOfMonth().atStartOfDay();
+                    return updateWatermark(WATERMARK_TWSE_DCA_RANKINGS, now, recordDate, dcaCount)
+                            .thenReturn(dcaCount);
+                });
+    }
+
+    private Mono<DcaPopularityRank> saveOrUpdateDcaRank(DcaPopularityRank rank) {
+        return dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(
+                        rank.getTicker(), rank.getRankingYear(), rank.getRankingMonth())
+                .flatMap(existing -> {
+                    existing.setRankPosition(rank.getRankPosition());
+                    existing.setRegularInvestorCount(rank.getRegularInvestorCount());
+                    if (rank.getAssetId() != null) {
+                        existing.setAssetId(rank.getAssetId());
+                    }
+                    return dcaRankRepository.save(existing);
+                })
+                .switchIfEmpty(Mono.defer(() -> dcaRankRepository.save(rank)));
     }
 
     private Mono<int[]> syncDividendsAndSplits(SyncScope scope, LocalDateTime now) {

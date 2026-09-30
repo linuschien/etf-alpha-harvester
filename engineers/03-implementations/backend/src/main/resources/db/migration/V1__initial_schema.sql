@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS global_asset_pairwise_matrix (
 
 CREATE TABLE IF NOT EXISTS dca_popularity_rank (
     id UUID PRIMARY KEY,
-    asset_id UUID NOT NULL REFERENCES global_asset_metadata(id) ON DELETE CASCADE,
+    asset_id UUID REFERENCES global_asset_metadata(id) ON DELETE CASCADE,
     ticker VARCHAR(32) NOT NULL,
     ranking_year INT NOT NULL,
     ranking_month INT NOT NULL,

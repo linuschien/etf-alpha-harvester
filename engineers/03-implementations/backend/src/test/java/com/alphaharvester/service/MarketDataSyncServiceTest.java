@@ -380,9 +380,13 @@ class MarketDataSyncServiceTest {
     @DisplayName("Should skip DCA rankings synchronization when already synced in current month with records (Scope ALL)")
     void shouldSkipDcaRanksWhenAlreadySyncedInCurrentMonth() {
         LocalDateTime now = LocalDateTime.now();
+        java.time.YearMonth reportMonth = (now.getDayOfMonth() >= 11)
+                ? java.time.YearMonth.from(now).minusMonths(1)
+                : java.time.YearMonth.from(now).minusMonths(2);
+        LocalDateTime recordDate = reportMonth.atEndOfMonth().atStartOfDay();
         DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
                 UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS,
-                now.minusDays(5), now.minusDays(5), 20, "SUCCESS", null, now.minusDays(5)
+                now.minusDays(5), recordDate, 20, "SUCCESS", null, now.minusDays(5)
         );
         when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS))
                 .thenReturn(Mono.just(watermark));
@@ -402,15 +406,19 @@ class MarketDataSyncServiceTest {
     @DisplayName("Should retry DCA rankings synchronization when watermark has 0 records synced this month")
     void shouldRetryDcaRanksWhenWatermarkHasZeroRecords() {
         LocalDateTime now = LocalDateTime.now();
+        java.time.YearMonth reportMonth = (now.getDayOfMonth() >= 11)
+                ? java.time.YearMonth.from(now).minusMonths(1)
+                : java.time.YearMonth.from(now).minusMonths(2);
+        LocalDateTime recordDate = reportMonth.atEndOfMonth().atStartOfDay();
         DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
                 UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS,
-                now.minusDays(2), now.minusDays(2), 0, "SUCCESS", null, now.minusDays(2)
+                now.minusDays(2), recordDate, 0, "SUCCESS", null, now.minusDays(2)
         );
         when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_DCA_RANKINGS))
                 .thenReturn(Mono.just(watermark));
 
-        DcaPopularityRank rank = new DcaPopularityRank(null, null, "0050", now.getYear(), now.getMonthValue(), 1, 1000000);
-        when(externalMarketDataPort.fetchDcaPopularityRanks(now.getYear(), now.getMonthValue())).thenReturn(Flux.just(rank));
+        DcaPopularityRank rank = new DcaPopularityRank(null, null, "0050", reportMonth.getYear(), reportMonth.getMonthValue(), 1, 1000000);
+        when(externalMarketDataPort.fetchDcaPopularityRanks(reportMonth.getYear(), reportMonth.getMonthValue())).thenReturn(Flux.just(rank));
         when(metadataRepository.findByTicker("0050")).thenReturn(Mono.empty());
         when(dcaRankRepository.findByTickerAndRankingYearAndRankingMonth(any(), any(), any())).thenReturn(Mono.empty());
         when(dcaRankRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -421,7 +429,7 @@ class MarketDataSyncServiceTest {
                 .assertNext(res -> {
                     assertThat(res.status()).isEqualTo("SUCCESS");
                     assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(1);
-                    verify(externalMarketDataPort).fetchDcaPopularityRanks(now.getYear(), now.getMonthValue());
+                    verify(externalMarketDataPort).fetchDcaPopularityRanks(reportMonth.getYear(), reportMonth.getMonthValue());
                 })
                 .verifyComplete();
     }

@@ -128,4 +128,53 @@ class TwseMarketDataClientTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should fetch DCA rankings from TWSE and parse No, ETFsSecurityCode, and accounts")
+    void shouldFetchDcaRankings() throws Exception {
+        String json = """
+                [
+                  {
+                    "No": "1",
+                    "STOCKsSecurityCode": "2330",
+                    "STOCKsName": "台積電",
+                    "STOCKsNumberofTradingAccounts": "231711",
+                    "ETFsSecurityCode": "0050",
+                    "ETFsName": "元大台灣50",
+                    "ETFsNumberofTradingAccounts": "1280028"
+                  },
+                  {
+                    "No": "2",
+                    "STOCKsSecurityCode": "2884",
+                    "STOCKsName": "玉山金",
+                    "STOCKsNumberofTradingAccounts": "27261",
+                    "ETFsSecurityCode": "0056",
+                    "ETFsName": "元大高股息",
+                    "ETFsNumberofTradingAccounts": "338456"
+                  }
+                ]
+                """;
+
+        when(webClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(json));
+
+        StepVerifier.create(client.fetchDcaRankings(2026, 8))
+                .assertNext(rank -> {
+                    assertThat(rank.getRankPosition()).isEqualTo(1);
+                    assertThat(rank.getTicker()).isEqualTo("0050");
+                    assertThat(rank.getRegularInvestorCount()).isEqualTo(1280028);
+                    assertThat(rank.getRankingYear()).isEqualTo(2026);
+                    assertThat(rank.getRankingMonth()).isEqualTo(8);
+                })
+                .assertNext(rank -> {
+                    assertThat(rank.getRankPosition()).isEqualTo(2);
+                    assertThat(rank.getTicker()).isEqualTo("0056");
+                    assertThat(rank.getRegularInvestorCount()).isEqualTo(338456);
+                    assertThat(rank.getRankingYear()).isEqualTo(2026);
+                    assertThat(rank.getRankingMonth()).isEqualTo(8);
+                })
+                .verifyComplete();
+    }
 }

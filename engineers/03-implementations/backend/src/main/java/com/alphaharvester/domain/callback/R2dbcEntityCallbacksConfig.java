@@ -120,7 +120,11 @@ public class R2dbcEntityCallbacksConfig {
     public BeforeConvertCallback<DcaPopularityRank> dcaPopularityRankCallback() {
         return (entity, table) -> {
             if (entity.getId() == null) {
-                entity.setId(UUID.randomUUID());
+                if (entity.getTicker() != null && entity.getRankingYear() != null && entity.getRankingMonth() != null) {
+                    entity.setId(UUID.nameUUIDFromBytes(("DCA:" + entity.getTicker() + ":" + entity.getRankingYear() + ":" + entity.getRankingMonth()).getBytes(StandardCharsets.UTF_8)));
+                } else {
+                    entity.setId(UUID.randomUUID());
+                }
             }
             return Mono.just(entity);
         };
