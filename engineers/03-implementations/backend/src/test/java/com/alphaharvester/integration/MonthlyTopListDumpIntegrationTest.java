@@ -5,6 +5,7 @@ import com.alphaharvester.adapter.out.persistence.DcaPopularityRankRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetPairwiseMatrixRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
+import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.port.in.GlobalAssetScoreEvaluationUseCase;
 import com.alphaharvester.application.service.GlobalAssetQueryService;
@@ -26,7 +27,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
@@ -50,6 +53,9 @@ public class MonthlyTopListDumpIntegrationTest {
 
     @Autowired
     private GlobalAssetScoreRepository scoreRepository;
+
+    @Autowired
+    private MarketDailyQuoteRepository quoteRepository;
 
     @Autowired
     private DcaPopularityRankRepository dcaRankRepository;
@@ -192,6 +198,571 @@ public class MonthlyTopListDumpIntegrationTest {
 
         assertThat(Files.exists(filePath)).isTrue();
         assertThat(Files.size(filePath)).isGreaterThan(1000L);
+    }
+
+    @Autowired(required = false)
+    private com.alphaharvester.application.port.out.ExternalMarketDataPort externalMarketDataPort;
+
+    @Autowired
+    private com.alphaharvester.adapter.out.persistence.CorporateActionRepository corporateActionRepository;
+
+    @Autowired
+    private com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository dividendRepository;
+
+    @Test
+    @DisplayName("Diagnose user questions: Core overseas ETFs, Satellite high-dividend ETFs, and 00720B")
+    void inspectUserQuestions() {
+        log.info("=== DIAGNOSING USER QUESTIONS ===");
+        LocalDateTime evalDate = LocalDateTime.of(2026, 9, 1, 0, 0);
+        LocalDateTime cutoff = LocalDateTime.of(2026, 8, 31, 23, 59, 59);
+        LocalDateTime start365d = LocalDateTime.of(2025, 9, 1, 0, 0);
+
+        var aumMap = externalMarketDataPort.fetchCurrentAumMap().block();
+
+        // Q1: Check 00646 (S&P500), 00662 (Nasdaq), 00657 (Nikkei), 00645 (Topix)
+        List<String> overseasCore = List.of("00646", "00662", "00657", "00645", "00661");
+        log.info("--- Q1: Overseas Benchmark ETFs ---");
+        for (String t : overseasCore) {
+            var meta = metadataRepository.findByTicker(t).block();
+            var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(t, start365d, cutoff)
+                    .collectList().block();
+            var aum = aumMap != null ? aumMap.get(t) : null;
+            log.info("ETF {}: meta={}, quotesCount={}, aum={}",
+                    t, meta != null ? meta.getName() : "NULL", quotes != null ? quotes.size() : 0, aum);
+
+            if (quotes != null && !quotes.isEmpty()) {
+                var bmTwii = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", start365d, cutoff).collectList().block();
+                var bmGspc = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^GSPC", start365d, cutoff).collectList().block();
+                var bmNdx = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^NDX", start365d, cutoff).collectList().block();
+                var bmN225 = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^N225", start365d, cutoff).collectList().block();
+
+                var ret = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(quotes);
+                var retTwii = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmTwii);
+                var retGspc = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmGspc);
+                var retNdx = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmNdx);
+                var retN225 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmN225);
+
+                double r2Twii = calcR2(ret, retTwii, 0);
+                double r2Gspc = calcR2(ret, retGspc, 1);
+                double r2Ndx = calcR2(ret, retNdx, 1);
+                double r2N225 = calcR2(ret, retN225, 0);
+                log.info("ETF {} R^2: TWII={}, GSPC={}, NDX={}, N225={}, maxR2={}",
+                        t, r2Twii, r2Gspc, r2Ndx, r2N225, Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225))));
+            }
+        }
+
+        // Q3: Check 00720B vs other bonds
+        log.info("--- Q3: Defensive Bonds (00720B vs Top 5) ---");
+        List<String> bonds = List.of("00720B", "00937B", "00768B", "00953B", "00981B", "00725B", "00679B", "00687B");
+        for (String b : bonds) {
+            var meta = metadataRepository.findByTicker(b).block();
+            var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(b, start365d, cutoff)
+                    .collectList().block();
+            var aum = aumMap != null ? aumMap.get(b) : null;
+            var divs = dividendRepository.findByTickerOrderByExDateDesc(b).collectList().block();
+            double totalDiv = 0.0;
+            if (divs != null) {
+                totalDiv = divs.stream()
+                        .filter(d -> d.getExDate() != null && !d.getExDate().isBefore(start365d) && !d.getExDate().isAfter(cutoff))
+                        .mapToDouble(d -> d.getDividendPerShare().doubleValue())
+                        .sum();
+            }
+            double lastPrice = (quotes != null && !quotes.isEmpty() && quotes.get(0).getClosePrice() != null)
+                    ? quotes.get(0).getClosePrice().doubleValue() : 1.0;
+            double ytm = lastPrice > 0 ? totalDiv / lastPrice : 0.0;
+            log.info("BOND {}: quotes={}, aum={}, divsCount={}, totalDiv={}, lastPrice={}, ytm={}%",
+                    b, quotes != null ? quotes.size() : 0, aum, divs != null ? divs.size() : 0, totalDiv, lastPrice, String.format("%.2f", ytm * 100));
+        }
+
+        // All evaluated defensive scores in DB:
+        var allDef = scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(CandidateAssetClass.DEFENSIVE, evalDate)
+                .collectList().block();
+        log.info("Evaluated Defensive in DB: {}", allDef != null ? allDef.size() : 0);
+        if (allDef != null) {
+            for (var s : allDef) {
+                log.info("Def Rank {}: {} - Score={}, YTM={}, AUM={}",
+                        s.getClassRank(), s.getTicker(), s.getCompositeScore(), s.getYtm(), s.getFundSizeTwd());
+            }
+        }
+        assertThat(allDef).isNotNull();
+    }
+
+    @Test
+    void validateUserPortfolio() {
+        LocalDate evalDate = LocalDate.of(2026, 9, 1);
+        LocalDateTime cutoff = evalDate.minusDays(1).atTime(23, 59, 59);
+        LocalDateTime start365d = cutoff.minusYears(1).plusDays(1).toLocalDate().atStartOfDay();
+
+        List<String> coreTw = List.of("0050", "00692", "00922", "009816");
+        List<String> coreUs = List.of("00646", "00662", "009813");
+        List<String> satUsTech = List.of("00757", "00830", "009820");
+        List<String> satTwTech = List.of("0052", "00935", "00881");
+        List<String> satTwDiv = List.of("00878", "0056", "00919");
+        List<String> satJp = List.of("00949", "00955", "00951");
+        List<String> satGlobal = List.of("00909", "00965", "009805", "009821");
+
+        List<List<String>> groups = List.of(coreTw, coreUs, satUsTech, satTwTech, satTwDiv, satJp, satGlobal);
+        List<String> groupNames = List.of("Core TW", "Core US", "Sat US Tech", "Sat TW Tech", "Sat TW Div", "Sat Japan", "Sat Global");
+
+        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
+
+        log.info("========== USER PORTFOLIO VALIDATION ==========");
+        for (int g = 0; g < groups.size(); g++) {
+            String gName = groupNames.get(g);
+            List<String> tickers = groups.get(g);
+            log.info("--- Group: {} ---", gName);
+            Map<String, Map<LocalDate, Double>> returnsMap = new HashMap<>();
+
+            for (String t : tickers) {
+                var meta = metadataRepository.findByTicker(t).block();
+                var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(t, start365d, cutoff)
+                        .collectList().block();
+                var aum = aumMap != null ? aumMap.get(t) : null;
+                long listingDays = (meta != null && meta.getListingDate() != null) ? java.time.temporal.ChronoUnit.DAYS.between(meta.getListingDate().toLocalDate(), cutoff.toLocalDate()) : 0;
+                boolean passAge = listingDays >= 365;
+                log.info("Ticker {}: Name='{}', Listing='{}' (age={}d, passAge={}), QuotesCount={}, AUM={}",
+                        t, meta != null ? meta.getName() : "NOT_FOUND", meta != null ? meta.getListingDate() : "NULL",
+                        listingDays, passAge, quotes != null ? quotes.size() : 0, aum);
+
+                if (quotes != null && !quotes.isEmpty()) {
+                    returnsMap.put(t, com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(quotes));
+                }
+            }
+
+            // Pairwise R2 within group
+            for (int i = 0; i < tickers.size(); i++) {
+                for (int j = i + 1; j < tickers.size(); j++) {
+                    String t1 = tickers.get(i);
+                    String t2 = tickers.get(j);
+                    if (returnsMap.containsKey(t1) && returnsMap.containsKey(t2)) {
+                        double r2 = calcR2(returnsMap.get(t1), returnsMap.get(t2), 0);
+                        log.info("Pairwise R^2 [{} vs {}] in {}: {}", t1, t2, gName, String.format("%.4f", r2));
+                    }
+                }
+            }
+        }
+        log.info("===============================================");
+    }
+
+    @Test
+    void diagnoseTargetTickers() {
+        LocalDate evalDate = LocalDate.of(2026, 9, 1);
+        LocalDateTime cutoff = evalDate.minusDays(1).atTime(23, 59, 59);
+        LocalDateTime start365d = cutoff.minusYears(1).plusDays(1).toLocalDate().atStartOfDay();
+        LocalDate window90dStart = cutoff.toLocalDate().minusDays(90);
+        LocalDate window30dStart = cutoff.toLocalDate().minusDays(30);
+
+        List<String> targets = List.of("00949", "00965", "009805");
+
+        var bmTwii = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", start365d, cutoff).collectList().block();
+        var bmGspc = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^GSPC", start365d, cutoff).collectList().block();
+        var bmNdx = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^NDX", start365d, cutoff).collectList().block();
+        var bmN225 = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^N225", start365d, cutoff).collectList().block();
+
+        var retTwii = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmTwii);
+        var retGspc = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmGspc);
+        var retNdx = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmNdx);
+        var retN225 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmN225);
+
+        log.info("========== DIAGNOSING 00949, 00965, 009805 ==========");
+        for (String t : targets) {
+            var meta = metadataRepository.findByTicker(t).block();
+            var rawQuotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(t, start365d, cutoff)
+                    .collectList().block();
+            long listingDays = (meta != null && meta.getListingDate() != null)
+                    ? java.time.temporal.ChronoUnit.DAYS.between(meta.getListingDate().toLocalDate(), cutoff.toLocalDate()) : 0;
+            boolean passAge = listingDays >= 365;
+
+            var quotes365d = (rawQuotes != null) ? rawQuotes.stream()
+                    .sorted(Comparator.comparing(com.alphaharvester.domain.entity.MarketDailyQuote::getTradeDate))
+                    .toList() : Collections.<com.alphaharvester.domain.entity.MarketDailyQuote>emptyList();
+            boolean passDays = quotes365d.size() >= 220;
+
+            // 30d Turnover
+            var quotes30d = quotes365d.stream()
+                    .filter(q -> !q.getTradeDate().toLocalDate().isBefore(window30dStart))
+                    .toList();
+            double totalTurnover30d = 0.0;
+            for (var q : quotes30d) {
+                if (q.getTradeValueTwd() != null) totalTurnover30d += q.getTradeValueTwd().doubleValue();
+            }
+            double avgTurnover30d = quotes30d.isEmpty() ? 0.0 : totalTurnover30d / quotes30d.size();
+            boolean passTurnover = avgTurnover30d >= 20_000_000.0;
+
+            var ret = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(quotes365d);
+            double r2Twii = calcR2(ret, retTwii, 0);
+            double r2Gspc = calcR2(ret, retGspc, 1);
+            double r2Ndx = calcR2(ret, retNdx, 1);
+            double r2N225 = calcR2(ret, retN225, 0);
+            double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
+            boolean passCoreR2 = maxR2 >= 0.80;
+
+            // Satellite Gates
+            List<Double> returns90d = ret.entrySet().stream()
+                    .filter(e -> !e.getKey().isBefore(window90dStart))
+                    .map(Map.Entry::getValue)
+                    .toList();
+            double vol90d = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(returns90d);
+            boolean passVol = vol90d >= 0.18;
+
+            BigDecimal p30d = findPriceNearDate(quotes365d, window30dStart);
+            BigDecimal p365d = findPriceNearDate(quotes365d, start365d.toLocalDate());
+            double mom121 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30d, p365d);
+            boolean passMom = mom121 > 0.0;
+
+            List<BigDecimal> prices365d = quotes365d.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
+            double ker = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateKaufmanEfficiencyRatio(prices365d);
+            double sharpe = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateSharpeRatio(new ArrayList<>(ret.values()));
+
+            log.info("DIAG {}: Name='{}', Listing={}, Days={}, PassAge={}, PassDays={}, AvgTurnover30d={} (PassTurnover={})",
+                    t, meta != null ? meta.getName() : "NULL", meta != null ? meta.getListingDate() : "NULL",
+                    quotes365d.size(), passAge, passDays, String.format("%.0f", avgTurnover30d), passTurnover);
+            log.info("DIAG {} R^2: TWII={}, GSPC={}, NDX={}, N225={}, maxR2={}, passCoreR2={}",
+                    t, String.format("%.4f", r2Twii), String.format("%.4f", r2Gspc), String.format("%.4f", r2Ndx),
+                    String.format("%.4f", r2N225), String.format("%.4f", maxR2), passCoreR2);
+            log.info("DIAG {} Satellite: vol90d={} (passVol={}), mom121={} (passMom={}), ker={}, sharpe={}, r2Twii={}",
+                    t, String.format("%.4f", vol90d), passVol, String.format("%.4f", mom121), passMom,
+                    String.format("%.4f", ker), String.format("%.4f", sharpe), String.format("%.4f", r2Twii));
+        }
+
+        // Now run full pipeline in-memory to get exact ranks of all satellites
+        var allAssets = metadataRepository.findAll().collectList().block();
+        record SatCand(String ticker, double mom, double ker, double sharpe, double r2Twii) {}
+        List<SatCand> satCands = new ArrayList<>();
+
+        for (var asset : allAssets) {
+            if (asset.getListingDate() == null || asset.getListingDate().isAfter(cutoff.minusYears(1))) continue;
+            var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(asset.getTicker(), start365d, cutoff).collectList().block();
+            if (quotes == null || quotes.size() < 220) continue;
+
+            // 30d turnover
+            var q30 = quotes.stream().filter(q -> !q.getTradeDate().toLocalDate().isBefore(window30dStart)).toList();
+            double turn = 0.0;
+            for (var q : q30) if (q.getTradeValueTwd() != null) turn += q.getTradeValueTwd().doubleValue();
+            if (q30.isEmpty() || (turn / q30.size()) < 20_000_000.0) continue;
+
+            boolean isBond = asset.getTicker().endsWith("B");
+            if (isBond) continue;
+
+            var ret = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(quotes);
+            double r2Twii = calcR2(ret, retTwii, 0);
+            double r2Gspc = calcR2(ret, retGspc, 1);
+            double r2Ndx = calcR2(ret, retNdx, 1);
+            double r2N225 = calcR2(ret, retN225, 0);
+            double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
+            if (maxR2 >= 0.80) continue; // Core
+
+            var r90 = ret.entrySet().stream().filter(e -> !e.getKey().isBefore(window90dStart)).map(Map.Entry::getValue).toList();
+            double vol = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(r90);
+            if (vol < 0.18) continue;
+
+            var p30 = findPriceNearDate(quotes, window30dStart);
+            var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
+            double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+            if (mom <= 0.0) continue;
+
+            var prices = quotes.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
+            double ker = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateKaufmanEfficiencyRatio(prices);
+            double sh = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateSharpeRatio(new ArrayList<>(ret.values()));
+
+            satCands.add(new SatCand(asset.getTicker(), mom, ker, sh, r2Twii));
+        }
+
+        log.info("Total qualified satellite candidates: {}", satCands.size());
+        var momR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(satCands, SatCand::mom, true);
+        var kerR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(satCands, SatCand::ker, true);
+        var shR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(satCands, SatCand::sharpe, true);
+
+        record ScoredSat(String ticker, double score, double raw, double discount, double mom, double ker, double sh, double r2Twii) {}
+        List<ScoredSat> scoredList = new ArrayList<>();
+        for (var c : satCands) {
+            double raw = (momR.get(c) + kerR.get(c) + shR.get(c)) / 3.0;
+            double disc = Math.max(0.0, 1.0 - c.r2Twii());
+            scoredList.add(new ScoredSat(c.ticker(), raw * disc * 100.0, raw * 100.0, disc, c.mom(), c.ker(), c.sharpe(), c.r2Twii()));
+        }
+        scoredList.sort(Comparator.comparing(ScoredSat::score).reversed());
+
+        for (int i = 0; i < scoredList.size(); i++) {
+            var s = scoredList.get(i);
+            if (targets.contains(s.ticker()) || i < 5 || i >= scoredList.size() - 5 || (i >= 18 && i <= 25)) {
+                log.info("Sat Rank #{}: {} - Score={}, Raw={}, Disc={}, MOM={}, KER={}, Sharpe={}, R2Twii={}",
+                        i + 1, s.ticker(), String.format("%.2f", s.score()), String.format("%.2f", s.raw()),
+                        String.format("%.2f", s.discount()), String.format("%.2f", s.mom()), String.format("%.4f", s.ker()),
+                        String.format("%.2f", s.sh()), String.format("%.4f", s.r2Twii()));
+            }
+        }
+        log.info("=======================================================");
+    }
+
+    @Test
+    void diagnoseAllUserExcludedTickers() {
+        LocalDate evalDate = LocalDate.of(2026, 9, 1);
+        LocalDateTime evalDateTime = evalDate.atStartOfDay();
+        LocalDateTime cutoff = evalDate.minusDays(1).atTime(23, 59, 59);
+        LocalDateTime start365d = cutoff.minusYears(1).plusDays(1).toLocalDate().atStartOfDay();
+        LocalDate window90dStart = cutoff.toLocalDate().minusDays(90);
+        LocalDate window30dStart = cutoff.toLocalDate().minusDays(30);
+
+        List<String> userTickers = List.of(
+                "0050", "00692", "00922", "009816",
+                "00646", "00662", "009813",
+                "00757", "00830", "009820",
+                "0052", "00935", "00881",
+                "00878", "0056", "00919",
+                "00949", "00955", "00951",
+                "00909", "00965", "009805", "009821"
+        );
+
+        var topScores = scoreRepository.findByEvaluationDateOrderByClassRankAsc(evalDateTime)
+                .collectList().block();
+        Map<String, GlobalAssetScore> topScoreMap = new HashMap<>();
+        if (topScores != null) {
+            for (var s : topScores) {
+                topScoreMap.put(s.getTicker(), s);
+            }
+        }
+
+        var bmTwii = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", start365d, cutoff).collectList().block();
+        var bmGspc = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^GSPC", start365d, cutoff).collectList().block();
+        var bmNdx = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^NDX", start365d, cutoff).collectList().block();
+        var bmN225 = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^N225", start365d, cutoff).collectList().block();
+
+        var retTwii = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmTwii);
+        var retGspc = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmGspc);
+        var retNdx = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmNdx);
+        var retN225 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmN225);
+
+        var allAssets = metadataRepository.findAll().collectList().block();
+        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
+
+        log.info("========== ALL USER TICKERS DIAGNOSIS (2026-09 TOP LIST) ==========");
+        for (String t : userTickers) {
+            if (topScoreMap.containsKey(t)) {
+                GlobalAssetScore s = topScoreMap.get(t);
+                log.info("[TOP LIST INCLUDED] {} ({} Rank #{}): Score={}, Status={}, Collision='{}'",
+                        t, s.getAssetClass(), s.getClassRank(), s.getCompositeScore(), s.getOrthogonalStatus(), s.getCollisionDetail());
+                continue;
+            }
+
+            // Excluded ticker: find exact root cause
+            var meta = metadataRepository.findByTicker(t).block();
+            if (meta == null) {
+                log.info("[EXCLUDED] {}: NOT FOUND in database metadata repository (Stage 0).", t);
+                continue;
+            }
+
+            long listingDays = (meta.getListingDate() != null)
+                    ? java.time.temporal.ChronoUnit.DAYS.between(meta.getListingDate().toLocalDate(), cutoff.toLocalDate()) : 0;
+            if (listingDays < 365) {
+                log.info("[EXCLUDED] {}: Stage 1 Gate 1 FAILED - Listing Age {}d < 365d (Listed: {})",
+                        t, listingDays, meta.getListingDate());
+                continue;
+            }
+
+            var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(t, start365d, cutoff).collectList().block();
+            if (quotes == null || quotes.size() < 220) {
+                log.info("[EXCLUDED] {}: Stage 1 Gate 1.2 FAILED - Trading days {} < 220",
+                        t, quotes != null ? quotes.size() : 0);
+                continue;
+            }
+
+            BigDecimal aum = (aumMap != null) ? aumMap.get(t) : null;
+            if (aum != null && aum.compareTo(new BigDecimal("2000000000")) < 0) {
+                log.info("[EXCLUDED] {}: Stage 1 Gate 2 FAILED - AUM {} < 20 億 TWD", t, aum);
+                continue;
+            }
+
+            var q30 = quotes.stream().filter(q -> !q.getTradeDate().toLocalDate().isBefore(window30dStart)).toList();
+            double turn = 0.0;
+            for (var q : q30) if (q.getTradeValueTwd() != null) turn += q.getTradeValueTwd().doubleValue();
+            double avgTurn = q30.isEmpty() ? 0.0 : turn / q30.size();
+            if (avgTurn < 20_000_000.0) {
+                log.info("[EXCLUDED] {}: Stage 1 Gate 3 FAILED - 30d Avg Daily Turnover {} < 20,000,000 TWD",
+                        t, String.format("%.0f", avgTurn));
+                continue;
+            }
+
+            var ret = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(quotes);
+            double r2Twii = calcR2(ret, retTwii, 0);
+            double r2Gspc = calcR2(ret, retGspc, 1);
+            double r2Ndx = calcR2(ret, retNdx, 1);
+            double r2N225 = calcR2(ret, retN225, 0);
+            double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
+
+            if (maxR2 >= 0.80) {
+                log.info("[EXCLUDED] {}: Routed to CORE (maxR2={}), but ranked outside Core Top 10.", t, String.format("%.4f", maxR2));
+            } else {
+                // Satellite
+                var r90 = ret.entrySet().stream().filter(e -> !e.getKey().isBefore(window90dStart)).map(Map.Entry::getValue).toList();
+                double vol = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(r90);
+                if (vol < 0.18) {
+                    log.info("[EXCLUDED] {}: Satellite Gate FAILED - Volatility 90d {} < 18%", t, String.format("%.2f%%", vol * 100));
+                    continue;
+                }
+
+                var p30 = findPriceNearDate(quotes, window30dStart);
+                var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
+                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+                if (mom <= 0.0) {
+                    log.info("[EXCLUDED] {}: Satellite Gate FAILED - Momentum 12-1 {} <= 0", t, String.format("%.2f%%", mom * 100));
+                    continue;
+                }
+
+                var prices = quotes.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
+                double ker = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateKaufmanEfficiencyRatio(prices);
+                double sh = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateSharpeRatio(new ArrayList<>(ret.values()));
+
+                log.info("[EXCLUDED] {}: Passed all gates, but Stage 2 score ranked outside Satellite Top 20 (MOM={}, KER={}, Sharpe={}, R2Twii={})",
+                        t, String.format("%.2f%%", mom * 100), String.format("%.4f", ker), String.format("%.2f", sh), String.format("%.4f", r2Twii));
+            }
+        }
+        log.info("====================================================================");
+    }
+
+    @Test
+    void inspectFunnelBreakdown() {
+        LocalDate evalDate = LocalDate.of(2026, 9, 1);
+        LocalDateTime cutoff = evalDate.minusDays(1).atTime(23, 59, 59);
+        LocalDateTime start365d = cutoff.minusYears(1).plusDays(1).toLocalDate().atStartOfDay();
+        LocalDate window90dStart = cutoff.toLocalDate().minusDays(90);
+        LocalDate window30dStart = cutoff.toLocalDate().minusDays(30);
+
+        var allAssets = metadataRepository.findAll().collectList().block();
+        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
+
+        var bmTwii = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", start365d, cutoff).collectList().block();
+        var bmGspc = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^GSPC", start365d, cutoff).collectList().block();
+        var bmNdx = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^NDX", start365d, cutoff).collectList().block();
+        var bmN225 = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^N225", start365d, cutoff).collectList().block();
+
+        var retTwii = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmTwii);
+        var retGspc = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmGspc);
+        var retNdx = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmNdx);
+        var retN225 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmN225);
+
+        int totalUniverse = allAssets != null ? allAssets.size() : 0;
+        int failedAge = 0;
+        int failedDays = 0;
+        int failedAum = 0;
+        int failedTurnover = 0;
+        int passedUniversal = 0;
+
+        int defensiveBonds = 0;
+        int corePool = 0;
+        int satelliteInitial = 0;
+
+        int satFailedVol = 0;
+        int satFailedMom = 0;
+        int satPassedQualified = 0;
+
+        List<String> failedVolTickers = new ArrayList<>();
+        List<String> failedMomTickers = new ArrayList<>();
+
+        for (var asset : allAssets) {
+            long listingDays = (asset.getListingDate() != null)
+                    ? java.time.temporal.ChronoUnit.DAYS.between(asset.getListingDate().toLocalDate(), cutoff.toLocalDate()) : 0;
+            if (listingDays < 365) {
+                failedAge++;
+                continue;
+            }
+
+            var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(asset.getTicker(), start365d, cutoff).collectList().block();
+            if (quotes == null || quotes.size() < 220) {
+                failedDays++;
+                continue;
+            }
+
+            BigDecimal aum = (aumMap != null) ? aumMap.get(asset.getTicker()) : null;
+            if (aum != null && aum.compareTo(new BigDecimal("2000000000")) < 0) {
+                failedAum++;
+                continue;
+            }
+
+            var q30 = quotes.stream().filter(q -> !q.getTradeDate().toLocalDate().isBefore(window30dStart)).toList();
+            double turn = 0.0;
+            for (var q : q30) if (q.getTradeValueTwd() != null) turn += q.getTradeValueTwd().doubleValue();
+            double avgTurn = q30.isEmpty() ? 0.0 : turn / q30.size();
+            if (avgTurn < 20_000_000.0) {
+                failedTurnover++;
+                continue;
+            }
+
+            passedUniversal++;
+
+            boolean isBond = asset.getTicker().endsWith("B");
+            if (isBond) {
+                defensiveBonds++;
+                continue;
+            }
+
+            var ret = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(quotes);
+            double r2Twii = calcR2(ret, retTwii, 0);
+            double r2Gspc = calcR2(ret, retGspc, 1);
+            double r2Ndx = calcR2(ret, retNdx, 1);
+            double r2N225 = calcR2(ret, retN225, 0);
+            double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
+
+            if (maxR2 >= 0.80) {
+                corePool++;
+            } else {
+                satelliteInitial++;
+                var r90 = ret.entrySet().stream().filter(e -> !e.getKey().isBefore(window90dStart)).map(Map.Entry::getValue).toList();
+                double vol = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(r90);
+                if (vol < 0.18) {
+                    satFailedVol++;
+                    failedVolTickers.add(asset.getTicker());
+                    continue;
+                }
+
+                var p30 = findPriceNearDate(quotes, window30dStart);
+                var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
+                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+                if (mom <= 0.0) {
+                    satFailedMom++;
+                    failedMomTickers.add(asset.getTicker());
+                    continue;
+                }
+
+                satPassedQualified++;
+            }
+        }
+
+        log.info("========== SCREENING FUNNEL BREAKDOWN ==========");
+        log.info("Total Universe: {}", totalUniverse);
+        log.info("Failed Gate 1 (Age < 365d): {}", failedAge);
+        log.info("Failed Gate 1.2 (Trading Days < 220): {}", failedDays);
+        log.info("Failed Gate 2 (AUM < 20億): {}", failedAum);
+        log.info("Failed Gate 3 (30d Turnover < 2000萬): {}", failedTurnover);
+        log.info("Passed Stage 1 Universal Gates: {}", passedUniversal);
+        log.info("--- Pool Distribution ---");
+        log.info("Defensive Bonds: {}", defensiveBonds);
+        log.info("Core Candidates (maxR2 >= 0.80): {}", corePool);
+        log.info("Satellite Candidates (Initial): {}", satelliteInitial);
+        log.info("--- Satellite Gates ---");
+        log.info("Satellite Failed Volatility (< 18%): {} -> {}", satFailedVol, failedVolTickers);
+        log.info("Satellite Failed Momentum (<= 0): {} -> {}", satFailedMom, failedMomTickers);
+        log.info("FINAL QUALIFIED SATELLITES: {}", satPassedQualified);
+        log.info("================================================");
+    }
+
+    private BigDecimal findPriceNearDate(List<com.alphaharvester.domain.entity.MarketDailyQuote> quotes, LocalDate targetDate) {
+        if (quotes.isEmpty()) return BigDecimal.ONE;
+        com.alphaharvester.domain.entity.MarketDailyQuote closest = null;
+        long minDiff = Long.MAX_VALUE;
+        for (com.alphaharvester.domain.entity.MarketDailyQuote q : quotes) {
+            long diff = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(q.getTradeDate().toLocalDate(), targetDate));
+            if (diff < minDiff) {
+                minDiff = diff;
+                closest = q;
+            }
+        }
+        return (closest != null && closest.getClosePrice() != null) ? closest.getClosePrice() : BigDecimal.ONE;
+    }
+
+    private double calcR2(java.util.Map<java.time.LocalDate, Double> a, java.util.Map<java.time.LocalDate, Double> b, int shift) {
+        if (a == null || b == null) return 0.0;
+        var aligned = com.alphaharvester.domain.math.FinancialMetricsCalculator.alignReturnSeries(a, b, shift);
+        return com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateCorrelationAndRSquared(aligned.returnsA(), aligned.returnsB()).rSquared();
     }
 
     private String formatDecimal(BigDecimal val) {
