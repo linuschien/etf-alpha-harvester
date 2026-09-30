@@ -40,10 +40,6 @@ public class TpexMarketDataClient {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
-    public TpexMarketDataClient(WebClient webClient) {
-        this(webClient, new ObjectMapper());
-    }
-
     /**
      * Fetches official TPEx (OTC) ETF metadata catalog from MOPS OpenData.
      * Enforces Stage 0 filter to block leveraged, inverse, futures, active, and ETN symbols.

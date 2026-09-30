@@ -44,7 +44,7 @@ class TpexMarketDataClientTest {
 
     @BeforeEach
     void setUp() {
-        client = new TpexMarketDataClient(webClient);
+        client = new TpexMarketDataClient(webClient, mapper);
     }
 
     @Test

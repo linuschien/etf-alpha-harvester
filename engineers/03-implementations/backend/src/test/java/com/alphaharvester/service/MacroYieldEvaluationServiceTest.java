@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -22,6 +23,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -41,7 +43,9 @@ class MacroYieldEvaluationServiceTest {
 
     @BeforeEach
     void setUp() {
-        macroYieldEvaluationService = new MacroYieldEvaluationService(macroYieldSnapshotRepository);
+        macroYieldEvaluationService = new MacroYieldEvaluationService(
+                macroYieldSnapshotRepository, quoteRepository, corporateActionRepository
+        );
     }
 
     @Test
@@ -138,6 +142,10 @@ class MacroYieldEvaluationServiceTest {
                 new BigDecimal("0.05")
         );
         when(macroYieldSnapshotRepository.findTopByOrderByRecordDateDesc()).thenReturn(Mono.just(snapshot));
+        when(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(any(), any()))
+                .thenReturn(Flux.empty());
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc(anyString()))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(macroYieldEvaluationService.evaluateCurrentRegime())
                 .assertNext(assessment -> {
@@ -222,10 +230,6 @@ class MacroYieldEvaluationServiceTest {
     @Test
     @DisplayName("Should prioritize ^TWII over 0050 in evaluateCurrentRegime")
     void shouldPrioritizeTwiiOver0050InEvaluateCurrentRegime() {
-        MacroYieldEvaluationService serviceWithRepos = new MacroYieldEvaluationService(
-                macroYieldSnapshotRepository, quoteRepository, corporateActionRepository
-        );
-
         LocalDateTime now = LocalDateTime.now();
         MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
                 null, now, new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
@@ -246,7 +250,7 @@ class MacroYieldEvaluationServiceTest {
                 .thenReturn(reactor.core.publisher.Flux.just(twiiQuote));
         when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Mono.just(vixQuote));
 
-        StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
+        StepVerifier.create(macroYieldEvaluationService.evaluateCurrentRegime())
                 .assertNext(assessment -> {
                     assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.NORMAL);
                 })
@@ -256,10 +260,6 @@ class MacroYieldEvaluationServiceTest {
     @Test
     @DisplayName("Should fallback to 0050 and adjust splits to prevent false CRISIS_LEVEL_2")
     void shouldFallbackTo0050AndAdjustSplitsToPreventFalseCrisis() {
-        MacroYieldEvaluationService serviceWithRepos = new MacroYieldEvaluationService(
-                macroYieldSnapshotRepository, quoteRepository, corporateActionRepository
-        );
-
         LocalDateTime now = LocalDateTime.now();
         MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
                 null, now, new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
@@ -294,7 +294,7 @@ class MacroYieldEvaluationServiceTest {
         when(quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")).thenReturn(Mono.just(vixQuote));
 
         // When split is adjusted: preSplitQuote becomes 200.0 * (1/4) = 50.0 -> drawdown = 0% -> NORMAL crisis level
-        StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
+        StepVerifier.create(macroYieldEvaluationService.evaluateCurrentRegime())
                 .assertNext(assessment -> {
                     assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.NORMAL);
                     assertThat(assessment.assessmentSummary()).doesNotContain("CRISIS_LEVEL_2");
@@ -305,10 +305,6 @@ class MacroYieldEvaluationServiceTest {
     @Test
     @DisplayName("Should strictly exclude quotes older than 365 calendar days in TAIEX 52-week drawdown")
     void shouldExcludeQuotesOlderThan365CalendarDaysInTaiexDrawdown() {
-        MacroYieldEvaluationService serviceWithRepos = new MacroYieldEvaluationService(
-                macroYieldSnapshotRepository, quoteRepository, corporateActionRepository
-        );
-
         LocalDateTime now = LocalDateTime.now();
         MacroYieldSnapshot snapshot = new MacroYieldSnapshot(
                 null, now, new BigDecimal("4.50"), new BigDecimal("3.80"), new BigDecimal("4.10"), new BigDecimal("0.20")
@@ -346,7 +342,7 @@ class MacroYieldEvaluationServiceTest {
         // When 365 calendar days rule is enforced:
         // quote380d is excluded from maxPrice!
         // maxPrice is 21,000 -> drawdown = -4.7% -> NORMAL (not CRISIS_LEVEL_2)
-        StepVerifier.create(serviceWithRepos.evaluateCurrentRegime())
+        StepVerifier.create(macroYieldEvaluationService.evaluateCurrentRegime())
                 .assertNext(assessment -> {
                     assertThat(assessment.crisisLevel()).isEqualTo(CrisisLevel.NORMAL);
                     assertThat(assessment.assessmentSummary()).doesNotContain("CRISIS_LEVEL_2");
@@ -357,8 +353,6 @@ class MacroYieldEvaluationServiceTest {
     @Test
     @DisplayName("Should correctly include exactly 1-year ago quote during leap year (366 calendar days) in TAIEX drawdown")
     void shouldHandleLeapYearCorrectlyInTaiexDrawdown() {
-        MacroYieldEvaluationService service = new MacroYieldEvaluationService(null, null, null);
-
         LocalDateTime leapYearNow = LocalDateTime.of(2024, 3, 1, 13, 30, 0);
         LocalDateTime exactlyOneYearAgo = LocalDateTime.of(2023, 3, 1, 13, 30, 0);
 
@@ -382,7 +376,7 @@ class MacroYieldEvaluationServiceTest {
         vixQuote.setTradeDate(leapYearNow);
 
         // evaluate pure assessment
-        MacroRegimeAssessment assessment = service.calculateAssessment(
+        MacroRegimeAssessment assessment = macroYieldEvaluationService.calculateAssessment(
                 snapshot, List.of(currentQuote, peakQuoteOneYearAgo), vixQuote
         );
 

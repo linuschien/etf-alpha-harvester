@@ -34,20 +34,11 @@ public class MacroYieldEvaluationService {
 
     @Autowired
     public MacroYieldEvaluationService(MacroYieldSnapshotRepository macroYieldSnapshotRepository,
-                                       @Autowired(required = false) MarketDailyQuoteRepository quoteRepository,
-                                       @Autowired(required = false) CorporateActionRepository corporateActionRepository) {
+                                       MarketDailyQuoteRepository quoteRepository,
+                                       CorporateActionRepository corporateActionRepository) {
         this.macroYieldSnapshotRepository = macroYieldSnapshotRepository;
         this.quoteRepository = quoteRepository;
         this.corporateActionRepository = corporateActionRepository;
-    }
-
-    public MacroYieldEvaluationService(MacroYieldSnapshotRepository macroYieldSnapshotRepository,
-                                       MarketDailyQuoteRepository quoteRepository) {
-        this(macroYieldSnapshotRepository, quoteRepository, null);
-    }
-
-    public MacroYieldEvaluationService(MacroYieldSnapshotRepository macroYieldSnapshotRepository) {
-        this(macroYieldSnapshotRepository, null, null);
     }
 
     public Mono<MacroRegimeAssessment> evaluateCurrentRegime() {

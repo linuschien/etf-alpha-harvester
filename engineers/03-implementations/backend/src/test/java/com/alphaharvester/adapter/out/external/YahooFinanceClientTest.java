@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class YahooFinanceClientTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final YahooFinanceClient client = new YahooFinanceClient(WebClient.create());
+    private final YahooFinanceClient client = new YahooFinanceClient(WebClient.create(), objectMapper);
 
     @Test
     @DisplayName("Should parse bond ETF dividends with TaxTag.OVERSEAS_76W for ticker ending in 'B'")

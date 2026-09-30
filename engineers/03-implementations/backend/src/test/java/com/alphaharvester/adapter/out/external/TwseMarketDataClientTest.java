@@ -42,7 +42,7 @@ class TwseMarketDataClientTest {
 
     @BeforeEach
     void setUp() {
-        client = new TwseMarketDataClient(webClient);
+        client = new TwseMarketDataClient(webClient, mapper);
     }
 
     @Test

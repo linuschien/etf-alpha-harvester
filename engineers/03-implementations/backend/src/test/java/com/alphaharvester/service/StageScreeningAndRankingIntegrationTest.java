@@ -60,7 +60,7 @@ class StageScreeningAndRankingIntegrationTest {
         evaluationService = new GlobalAssetScoreEvaluationService(
                 metadataRepository, scoreRepository, quoteRepository,
                 dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository,
-                externalMarketDataPort
+                externalMarketDataPort, corporateActionRepository
         );
 
         queryService = new GlobalAssetQueryService(
@@ -73,6 +73,7 @@ class StageScreeningAndRankingIntegrationTest {
 
         when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
+        when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any())).thenReturn(Flux.empty());
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(any(), any(), any())).thenReturn(Flux.empty());
         when(metadataRepository.findAll()).thenReturn(Flux.empty());
         when(watermarkRepository.findByFeedName(any())).thenReturn(Mono.empty());

@@ -34,8 +34,8 @@ import java.util.Map;
 public class YahooFinanceClient {
 
     private static final Logger log = LoggerFactory.getLogger(YahooFinanceClient.class);
-
     private static final String YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart/";
+    private static final String DEFAULT_RECENT_RANGE = "5d";
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -44,10 +44,6 @@ public class YahooFinanceClient {
     public YahooFinanceClient(WebClient webClient, @Autowired(required = false) ObjectMapper objectMapper) {
         this.webClient = webClient;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
-    }
-
-    public YahooFinanceClient(WebClient webClient) {
-        this(webClient, new ObjectMapper());
     }
 
     /**
@@ -117,20 +113,12 @@ public class YahooFinanceClient {
     }
 
     /**
-     * Fetches daily quote for a global benchmark index (latest).
-     */
-    public Mono<MarketDailyQuote> fetchBenchmarkQuote(String symbol) {
-        return fetchHistoricalQuotes(symbol, "5d").last()
-                .onErrorResume(e -> Mono.empty());
-    }
-
-    /**
      * Fallback to fetch Taiwan ETF quote from Yahoo Finance when TWSE/TPEx misses data.
      * Tries {ticker}.TW (TWSE listed) first, then {ticker}.TWO (TPEx OTC listed).
      */
     public Mono<MarketDailyQuote> fetchTaiwanEtfQuote(String ticker) {
         log.info("Attempting Yahoo Finance fallback quote fetch for ETF '{}'...", ticker);
-        return fetchTaiwanEtfHistoricalQuotes(ticker, "5d").last()
+        return fetchTaiwanEtfHistoricalQuotes(ticker, DEFAULT_RECENT_RANGE).last()
                 .onErrorResume(e -> Mono.empty())
                 .doOnSuccess(q -> {
                     if (q != null) {

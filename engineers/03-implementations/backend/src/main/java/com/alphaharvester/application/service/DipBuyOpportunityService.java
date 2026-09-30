@@ -26,27 +26,18 @@ public class DipBuyOpportunityService {
 
     @Autowired
     public DipBuyOpportunityService(MarketDailyQuoteRepository quoteRepository,
-                                   @Autowired(required = false) CorporateActionRepository corporateActionRepository) {
+                                    CorporateActionRepository corporateActionRepository) {
         this.quoteRepository = quoteRepository;
         this.corporateActionRepository = corporateActionRepository;
-    }
-
-    public DipBuyOpportunityService(MarketDailyQuoteRepository quoteRepository) {
-        this(quoteRepository, null);
     }
 
     public Mono<DipBuyOpportunityScore> calculateDipBuyOpportunity(String ticker) {
         Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findTop240ByTickerOrderByTradeDateDesc(ticker)
                 .collectList()
                 .filter(quotes -> !quotes.isEmpty())
-                .flatMap(rawQuotes -> {
-                    if (corporateActionRepository == null) {
-                        return Mono.just(rawQuotes);
-                    }
-                    return corporateActionRepository.findByTicker(ticker)
-                            .collectList()
-                            .map(splits -> FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, splits));
-                });
+                .flatMap(rawQuotes -> corporateActionRepository.findByTicker(ticker)
+                        .collectList()
+                        .map(splits -> FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, splits)));
 
         Mono<Double> vixMono = quoteRepository.findFirstByTickerOrderByTradeDateDesc("^VIX")
                 .filter(q -> q.getClosePrice() != null && q.getClosePrice().compareTo(BigDecimal.ZERO) > 0)

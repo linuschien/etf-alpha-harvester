@@ -56,18 +56,6 @@ public class GlobalAssetQueryService {
         this.pairwiseMatrixRepository = pairwiseMatrixRepository;
     }
 
-    public GlobalAssetQueryService(GlobalAssetMetadataRepository metadataRepository,
-                                   BenchmarkIndexRepository benchmarkRepository,
-                                   MarketDailyQuoteRepository quoteRepository,
-                                   MacroYieldSnapshotRepository macroYieldRepository,
-                                   GlobalAssetScoreRepository scoreRepository,
-                                   DcaPopularityRankRepository dcaRankRepository,
-                                   DividendAnnouncementRepository dividendRepository,
-                                   CorporateActionRepository corporateActionRepository) {
-        this(metadataRepository, benchmarkRepository, quoteRepository, macroYieldRepository,
-             scoreRepository, dcaRankRepository, dividendRepository, corporateActionRepository, null);
-    }
-
     public Flux<GlobalAssetMetadata> listGlobalAssets(GlobalAssetFilterInput filter) {
         if (filter == null || filter.ticker() == null || filter.ticker().isBlank()) {
             return metadataRepository.findAll();

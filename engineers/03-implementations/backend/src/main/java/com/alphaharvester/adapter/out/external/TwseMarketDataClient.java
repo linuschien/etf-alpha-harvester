@@ -47,10 +47,6 @@ public class TwseMarketDataClient {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
-    public TwseMarketDataClient(WebClient webClient) {
-        this(webClient, new ObjectMapper());
-    }
-
     /**
      * Fetches all TWSE listed ETF metadata from TWSE OpenAPI.
      * Enforces Stage 0 regex short-circuit blocking: filters out U, L, R, A, and 02 ETNs.
@@ -206,9 +202,5 @@ public class TwseMarketDataClient {
         }
     }
 
-    public record NavSnapshot(String name, BigDecimal nav, BigDecimal discountPremiumPct, long sharesOutstanding) {
-        public NavSnapshot(BigDecimal nav, BigDecimal discountPremiumPct, long sharesOutstanding) {
-            this(null, nav, discountPremiumPct, sharesOutstanding);
-        }
-    }
+    public record NavSnapshot(String name, BigDecimal nav, BigDecimal discountPremiumPct, long sharesOutstanding) {}
 }

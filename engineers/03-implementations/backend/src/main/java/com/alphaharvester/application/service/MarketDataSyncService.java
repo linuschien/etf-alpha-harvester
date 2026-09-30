@@ -81,21 +81,6 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         this.gatekeeperService = gatekeeperService;
     }
 
-    public MarketDataSyncService(ExternalMarketDataPort externalMarketDataPort,
-                                 GlobalAssetMetadataRepository metadataRepository,
-                                 BenchmarkIndexRepository benchmarkRepository,
-                                 MarketDailyQuoteRepository quoteRepository,
-                                 MacroYieldSnapshotRepository macroYieldRepository,
-                                 DcaPopularityRankRepository dcaRankRepository,
-                                 DividendAnnouncementRepository dividendRepository,
-                                 CorporateActionRepository corporateActionRepository,
-                                 GlobalAssetScoreEvaluationService scoreEvaluationService,
-                                 DataFeedSyncWatermarkRepository watermarkRepository) {
-        this(externalMarketDataPort, metadataRepository, benchmarkRepository, quoteRepository,
-             macroYieldRepository, dcaRankRepository, dividendRepository, corporateActionRepository,
-             scoreEvaluationService, watermarkRepository, null);
-    }
-
     @Override
     @Transactional
     public Mono<MarketDataSyncResponse> syncMarketData(MarketDataSyncRequest request) {
@@ -411,15 +396,6 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     }
                     return quoteRepository.save(q);
                 }));
-    }
-
-    private boolean isTradingGap(LocalDateTime latestTradeDate, LocalDateTime now) {
-        if (latestTradeDate == null) {
-            return true;
-        }
-        long daysBetween = ChronoUnit.DAYS.between(latestTradeDate.toLocalDate(), now.toLocalDate());
-        long allowedGap = now.getDayOfWeek() == DayOfWeek.MONDAY ? 3 : 1;
-        return daysBetween > allowedGap;
     }
 
     private String deriveRange(int days) {

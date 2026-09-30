@@ -70,48 +70,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         this.corporateActionRepository = corporateActionRepository;
     }
 
-    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
-                                             GlobalAssetScoreRepository scoreRepository,
-                                             MarketDailyQuoteRepository quoteRepository,
-                                             DcaPopularityRankRepository dcaRankRepository,
-                                             DividendAnnouncementRepository dividendRepository,
-                                             DataFeedSyncWatermarkRepository watermarkRepository,
-                                             GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository,
-                                             ExternalMarketDataPort externalMarketDataPort) {
-        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository, externalMarketDataPort, null);
-    }
-
-    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
-                                             GlobalAssetScoreRepository scoreRepository,
-                                             MarketDailyQuoteRepository quoteRepository,
-                                             DcaPopularityRankRepository dcaRankRepository,
-                                             DividendAnnouncementRepository dividendRepository,
-                                             DataFeedSyncWatermarkRepository watermarkRepository,
-                                             GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository) {
-        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository, null, null);
-    }
-
-    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
-                                             GlobalAssetScoreRepository scoreRepository,
-                                             MarketDailyQuoteRepository quoteRepository,
-                                             DcaPopularityRankRepository dcaRankRepository,
-                                             DividendAnnouncementRepository dividendRepository) {
-        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, null, null);
-    }
-
-    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
-                                             GlobalAssetScoreRepository scoreRepository,
-                                             MarketDailyQuoteRepository quoteRepository,
-                                             DcaPopularityRankRepository dcaRankRepository) {
-        this(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, null, null, null);
-    }
-
-    public GlobalAssetScoreEvaluationService(GlobalAssetMetadataRepository metadataRepository,
-                                             GlobalAssetScoreRepository scoreRepository,
-                                             MarketDailyQuoteRepository quoteRepository) {
-        this(metadataRepository, scoreRepository, quoteRepository, null, null, null, null);
-    }
-
     @Override
     @Transactional
     public Mono<GlobalAssetScoreEvaluationResponse> evaluateGlobalAssetScores() {

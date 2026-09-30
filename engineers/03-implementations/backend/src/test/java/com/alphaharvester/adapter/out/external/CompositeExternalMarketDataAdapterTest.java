@@ -83,8 +83,8 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
-    @DisplayName("Should combine quotes, recover missing ETF from Yahoo Finance, and include CNN Fear & Greed without daily NAV calls")
-    void shouldCombineQuotesAndRecoverMissingAndIncludeFearGreed() {
+    @DisplayName("Should combine quotes and recover missing ETF from Yahoo Finance without daily NAV calls")
+    void shouldCombineQuotesAndRecoverMissingWithoutDailyNavCalls() {
         LocalDateTime now = LocalDateTime.now();
         MarketDailyQuote twseQuote = new MarketDailyQuote(
                 null, null, null, "0050", now,
@@ -101,47 +101,46 @@ class CompositeExternalMarketDataAdapterTest {
                 new BigDecimal("113.0"), new BigDecimal("115.0"), new BigDecimal("112.5"),
                 new BigDecimal("114.5"), 800000L, new BigDecimal("91600000"), null, null
         );
-        MarketDailyQuote benchmarkQuote = new MarketDailyQuote(
-                null, null, null, "^TWII", now,
-                new BigDecimal("22500.0"), new BigDecimal("22800.0"), new BigDecimal("22450.0"),
-                new BigDecimal("22750.0"), 500000000L, BigDecimal.ZERO, null, null
-        );
-        MarketDailyQuote fearGreedQuote = new MarketDailyQuote(
-                null, null, null, "FEAR_GREED", now,
-                new BigDecimal("45.5"), new BigDecimal("45.5"), new BigDecimal("45.5"),
-                new BigDecimal("45.5"), 0L, BigDecimal.ZERO, null, null
-        );
 
         when(twseClient.fetchTwseDailyQuotes()).thenReturn(Flux.just(twseQuote));
         when(tpexClient.fetchTpexDailyQuotes()).thenReturn(Flux.just(tpexQuote));
-
-        // 006208 is monitored but missing from TWSE/TPEx; Yahoo recovery will be triggered
         when(yahooFinanceClient.fetchTaiwanEtfQuote("006208")).thenReturn(Mono.just(recovered006208));
 
-        // Yahoo benchmarks (past 1 month)
-        when(yahooFinanceClient.fetchHistoricalQuotes(anyString(), anyString())).thenReturn(Flux.empty());
-        when(yahooFinanceClient.fetchHistoricalQuotes(eq("^TWII"), anyString())).thenReturn(Flux.just(benchmarkQuote));
-
-        // CNN Fear & Greed
-        when(cnnSentimentClient.fetchFearAndGreedIndex()).thenReturn(Mono.just(fearGreedQuote));
-
         // Pass monitored tickers: ["0050", "00679B", "006208"]
-        StepVerifier.create(adapter.fetchDailyQuotes(List.of("0050", "00679B", "006208")))
+        StepVerifier.create(adapter.fetchTaiwanEtfDailyQuotes(List.of("0050", "00679B", "006208")))
                 .assertNext(q -> {
                     assertThat(q.getTicker()).isEqualTo("0050");
                     assertThat(q.getClosePrice()).isEqualTo(new BigDecimal("188.0"));
                 })
                 .assertNext(q -> assertThat(q.getTicker()).isEqualTo("00679B"))
                 .assertNext(q -> assertThat(q.getTicker()).isEqualTo("006208")) // successfully recovered from Yahoo!
-                .assertNext(q -> assertThat(q.getTicker()).isEqualTo("^TWII"))
-                .assertNext(q -> {
-                    assertThat(q.getTicker()).isEqualTo("FEAR_GREED");
-                    assertThat(q.getClosePrice()).isEqualTo(new BigDecimal("45.5"));
-                })
                 .verifyComplete();
 
         // Verify twseClient.fetchMisNavData() is NOT called during daily quote processing
         verify(twseClient, never()).fetchMisNavData();
+    }
+
+    @Test
+    @DisplayName("Should fetch benchmark quotes using DEFAULT_BENCHMARK_RANGE")
+    void shouldFetchBenchmarkQuotes() {
+        when(yahooFinanceClient.fetchHistoricalQuotes(anyString(), anyString())).thenReturn(Flux.empty());
+        StepVerifier.create(adapter.fetchBenchmarkQuotes(null))
+                .verifyComplete();
+        verify(yahooFinanceClient).fetchHistoricalQuotes("^TWII", "1mo");
+    }
+
+    @Test
+    @DisplayName("Should fetch CNN sentiment quote")
+    void shouldFetchCnnSentimentQuote() {
+        MarketDailyQuote fearGreedQuote = new MarketDailyQuote(
+                null, null, null, "FEAR_GREED", LocalDateTime.now(),
+                new BigDecimal("45.5"), new BigDecimal("45.5"), new BigDecimal("45.5"),
+                new BigDecimal("45.5"), 0L, BigDecimal.ZERO, null, null
+        );
+        when(cnnSentimentClient.fetchFearAndGreedIndex()).thenReturn(Mono.just(fearGreedQuote));
+        StepVerifier.create(adapter.fetchCnnSentimentQuote())
+                .assertNext(q -> assertThat(q.getTicker()).isEqualTo("FEAR_GREED"))
+                .verifyComplete();
     }
 
     @Test

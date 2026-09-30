@@ -15,6 +15,7 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -36,15 +37,11 @@ public class CnnSentimentClient {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
-    public CnnSentimentClient(WebClient webClient) {
-        this(webClient, new ObjectMapper());
-    }
-
     /**
-     * Fetches historical multi-day CNN Fear & Greed Index quotes starting from startDate (e.g. '2024-09-01').
+     * Fetches historical multi-day CNN Fear & Greed Index quotes starting from startDate (e.g. 2 years ago by default).
      */
     public Flux<MarketDailyQuote> fetchHistoricalFearAndGreedIndex(String startDate) {
-        String effectiveStart = (startDate != null && !startDate.isBlank()) ? startDate : "2024-09-01";
+        String effectiveStart = (startDate != null && !startDate.isBlank()) ? startDate : LocalDate.now().minusYears(2).toString();
         String url = CNN_FEAR_GREED_URL + "/" + effectiveStart;
         log.info("Fetching CNN Fear & Greed historical data from '{}'...", url);
         return webClient.get()

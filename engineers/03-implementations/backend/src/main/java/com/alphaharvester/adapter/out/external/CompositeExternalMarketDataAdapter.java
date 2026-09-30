@@ -21,6 +21,7 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     private static final List<String> BENCHMARK_SYMBOLS = List.of(
             "^TWII", "^GSPC", "^NDX", "^SOX", "^N225", "^VIX", "^VXN", "^MOVE"
     );
+    private static final String DEFAULT_BENCHMARK_RANGE = "1mo";
 
     private final TwseMarketDataClient twseClient;
     private final TpexMarketDataClient tpexClient;
@@ -109,7 +110,7 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
 
     @Override
     public Flux<MarketDailyQuote> fetchBenchmarkQuotes(String range) {
-        String effectiveRange = (range != null && !range.isBlank()) ? range : "1mo";
+        String effectiveRange = (range != null && !range.isBlank()) ? range : DEFAULT_BENCHMARK_RANGE;
         log.info("Fetching quotes for {} global benchmark indices from Yahoo Finance (range: {})...",
                 BENCHMARK_SYMBOLS.size(), effectiveRange);
         return Flux.fromIterable(BENCHMARK_SYMBOLS)
@@ -120,16 +121,6 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     public Mono<MarketDailyQuote> fetchCnnSentimentQuote() {
         log.info("Fetching CNN Fear & Greed sentiment index...");
         return cnnSentimentClient.fetchFearAndGreedIndex();
-    }
-
-    @Override
-    public Flux<MarketDailyQuote> fetchDailyQuotes(List<String> monitoredTickers) {
-        log.info("Fetching composite daily quotes (ETFs, Benchmarks, CNN)...");
-        return Flux.concat(
-                fetchTaiwanEtfDailyQuotes(monitoredTickers),
-                fetchBenchmarkQuotes("1mo"),
-                fetchCnnSentimentQuote().flux()
-        );
     }
 
     @Override

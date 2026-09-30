@@ -41,6 +41,7 @@ class GlobalAssetQueryServiceTest {
     @Mock private DcaPopularityRankRepository dcaRankRepository;
     @Mock private DividendAnnouncementRepository dividendRepository;
     @Mock private CorporateActionRepository corporateActionRepository;
+    @Mock private GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
 
     private GlobalAssetQueryService queryService;
 
@@ -49,7 +50,7 @@ class GlobalAssetQueryServiceTest {
         queryService = new GlobalAssetQueryService(
                 metadataRepository, benchmarkRepository, quoteRepository,
                 macroYieldRepository, scoreRepository, dcaRankRepository,
-                dividendRepository, corporateActionRepository
+                dividendRepository, corporateActionRepository, pairwiseMatrixRepository
         );
     }
 

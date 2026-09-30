@@ -47,7 +47,8 @@ class MarketOrchestrationRestControllerTest {
                 "SUCCESS",
                 "Synced successfully",
                 LocalDateTime.now().toString(),
-                new SyncedRecordsCount(5, 4, 1, 1, 1, 0)
+                new SyncedRecordsCount(5, 4, 1, 1, 1, 0),
+                null
         );
         when(syncUseCase.syncMarketData(any())).thenReturn(Mono.just(mockResponse));
 

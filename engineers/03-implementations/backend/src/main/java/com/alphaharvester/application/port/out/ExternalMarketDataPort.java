@@ -22,24 +22,6 @@ public interface ExternalMarketDataPort {
         return Mono.just(java.util.Map.of());
     }
 
-    /**
-     * Fetches daily market closing quotes for TWSE & TPEx ETFs and Yahoo Finance benchmarks.
-     */
-    default Flux<MarketDailyQuote> fetchDailyQuotes() {
-        return fetchDailyQuotes(List.of());
-    }
-
-    /**
-     * Fetches daily market closing quotes with automatic fallback to Yahoo Finance for any monitored tickers
-     * missing from TWSE / TPEx daily reports.
-     */
-    default Flux<MarketDailyQuote> fetchDailyQuotes(List<String> monitoredTickers) {
-        return Flux.concat(
-                fetchTaiwanEtfDailyQuotes(monitoredTickers),
-                fetchBenchmarkQuotes("1mo"),
-                fetchCnnSentimentQuote().flux()
-        );
-    }
 
     /**
      * Fetches daily market closing quotes for TWSE & TPEx ETFs, enriched with MIS NAV,
