@@ -156,10 +156,33 @@ public class YahooFinanceClient {
 
     /**
      * Concurrently fetches dividend announcements and stock split corporate actions
-     * in a single external request from Yahoo Finance chart events.
+     * in a single external request from Yahoo Finance chart events with specified range.
      */
-    public Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker) {
-        String url = YAHOO_CHART_BASE + ticker + "?interval=1d&range=1y&events=div,split";
+    public Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker, String range) {
+        if (ticker == null || ticker.isBlank()) {
+            return Mono.just(new DividendsAndSplits(List.of(), List.of()));
+        }
+
+        String effectiveRange = (range != null && !range.isBlank()) ? range : "1y";
+
+        if (ticker.contains(".")) {
+            return fetchDirectDividendsAndSplits(ticker, ticker, effectiveRange);
+        }
+
+        String primarySuffix = ticker.endsWith("B") ? ".TWO" : ".TW";
+        String fallbackSuffix = ticker.endsWith("B") ? ".TW" : ".TWO";
+
+        return fetchDirectDividendsAndSplits(ticker + primarySuffix, ticker, effectiveRange)
+                .flatMap(res -> {
+                    if (res.dividends().isEmpty() && res.splits().isEmpty()) {
+                        return fetchDirectDividendsAndSplits(ticker + fallbackSuffix, ticker, effectiveRange);
+                    }
+                    return Mono.just(res);
+                });
+    }
+
+    private Mono<DividendsAndSplits> fetchDirectDividendsAndSplits(String symbol, String ticker, String range) {
+        String url = YAHOO_CHART_BASE + symbol + "?interval=1d&range=" + range + "&events=div,split";
         return webClient.get()
                 .uri(url)
                 .retrieve()
@@ -168,12 +191,12 @@ public class YahooFinanceClient {
                     try {
                         return parseDividendsAndSplits(objectMapper.readTree(jsonStr), ticker);
                     } catch (Exception e) {
-                        log.error("Error parsing Yahoo dividends & splits for '{}': {}", ticker, e.getMessage());
+                        log.debug("Error parsing Yahoo dividends & splits for '{}': {}", symbol, e.getMessage());
                         return new DividendsAndSplits(List.of(), List.of());
                     }
                 })
                 .onErrorResume(e -> {
-                    log.error("Error fetching Yahoo dividends & splits for '{}': {}", ticker, e.getMessage());
+                    log.debug("Error fetching Yahoo dividends & splits for '{}': {}", symbol, e.getMessage());
                     return Mono.just(new DividendsAndSplits(List.of(), List.of()));
                 });
     }
@@ -196,7 +219,7 @@ public class YahooFinanceClient {
                     Map.Entry<String, JsonNode> entry = fields.next();
                     JsonNode item = entry.getValue();
                     long epoch = item.path("date").asLong();
-                    LocalDateTime exDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.systemDefault());
+                    LocalDateTime exDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.of("Asia/Taipei")).toLocalDate().atStartOfDay();
                     BigDecimal amount = BigDecimal.valueOf(item.path("amount").asDouble(0.0)).setScale(4, RoundingMode.HALF_UP);
                     TaxTag taxTag = (ticker != null && ticker.endsWith("B"))
                             ? TaxTag.OVERSEAS_76W
@@ -217,7 +240,7 @@ public class YahooFinanceClient {
                     Map.Entry<String, JsonNode> entry = fields.next();
                     JsonNode item = entry.getValue();
                     long epoch = item.path("date").asLong();
-                    LocalDateTime effectiveDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.systemDefault());
+                    LocalDateTime effectiveDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), ZoneId.of("Asia/Taipei")).toLocalDate().atStartOfDay();
                     int toShares = (int) Math.round(item.path("numerator").asDouble(1.0));
                     int fromShares = (int) Math.round(item.path("denominator").asDouble(1.0));
 
@@ -233,20 +256,6 @@ public class YahooFinanceClient {
             log.error("Error parsing Yahoo dividends and splits for '{}': {}", ticker, e.getMessage());
             return new DividendsAndSplits(List.of(), List.of());
         }
-    }
-
-    /**
-     * Fetches historical splits for a ticker from Yahoo Finance events.
-     */
-    public Flux<CorporateAction> fetchSplits(String ticker) {
-        return fetchDividendsAndSplits(ticker).flatMapMany(res -> Flux.fromIterable(res.splits()));
-    }
-
-    /**
-     * Fetches historical dividend announcements for a ticker from Yahoo Finance events.
-     */
-    public Flux<DividendAnnouncement> fetchDividends(String ticker) {
-        return fetchDividendsAndSplits(ticker).flatMapMany(res -> Flux.fromIterable(res.dividends()));
     }
 
     private BigDecimal parseBigDecimalSafe(JsonNode node) {

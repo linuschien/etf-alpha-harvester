@@ -134,7 +134,11 @@ public class R2dbcEntityCallbacksConfig {
     public BeforeConvertCallback<DividendAnnouncement> dividendAnnouncementCallback() {
         return (entity, table) -> {
             if (entity.getId() == null) {
-                entity.setId(UUID.randomUUID());
+                if (entity.getTicker() != null && entity.getExDate() != null) {
+                    entity.setId(UUID.nameUUIDFromBytes(("DIV:" + entity.getTicker() + ":" + entity.getExDate().toLocalDate()).getBytes(StandardCharsets.UTF_8)));
+                } else {
+                    entity.setId(UUID.randomUUID());
+                }
             }
             return Mono.just(entity);
         };
@@ -144,7 +148,11 @@ public class R2dbcEntityCallbacksConfig {
     public BeforeConvertCallback<CorporateAction> corporateActionCallback() {
         return (entity, table) -> {
             if (entity.getId() == null) {
-                entity.setId(UUID.randomUUID());
+                if (entity.getTicker() != null && entity.getEffectiveDate() != null) {
+                    entity.setId(UUID.nameUUIDFromBytes(("SPLIT:" + entity.getTicker() + ":" + entity.getEffectiveDate().toLocalDate()).getBytes(StandardCharsets.UTF_8)));
+                } else {
+                    entity.setId(UUID.randomUUID());
+                }
             }
             return Mono.just(entity);
         };

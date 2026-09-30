@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -170,7 +171,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                 .flatMap(metaCount -> syncQuotes(scope, now, backfillDays)
                         .flatMap(quotesCount -> syncMacroYields(scope, now, backfillDays)
                                 .flatMap(yieldCount -> syncDcaRanks(scope, now)
-                                        .flatMap(dcaCount -> syncDividendsAndSplits(scope, now)
+                                        .flatMap(dcaCount -> syncDividendsAndSplits(scope, now, backfillDays)
                                                 .map(divSplits -> new SyncedRecordsCount(
                                                         metaCount,
                                                         quotesCount,
@@ -546,13 +547,15 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                 .switchIfEmpty(Mono.defer(() -> dcaRankRepository.save(rank)));
     }
 
-    private Mono<int[]> syncDividendsAndSplits(SyncScope scope, LocalDateTime now) {
+    private Mono<int[]> syncDividendsAndSplits(SyncScope scope, LocalDateTime now, Integer backfillDays) {
         if (scope != SyncScope.ALL && scope != SyncScope.DIVIDENDS_AND_SPLITS) {
             return Mono.just(new int[]{0, 0});
         }
 
-        // Monthly check: if running as part of scope ALL, skip if already synced in current calendar month
-        if (scope == SyncScope.ALL && watermarkRepository != null) {
+        boolean forceBackfill = backfillDays != null && backfillDays > 0;
+
+        // Monthly check: if running as part of scope ALL without force backfill, skip if already synced in current calendar month
+        if (scope == SyncScope.ALL && !forceBackfill && watermarkRepository != null) {
             return watermarkRepository.findByFeedName(WATERMARK_DIVIDENDS_AND_SPLITS)
                     .flatMap(wm -> {
                         if ("SUCCESS".equalsIgnoreCase(wm.getStatus()) && wm.getLatestRecordDate() != null) {
@@ -563,55 +566,78 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                 return Mono.just(new int[]{0, 0});
                             }
                         }
-                        return executeSyncDividendsAndSplits(now);
+                        return executeSyncDividendsAndSplits(now, backfillDays);
                     })
-                    .switchIfEmpty(Mono.defer(() -> executeSyncDividendsAndSplits(now)));
+                    .switchIfEmpty(Mono.defer(() -> executeSyncDividendsAndSplits(now, backfillDays)));
         }
 
-        return executeSyncDividendsAndSplits(now);
+        return executeSyncDividendsAndSplits(now, backfillDays);
     }
 
-    private Mono<int[]> executeSyncDividendsAndSplits(LocalDateTime now) {
-        log.info("Fetching and syncing dividend announcements and stock splits via single concurrent Yahoo Finance call...");
-        return metadataRepository.findAll()
-                .flatMap(asset -> externalMarketDataPort.fetchDividendsAndSplits(asset.getTicker())
-                        .flatMap(res -> {
-                            Mono<Integer> divCount = Flux.fromIterable(res.dividends())
-                                    .flatMap(div -> {
-                                        div.setAssetId(asset.getId());
-                                        return dividendRepository.findByTickerAndExDate(div.getTicker(), div.getExDate())
-                                                .flatMap(existing -> {
-                                                    existing.setDividendPerShare(div.getDividendPerShare());
-                                                    existing.setPaymentDate(div.getPaymentDate());
-                                                    existing.setTaxTag(div.getTaxTag());
-                                                    existing.setAssetId(asset.getId());
-                                                    return dividendRepository.save(existing);
-                                                })
-                                                .switchIfEmpty(dividendRepository.save(div));
-                                    })
-                                    .count()
-                                    .map(Long::intValue);
+    private Mono<int[]> executeSyncDividendsAndSplits(LocalDateTime now, Integer backfillDays) {
+        log.info("Fetching and syncing dividend announcements and stock splits via concurrent Yahoo Finance calls...");
+        return watermarkRepository.findByFeedName(WATERMARK_DIVIDENDS_AND_SPLITS)
+                .map(Optional::of)
+                .defaultIfEmpty(Optional.empty())
+                .flatMap(wmOpt -> {
+                    LocalDateTime startDate;
+                    String range;
+                    if (backfillDays != null && backfillDays > 0) {
+                        startDate = now.minusDays(backfillDays);
+                        range = deriveRange(backfillDays);
+                    } else if (wmOpt.isPresent() && wmOpt.get().getLatestRecordDate() != null) {
+                        startDate = wmOpt.get().getLatestRecordDate();
+                        int missedDays = (int) Math.max(ChronoUnit.DAYS.between(startDate.toLocalDate(), now.toLocalDate()), 30);
+                        range = deriveRange(missedDays);
+                    } else {
+                        startDate = now.minusYears(1);
+                        range = "1y";
+                    }
 
-                            Mono<Integer> splitCount = Flux.fromIterable(res.splits())
-                                    .flatMap(split -> {
-                                        split.setAssetId(asset.getId());
-                                        return corporateActionRepository.findByTickerAndEffectiveDate(split.getTicker(), split.getEffectiveDate())
-                                                .flatMap(existing -> {
-                                                    existing.setSplitToShares(split.getSplitToShares());
-                                                    existing.setSplitFromShares(split.getSplitFromShares());
-                                                    existing.setAssetId(asset.getId());
-                                                    return corporateActionRepository.save(existing);
-                                                })
-                                                .switchIfEmpty(corporateActionRepository.save(split));
-                                    })
-                                    .count()
-                                    .map(Long::intValue);
+                    log.info("Executing dividends and splits sync: startDate={}, range='{}'...", startDate, range);
 
-                            return Mono.zip(divCount, splitCount, (d, s) -> new int[]{d, s});
-                        })
-                )
-                .reduce(new int[]{0, 0}, (acc, cur) -> new int[]{acc[0] + cur[0], acc[1] + cur[1]})
-                .flatMap(counts -> updateWatermark(WATERMARK_DIVIDENDS_AND_SPLITS, now, now, counts[0] + counts[1])
-                        .thenReturn(counts));
+                    return metadataRepository.findAll()
+                            .flatMap(asset -> externalMarketDataPort.fetchDividendsAndSplits(asset.getTicker(), range)
+                                    .flatMap(res -> {
+                                        Mono<Integer> divCount = Flux.fromIterable(res.dividends())
+                                                .filter(div -> div.getExDate() != null && !div.getExDate().isBefore(startDate))
+                                                .flatMap(div -> {
+                                                    div.setAssetId(asset.getId());
+                                                    return dividendRepository.findByTickerAndExDate(div.getTicker(), div.getExDate())
+                                                            .flatMap(existing -> {
+                                                                existing.setDividendPerShare(div.getDividendPerShare());
+                                                                existing.setPaymentDate(div.getPaymentDate());
+                                                                existing.setTaxTag(div.getTaxTag());
+                                                                existing.setAssetId(asset.getId());
+                                                                return dividendRepository.save(existing);
+                                                            })
+                                                            .switchIfEmpty(dividendRepository.save(div));
+                                                })
+                                                .count()
+                                                .map(Long::intValue);
+
+                                        Mono<Integer> splitCount = Flux.fromIterable(res.splits())
+                                                .filter(split -> split.getEffectiveDate() != null && !split.getEffectiveDate().isBefore(startDate))
+                                                .flatMap(split -> {
+                                                    split.setAssetId(asset.getId());
+                                                    return corporateActionRepository.findByTickerAndEffectiveDate(split.getTicker(), split.getEffectiveDate())
+                                                            .flatMap(existing -> {
+                                                                existing.setSplitToShares(split.getSplitToShares());
+                                                                existing.setSplitFromShares(split.getSplitFromShares());
+                                                                existing.setAssetId(asset.getId());
+                                                                return corporateActionRepository.save(existing);
+                                                            })
+                                                            .switchIfEmpty(corporateActionRepository.save(split));
+                                                })
+                                                .count()
+                                                .map(Long::intValue);
+
+                                        return Mono.zip(divCount, splitCount, (d, s) -> new int[]{d, s});
+                                    }), 8
+                            )
+                            .reduce(new int[]{0, 0}, (acc, cur) -> new int[]{acc[0] + cur[0], acc[1] + cur[1]})
+                            .flatMap(counts -> updateWatermark(WATERMARK_DIVIDENDS_AND_SPLITS, now, now, counts[0] + counts[1])
+                                    .thenReturn(counts));
+                });
     }
 }

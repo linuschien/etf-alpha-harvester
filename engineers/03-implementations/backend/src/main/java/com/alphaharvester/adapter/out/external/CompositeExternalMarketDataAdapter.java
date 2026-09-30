@@ -174,20 +174,8 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     }
 
     @Override
-    public Flux<DividendAnnouncement> fetchDividendAnnouncements(String ticker) {
-        log.info("Fetching real dividend history from Yahoo Finance for '{}'...", ticker);
-        return yahooFinanceClient.fetchDividends(ticker);
-    }
-
-    @Override
-    public Flux<CorporateAction> fetchCorporateActions(String ticker) {
-        log.info("Fetching real stock splits from Yahoo Finance for '{}'...", ticker);
-        return yahooFinanceClient.fetchSplits(ticker);
-    }
-
-    @Override
-    public Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker) {
-        log.info("Fetching real dividend history and stock splits concurrently from Yahoo Finance for '{}'...", ticker);
-        return yahooFinanceClient.fetchDividendsAndSplits(ticker);
+    public Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker, String range) {
+        log.info("Fetching real dividend history and stock splits concurrently from Yahoo Finance for '{}' (range: {})...", ticker, range);
+        return yahooFinanceClient.fetchDividendsAndSplits(ticker, range);
     }
 }

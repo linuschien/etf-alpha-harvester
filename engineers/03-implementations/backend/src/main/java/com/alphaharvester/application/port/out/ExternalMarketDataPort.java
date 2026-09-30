@@ -73,31 +73,15 @@ public interface ExternalMarketDataPort {
     Flux<DcaPopularityRank> fetchDcaPopularityRanks(int year, int month);
 
     /**
-     * Fetches dividend distributions for a specific ETF ticker from Yahoo Finance events.
-     */
-    Flux<DividendAnnouncement> fetchDividendAnnouncements(String ticker);
-
-    /**
-     * Fetches stock split corporate actions for a specific ETF ticker from Yahoo Finance events.
-     */
-    Flux<CorporateAction> fetchCorporateActions(String ticker);
-
-    /**
      * Data carrier for combined dividend distributions and stock split corporate actions.
      */
     record DividendsAndSplits(List<DividendAnnouncement> dividends, List<CorporateAction> splits) {}
 
     /**
      * Concurrently fetches dividend distributions and stock split corporate actions
-     * for a specific ETF ticker in a single external request.
+     * for a specific ETF ticker in a single external request with specified range.
      */
-    default Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker) {
-        Flux<DividendAnnouncement> divFlux = fetchDividendAnnouncements(ticker);
-        Flux<CorporateAction> splitFlux = fetchCorporateActions(ticker);
-        Mono<List<DividendAnnouncement>> divMono = (divFlux != null) ? divFlux.collectList() : Mono.just(List.of());
-        Mono<List<CorporateAction>> splitMono = (splitFlux != null) ? splitFlux.collectList() : Mono.just(List.of());
-        return Mono.zip(divMono, splitMono, DividendsAndSplits::new);
-    }
+    Mono<DividendsAndSplits> fetchDividendsAndSplits(String ticker, String range);
 
     /**
      * Fetches multi-day historical bars for an ETF or benchmark index from Yahoo Finance

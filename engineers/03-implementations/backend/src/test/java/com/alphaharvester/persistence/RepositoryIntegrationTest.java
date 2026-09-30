@@ -182,7 +182,7 @@ class RepositoryIntegrationTest {
         StepVerifier.create(watermarkRepository.findByFeedName("DIVIDENDS_AND_SPLITS"))
                 .assertNext(wm -> {
                     assertThat(wm.getFeedName()).isEqualTo("DIVIDENDS_AND_SPLITS");
-                    assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
+                    assertThat(wm.getStatus()).isEqualTo("SUCCESS");
                 })
                 .verifyComplete();
 
@@ -191,6 +191,27 @@ class RepositoryIntegrationTest {
                     assertThat(wm.getFeedName()).isEqualTo("MONTHLY_TOP_LIST");
                     assertThat(wm.getStatus()).isEqualTo("INITIALIZED");
                 })
+                .verifyComplete();
+    }
+
+    @Autowired
+    private com.alphaharvester.adapter.out.persistence.CorporateActionRepository corporateActionRepository;
+
+    @Autowired
+    private com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository dividendRepository;
+
+    @Test
+    @DisplayName("Should verify Flyway V7 seeded corporate actions (0050, 0052 splits) and dividends")
+    void shouldVerifyFlywaySeededCorporateActionsAndDividends() {
+        StepVerifier.create(corporateActionRepository.findAll().collectList())
+                .assertNext(splits -> {
+                    assertThat(splits).hasSize(2);
+                    assertThat(splits).extracting("ticker").containsExactlyInAnyOrder("0050", "0052");
+                })
+                .verifyComplete();
+
+        StepVerifier.create(dividendRepository.count())
+                .assertNext(count -> assertThat(count).isGreaterThanOrEqualTo(1000L))
                 .verifyComplete();
     }
 }

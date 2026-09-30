@@ -182,25 +182,14 @@ class CompositeExternalMarketDataAdapterTest {
         CorporateAction split = new CorporateAction(null, null, "0050", CorporateActionType.SPLIT, LocalDateTime.now(), 4, 1);
 
         when(twseClient.fetchDcaRankings(2026, 8)).thenReturn(Flux.just(rank));
-        when(yahooFinanceClient.fetchDividends("0050")).thenReturn(Flux.just(div));
-        when(yahooFinanceClient.fetchSplits("0050")).thenReturn(Flux.just(split));
+        when(yahooFinanceClient.fetchDividendsAndSplits("0050", "2y"))
+                .thenReturn(Mono.just(new DividendsAndSplits(List.of(div), List.of(split))));
 
         StepVerifier.create(adapter.fetchDcaPopularityRanks(2026, 8))
                 .assertNext(r -> assertThat(r.getRankPosition()).isEqualTo(1))
                 .verifyComplete();
 
-        StepVerifier.create(adapter.fetchDividendAnnouncements("0050"))
-                .assertNext(d -> assertThat(d.getDividendPerShare()).isEqualTo(new BigDecimal("1.5")))
-                .verifyComplete();
-
-        StepVerifier.create(adapter.fetchCorporateActions("0050"))
-                .assertNext(s -> assertThat(s.getSplitToShares()).isEqualTo(4))
-                .verifyComplete();
-
-        when(yahooFinanceClient.fetchDividendsAndSplits("0050"))
-                .thenReturn(Mono.just(new DividendsAndSplits(List.of(div), List.of(split))));
-
-        StepVerifier.create(adapter.fetchDividendsAndSplits("0050"))
+        StepVerifier.create(adapter.fetchDividendsAndSplits("0050", "2y"))
                 .assertNext(ds -> {
                     assertThat(ds.dividends()).hasSize(1);
                     assertThat(ds.splits()).hasSize(1);

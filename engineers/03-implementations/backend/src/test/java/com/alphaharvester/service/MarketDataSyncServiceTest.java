@@ -79,9 +79,8 @@ class MarketDataSyncServiceTest {
         when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
         when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.empty());
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.empty());
-        when(externalMarketDataPort.fetchDividendAnnouncements(anyString())).thenReturn(Flux.empty());
-        when(externalMarketDataPort.fetchCorporateActions(anyString())).thenReturn(Flux.empty());
-        when(externalMarketDataPort.fetchDividendsAndSplits(anyString())).thenCallRealMethod();
+        when(externalMarketDataPort.fetchDividendsAndSplits(anyString(), anyString()))
+                .thenReturn(Mono.just(new ExternalMarketDataPort.DividendsAndSplits(List.of(), List.of())));
         when(metadataRepository.findAll()).thenReturn(Flux.empty());
     }
 
@@ -115,8 +114,8 @@ class MarketDataSyncServiceTest {
         when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
         when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(snapshot));
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(rank50));
-        when(externalMarketDataPort.fetchDividendAnnouncements("00720B")).thenReturn(Flux.just(div));
-        when(externalMarketDataPort.fetchCorporateActions(any())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchDividendsAndSplits(eq("00720B"), anyString()))
+                .thenReturn(Mono.just(new ExternalMarketDataPort.DividendsAndSplits(List.of(div), List.of())));
 
         // Mock repository calls
         when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(asset50));
@@ -233,8 +232,6 @@ class MarketDataSyncServiceTest {
         when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.just(cnnQuote));
         when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(yieldSnapshot));
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(dcaRank));
-        when(externalMarketDataPort.fetchDividendAnnouncements(anyString())).thenReturn(Flux.empty());
-        when(externalMarketDataPort.fetchCorporateActions(anyString())).thenReturn(Flux.empty());
 
         when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(asset));
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
@@ -315,8 +312,8 @@ class MarketDataSyncServiceTest {
         CorporateAction split = new CorporateAction(null, null, "0050", com.alphaharvester.domain.model.CorporateActionType.SPLIT, now, 4, 1);
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(externalMarketDataPort.fetchDividendAnnouncements("0050")).thenReturn(Flux.just(div));
-        when(externalMarketDataPort.fetchCorporateActions("0050")).thenReturn(Flux.just(split));
+        when(externalMarketDataPort.fetchDividendsAndSplits(eq("0050"), anyString()))
+                .thenReturn(Mono.just(new ExternalMarketDataPort.DividendsAndSplits(List.of(div), List.of(split))));
         when(dividendRepository.findByTickerAndExDate(any(), any())).thenReturn(Mono.empty());
         when(dividendRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
         when(corporateActionRepository.findByTickerAndEffectiveDate(any(), any())).thenReturn(Mono.empty());
