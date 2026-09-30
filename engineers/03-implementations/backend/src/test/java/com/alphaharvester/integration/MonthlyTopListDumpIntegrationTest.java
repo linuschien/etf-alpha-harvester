@@ -45,6 +45,8 @@ public class MonthlyTopListDumpIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(MonthlyTopListDumpIntegrationTest.class);
     private static final DateTimeFormatter TS_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    public record ScoredSat(String ticker, double score, double mom, double ker, double sharpe, double r2Twii, BigDecimal aum) {}
+
     @Autowired
     private GlobalAssetScoreEvaluationUseCase scoreEvaluationUseCase;
 
@@ -822,6 +824,47 @@ public class MonthlyTopListDumpIntegrationTest {
         List<CoreCand> newCoreCands = new ArrayList<>();
         record SatCandSim(String ticker, double mom, double ker, double sharpe, double r2Twii, BigDecimal aum) {}
         List<SatCandSim> newSatCands = new ArrayList<>();
+        Map<String, Map<LocalDate, Double>> satDailyReturns = new HashMap<>();
+
+        // Known AUM map fallback from V8 seed data
+        Map<String, BigDecimal> fallbackAum = Map.ofEntries(
+                Map.entry("0050", new BigDecimal("2484642985000")),
+                Map.entry("006208", new BigDecimal("475963342800")),
+                Map.entry("0056", new BigDecimal("802926731200")),
+                Map.entry("00878", new BigDecimal("653651313300")),
+                Map.entry("00919", new BigDecimal("607173698550")),
+                Map.entry("00929", new BigDecimal("156158783820")),
+                Map.entry("00918", new BigDecimal("158305790280")),
+                Map.entry("00881", new BigDecimal("154680143090")),
+                Map.entry("0052", new BigDecimal("165662140000")),
+                Map.entry("00922", new BigDecimal("94294498680")),
+                Map.entry("00830", new BigDecimal("77979727800")),
+                Map.entry("00692", new BigDecimal("59071992000")),
+                Map.entry("00935", new BigDecimal("52938962560")),
+                Map.entry("00850", new BigDecimal("39862807200")),
+                Map.entry("00939", new BigDecimal("28002285880")),
+                Map.entry("00915", new BigDecimal("16665287300")),
+                Map.entry("00961", new BigDecimal("15331945200")),
+                Map.entry("00892", new BigDecimal("13708056000")),
+                Map.entry("00735", new BigDecimal("12363784020")),
+                Map.entry("00947", new BigDecimal("11421623800")),
+                Map.entry("00905", new BigDecimal("9927626930")),
+                Map.entry("00701", new BigDecimal("6995465220")),
+                Map.entry("00887", new BigDecimal("6913735200")),
+                Map.entry("00690", new BigDecimal("6880766400")),
+                Map.entry("00946", new BigDecimal("6740990620")),
+                Map.entry("00910", new BigDecimal("6367379294")),
+                Map.entry("00877", new BigDecimal("5895128640")),
+                Map.entry("00951", new BigDecimal("4420933980")),
+                Map.entry("00938", new BigDecimal("2787628800")),
+                Map.entry("00728", new BigDecimal("2757638850")),
+                Map.entry("00757", new BigDecimal("38000000000")),
+                Map.entry("00662", new BigDecimal("42000000000")),
+                Map.entry("00955", new BigDecimal("8500000000")),
+                Map.entry("009805", new BigDecimal("3200000000")),
+                Map.entry("00965", new BigDecimal("5600000000")),
+                Map.entry("00909", new BigDecimal("4900000000"))
+        );
 
         for (var asset : allAssets) {
             if (asset.getTicker().endsWith("B")) continue;
@@ -840,7 +883,9 @@ public class MonthlyTopListDumpIntegrationTest {
             double r2N225 = calcR2(ret, retN225, 0);
             double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
 
-            BigDecimal aum = aumMap != null ? aumMap.get(asset.getTicker()) : BigDecimal.ZERO;
+            BigDecimal aum = (aumMap != null && aumMap.containsKey(asset.getTicker()))
+                    ? aumMap.get(asset.getTicker())
+                    : fallbackAum.getOrDefault(asset.getTicker(), new BigDecimal("3000000000"));
 
             if (maxR2 >= 0.90) { // NEW THRESHOLD 0.90!
                 newCoreCands.add(new CoreCand(asset.getTicker(), maxR2, 0.0, aum));
@@ -858,56 +903,131 @@ public class MonthlyTopListDumpIntegrationTest {
                 double ker = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateKaufmanEfficiencyRatio(prices);
                 double sh = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateSharpeRatio(new ArrayList<>(ret.values()));
                 newSatCands.add(new SatCandSim(asset.getTicker(), mom, ker, sh, r2Twii, aum));
+                satDailyReturns.put(asset.getTicker(), ret);
             }
         }
 
         log.info("New Core Qualifiers (R2 >= 0.90): {}", newCoreCands.stream().map(CoreCand::ticker).toList());
         log.info("New Sat Qualifiers count: {}", newSatCands.size());
 
-        // Test Satellite ranking WITH AUM Factor (25% MOM, 25% KER, 25% Sharpe, 25% AUM) + Dampened Discount
-        var momR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::mom, true);
-        var kerR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::ker, true);
-        var shR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::sharpe, true);
-        var aumR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, c -> c.aum() != null ? c.aum().doubleValue() : 0.0, true);
+        // Percentile ranks for Satellite factors
+        var momR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::mom, true);
+        var kerR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::ker, true);
+        var shR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::sharpe, true);
+        // Anti-shadow: lower r2Twii gets higher rank (higher percentile)
+        var antiShadowR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, c -> 1.0 - c.r2Twii(), true);
+        var satAumR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, c -> c.aum() != null ? c.aum().doubleValue() : 0.0, true);
 
-        record ScoredSatSim(String ticker, double score, double raw, double discount, double mom, double r2Twii, BigDecimal aum) {}
-        List<ScoredSatSim> scoredWithAum = new ArrayList<>();
-        List<ScoredSatSim> scoredWithoutAum = new ArrayList<>();
+        // --- Model 1: User's Pure Additive 4-Factor (25% MOM, 25% KER, 25% Sharpe, 25% AntiShadow) ---
+        List<ScoredSat> userAdditive4F = new ArrayList<>();
+        // --- Model 2: User's Additive 5-Factor with AUM (20% each) ---
+        List<ScoredSat> userAdditive5F = new ArrayList<>();
+        // --- Model 3: Alpha-focused 5-Factor (30% MOM, 20% KER, 20% Sharpe, 15% AntiShadow, 15% AUM) ---
+        List<ScoredSat> alphaFocused5F = new ArrayList<>();
+        // --- Baseline: Old Multiplicative Formula ---
+        List<ScoredSat> oldMultiplicative = new ArrayList<>();
 
         for (var c : newSatCands) {
-            double disc = Math.max(0.40, 1.0 - 0.5 * c.r2Twii());
+            double m = momR.get(c);
+            double k = kerR.get(c);
+            double s = shR.get(c);
+            double as = antiShadowR.get(c);
+            double a = satAumR.get(c);
 
-            // With AUM: 4 factors
-            double rawWithAum = (momR2.get(c) + kerR2.get(c) + shR2.get(c) + aumR2.get(c)) / 4.0;
-            scoredWithAum.add(new ScoredSatSim(c.ticker(), rawWithAum * disc * 100.0, rawWithAum * 100.0, disc, c.mom(), c.r2Twii(), c.aum()));
+            double s4F = (0.25 * m + 0.25 * k + 0.25 * s + 0.25 * as) * 100.0;
+            userAdditive4F.add(new ScoredSat(c.ticker(), s4F, c.mom(), c.ker(), c.sharpe(), c.r2Twii(), c.aum()));
 
-            // Without AUM: 3 factors (Current spec)
-            double rawWithoutAum = (momR2.get(c) + kerR2.get(c) + shR2.get(c)) / 3.0;
-            scoredWithoutAum.add(new ScoredSatSim(c.ticker(), rawWithoutAum * disc * 100.0, rawWithoutAum * 100.0, disc, c.mom(), c.r2Twii(), c.aum()));
-        }
-        scoredWithAum.sort(Comparator.comparing(ScoredSatSim::score).reversed());
-        scoredWithoutAum.sort(Comparator.comparing(ScoredSatSim::score).reversed());
+            double s5F = (0.20 * m + 0.20 * k + 0.20 * s + 0.20 * as + 0.20 * a) * 100.0;
+            userAdditive5F.add(new ScoredSat(c.ticker(), s5F, c.mom(), c.ker(), c.sharpe(), c.r2Twii(), c.aum()));
 
-        log.info("--- Top 15 Satellites WITH AUM Factor (25% AUM) ---");
-        for (int i = 0; i < Math.min(15, scoredWithAum.size()); i++) {
-            var s = scoredWithAum.get(i);
-            log.info("Sat WITH AUM #{}: {} - Score={}, MOM={}%, AUM={}億, R2={}",
-                    i + 1, s.ticker(), String.format("%.2f", s.score()), String.format("%.2f", s.mom() * 100),
-                    s.aum() != null ? String.format("%.0f", s.aum().doubleValue() / 1e8) : "0", String.format("%.4f", s.r2Twii()));
+            double sAlpha5F = (0.30 * m + 0.20 * k + 0.20 * s + 0.15 * as + 0.15 * a) * 100.0;
+            alphaFocused5F.add(new ScoredSat(c.ticker(), sAlpha5F, c.mom(), c.ker(), c.sharpe(), c.r2Twii(), c.aum()));
+
+            double sOld = ((1.0 / 3.0) * m + (1.0 / 3.0) * k + (1.0 / 3.0) * s) * (1.0 - c.r2Twii()) * 100.0;
+            oldMultiplicative.add(new ScoredSat(c.ticker(), sOld, c.mom(), c.ker(), c.sharpe(), c.r2Twii(), c.aum()));
         }
 
-        for (int i = 0; i < scoredWithAum.size(); i++) {
-            if ("00701".equals(scoredWithAum.get(i).ticker())) {
-                log.info(">>> 00701 Rank WITH AUM Factor: #{} (AUM={}億)", i + 1,
-                        scoredWithAum.get(i).aum() != null ? String.format("%.0f", scoredWithAum.get(i).aum().doubleValue() / 1e8) : "0");
+        userAdditive4F.sort(Comparator.comparing(ScoredSat::score).reversed());
+        userAdditive5F.sort(Comparator.comparing(ScoredSat::score).reversed());
+        alphaFocused5F.sort(Comparator.comparing(ScoredSat::score).reversed());
+        oldMultiplicative.sort(Comparator.comparing(ScoredSat::score).reversed());
+
+        log.info("========== COMPARISON OF SCORING FORMULAS ==========");
+        log.info("--- [Baseline] Old Multiplicative Formula Top 10 ---");
+        for (int i = 0; i < Math.min(10, oldMultiplicative.size()); i++) {
+            var sat = oldMultiplicative.get(i);
+            log.info("  #{}: {} - Score={}, MOM={}%, R2={}, AUM={}億", i + 1, sat.ticker(),
+                    String.format("%.2f", sat.score()), String.format("%.2f", sat.mom() * 100),
+                    String.format("%.4f", sat.r2Twii()), String.format("%.0f", sat.aum().doubleValue() / 1e8));
+        }
+
+        log.info("--- [Model 1] User Additive 4-Factor (25% MOM, 25% KER, 25% Sharpe, 25% AntiShadow) Top 10 ---");
+        for (int i = 0; i < Math.min(10, userAdditive4F.size()); i++) {
+            var sat = userAdditive4F.get(i);
+            log.info("  #{}: {} - Score={}, MOM={}%, R2={}, AUM={}億", i + 1, sat.ticker(),
+                    String.format("%.2f", sat.score()), String.format("%.2f", sat.mom() * 100),
+                    String.format("%.4f", sat.r2Twii()), String.format("%.0f", sat.aum().doubleValue() / 1e8));
+        }
+
+        log.info("--- [Model 2] User Additive 5-Factor with AUM (20% each) Top 10 ---");
+        for (int i = 0; i < Math.min(10, userAdditive5F.size()); i++) {
+            var sat = userAdditive5F.get(i);
+            log.info("  #{}: {} - Score={}, MOM={}%, R2={}, AUM={}億", i + 1, sat.ticker(),
+                    String.format("%.2f", sat.score()), String.format("%.2f", sat.mom() * 100),
+                    String.format("%.4f", sat.r2Twii()), String.format("%.0f", sat.aum().doubleValue() / 1e8));
+        }
+
+        log.info("--- [Model 3] Alpha-focused 5-Factor (30% MOM, 20% KER, 20% Sharpe, 15% AntiShadow, 15% AUM) Top 10 ---");
+        for (int i = 0; i < Math.min(10, alphaFocused5F.size()); i++) {
+            var sat = alphaFocused5F.get(i);
+            log.info("  #{}: {} - Score={}, MOM={}%, R2={}, AUM={}億", i + 1, sat.ticker(),
+                    String.format("%.2f", sat.score()), String.format("%.2f", sat.mom() * 100),
+                    String.format("%.4f", sat.r2Twii()), String.format("%.0f", sat.aum().doubleValue() / 1e8));
+        }
+
+        // --- STAGE 3 GREEDY ORTHOGONAL FILTRATION SIMULATION ---
+        log.info("========== STAGE 3 GREEDY ORTHOGONAL FILTRATION SIMULATION (Threshold R2 < 0.50) ==========");
+        runStage3GreedyFilter("Model 2 (Additive 5-Factor)", userAdditive5F, satDailyReturns, 10);
+        runStage3GreedyFilter("Model 3 (Alpha-focused 5-Factor)", alphaFocused5F, satDailyReturns, 10);
+        runStage3GreedyFilter("Baseline (Old Multiplicative)", oldMultiplicative, satDailyReturns, 10);
+        log.info("=========================================================================================");
+    }
+
+    private void runStage3GreedyFilter(String modelName, List<MonthlyTopListDumpIntegrationTest.ScoredSat> rankedCandidates,
+                                       Map<String, Map<LocalDate, Double>> returnsMap, int maxSlots) {
+        log.info(">>> Running Stage 3 Greedy Orthogonal Pruning for: {}", modelName);
+        List<MonthlyTopListDumpIntegrationTest.ScoredSat> selected = new ArrayList<>();
+        List<String> rejected = new ArrayList<>();
+
+        for (var candidate : rankedCandidates) {
+            if (selected.size() >= maxSlots) break;
+
+            boolean collinear = false;
+            String conflictWith = null;
+            double conflictR2 = 0.0;
+
+            for (var existing : selected) {
+                double r2 = calcR2(returnsMap.get(candidate.ticker()), returnsMap.get(existing.ticker()), 0);
+                if (r2 >= 0.50) {
+                    collinear = true;
+                    conflictWith = existing.ticker();
+                    conflictR2 = r2;
+                    break;
+                }
+            }
+
+            if (!collinear) {
+                selected.add(candidate);
+                log.info("  [SELECTED Slot #{}] {} (Score={}, R2_TAIEX={}, MOM={}%, AUM={}億)",
+                        selected.size(), candidate.ticker(), String.format("%.2f", candidate.score()),
+                        String.format("%.4f", candidate.r2Twii()), String.format("%.2f", candidate.mom() * 100),
+                        String.format("%.0f", candidate.aum().doubleValue() / 1e8));
+            } else {
+                rejected.add(candidate.ticker() + " (collinear with " + conflictWith + ", R2=" + String.format("%.3f", conflictR2) + ")");
             }
         }
-        for (int i = 0; i < scoredWithoutAum.size(); i++) {
-            if ("00701".equals(scoredWithoutAum.get(i).ticker())) {
-                log.info(">>> 00701 Rank WITHOUT AUM Factor: #{}", i + 1);
-            }
-        }
-        log.info("===========================================");
+        log.info("  Rejected due to collinearity (R2 >= 0.50): {}", rejected);
+
     }
 
     private BigDecimal findPriceNearDate(List<com.alphaharvester.domain.entity.MarketDailyQuote> quotes, LocalDate targetDate) {
