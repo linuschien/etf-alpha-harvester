@@ -745,6 +745,171 @@ public class MonthlyTopListDumpIntegrationTest {
         log.info("================================================");
     }
 
+    @Test
+    void simulateUserIdeas() {
+        LocalDate evalDate = LocalDate.of(2026, 9, 1);
+        LocalDateTime cutoff = evalDate.minusDays(1).atTime(23, 59, 59);
+        LocalDateTime start365d = cutoff.minusYears(1).plusDays(1).toLocalDate().atStartOfDay();
+        LocalDate window90dStart = cutoff.toLocalDate().minusDays(90);
+        LocalDate window30dStart = cutoff.toLocalDate().minusDays(30);
+
+        var allAssets = metadataRepository.findAll().collectList().block();
+        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
+
+        var bmTwii = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", start365d, cutoff).collectList().block();
+        var bmGspc = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^GSPC", start365d, cutoff).collectList().block();
+        var bmNdx = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^NDX", start365d, cutoff).collectList().block();
+        var bmN225 = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^N225", start365d, cutoff).collectList().block();
+
+        var retTwii = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmTwii);
+        var retGspc = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmGspc);
+        var retNdx = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmNdx);
+        var retN225 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmN225);
+
+        log.info("========== SIMULATING USER IDEAS ==========");
+
+        // --- 1. Defensive Bond Pool with Junk Bond Exclusion ---
+        record BondCand(String ticker, String name, double ytm, BigDecimal aum) {}
+        List<BondCand> bondCands = new ArrayList<>();
+        List<String> excludedJunkBonds = new ArrayList<>();
+
+        for (var asset : allAssets) {
+            if (!asset.getTicker().endsWith("B")) continue;
+            if (asset.getListingDate() == null || asset.getListingDate().isAfter(cutoff.minusYears(1))) continue;
+            var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(asset.getTicker(), start365d, cutoff).collectList().block();
+            if (quotes == null || quotes.size() < 220) continue;
+
+            // Check Junk Bond Veto
+            String name = asset.getName() != null ? asset.getName() : "";
+            if (name.contains("非投資等級") || name.contains("高收益")) {
+                excludedJunkBonds.add(asset.getTicker() + "(" + name + ")");
+                continue;
+            }
+
+            var divs = dividendRepository.findByTickerOrderByExDateDesc(asset.getTicker()).collectList().block();
+            double totalDiv = 0.0;
+            if (divs != null) {
+                totalDiv = divs.stream()
+                        .filter(d -> d.getExDate() != null && !d.getExDate().isBefore(start365d) && !d.getExDate().isAfter(cutoff))
+                        .mapToDouble(d -> d.getDividendPerShare().doubleValue())
+                        .sum();
+            }
+            double lastPrice = (quotes.get(0).getClosePrice() != null) ? quotes.get(0).getClosePrice().doubleValue() : 1.0;
+            double ytm = lastPrice > 0 ? totalDiv / lastPrice : 0.0;
+            BigDecimal aum = aumMap != null ? aumMap.get(asset.getTicker()) : BigDecimal.ZERO;
+            bondCands.add(new BondCand(asset.getTicker(), name, ytm, aum));
+        }
+
+        log.info("--- Idea 3: Defensive Bonds (Junk Excluded: {}) ---", excludedJunkBonds);
+        var ytmR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(bondCands, BondCand::ytm, true);
+        var aumR = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(bondCands, b -> b.aum() != null ? b.aum().doubleValue() : 0.0, true);
+        record ScoredBond(String ticker, String name, double score, double ytm, BigDecimal aum) {}
+        List<ScoredBond> scoredBonds = new ArrayList<>();
+        for (var b : bondCands) {
+            double sc = (0.70 * ytmR.get(b) + 0.30 * aumR.get(b)) * 100.0;
+            scoredBonds.add(new ScoredBond(b.ticker(), b.name(), sc, b.ytm(), b.aum()));
+        }
+        scoredBonds.sort(Comparator.comparing(ScoredBond::score).reversed());
+        for (int i = 0; i < Math.min(7, scoredBonds.size()); i++) {
+            var b = scoredBonds.get(i);
+            log.info("NEW Def Rank #{}: {} - Score={}, YTM={}%, AUM={}",
+                    i + 1, b.ticker(), String.format("%.2f", b.score()), String.format("%.2f", b.ytm() * 100), b.aum());
+        }
+
+        // --- 2. Core vs Satellite with Core R2 >= 0.90 ---
+        log.info("--- Idea 1: Core Threshold R^2 >= 0.90 ---");
+        record CoreCand(String ticker, double maxR2, double dcaRank, BigDecimal aum) {}
+        List<CoreCand> newCoreCands = new ArrayList<>();
+        record SatCandSim(String ticker, double mom, double ker, double sharpe, double r2Twii, BigDecimal aum) {}
+        List<SatCandSim> newSatCands = new ArrayList<>();
+
+        for (var asset : allAssets) {
+            if (asset.getTicker().endsWith("B")) continue;
+            if (asset.getListingDate() == null || asset.getListingDate().isAfter(cutoff.minusYears(1))) continue;
+            var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(asset.getTicker(), start365d, cutoff).collectList().block();
+            if (quotes == null || quotes.size() < 220) continue;
+            var q30 = quotes.stream().filter(q -> !q.getTradeDate().toLocalDate().isBefore(window30dStart)).toList();
+            double turn = 0.0;
+            for (var q : q30) if (q.getTradeValueTwd() != null) turn += q.getTradeValueTwd().doubleValue();
+            if (q30.isEmpty() || (turn / q30.size()) < 20_000_000.0) continue;
+
+            var ret = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(quotes);
+            double r2Twii = calcR2(ret, retTwii, 0);
+            double r2Gspc = calcR2(ret, retGspc, 1);
+            double r2Ndx = calcR2(ret, retNdx, 1);
+            double r2N225 = calcR2(ret, retN225, 0);
+            double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
+
+            BigDecimal aum = aumMap != null ? aumMap.get(asset.getTicker()) : BigDecimal.ZERO;
+
+            if (maxR2 >= 0.90) { // NEW THRESHOLD 0.90!
+                newCoreCands.add(new CoreCand(asset.getTicker(), maxR2, 0.0, aum));
+            } else {
+                // Routes to Satellite!
+                var r90 = ret.entrySet().stream().filter(e -> !e.getKey().isBefore(window90dStart)).map(Map.Entry::getValue).toList();
+                double vol = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(r90);
+                if (vol < 0.18) continue;
+                var p30 = findPriceNearDate(quotes, window30dStart);
+                var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
+                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+                if (mom <= 0.0) continue;
+
+                var prices = quotes.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
+                double ker = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateKaufmanEfficiencyRatio(prices);
+                double sh = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateSharpeRatio(new ArrayList<>(ret.values()));
+                newSatCands.add(new SatCandSim(asset.getTicker(), mom, ker, sh, r2Twii, aum));
+            }
+        }
+
+        log.info("New Core Qualifiers (R2 >= 0.90): {}", newCoreCands.stream().map(CoreCand::ticker).toList());
+        log.info("New Sat Qualifiers count: {}", newSatCands.size());
+
+        // Test Satellite ranking WITH AUM Factor (25% MOM, 25% KER, 25% Sharpe, 25% AUM) + Dampened Discount
+        var momR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::mom, true);
+        var kerR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::ker, true);
+        var shR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, SatCandSim::sharpe, true);
+        var aumR2 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculatePercentileRanks(newSatCands, c -> c.aum() != null ? c.aum().doubleValue() : 0.0, true);
+
+        record ScoredSatSim(String ticker, double score, double raw, double discount, double mom, double r2Twii, BigDecimal aum) {}
+        List<ScoredSatSim> scoredWithAum = new ArrayList<>();
+        List<ScoredSatSim> scoredWithoutAum = new ArrayList<>();
+
+        for (var c : newSatCands) {
+            double disc = Math.max(0.40, 1.0 - 0.5 * c.r2Twii());
+
+            // With AUM: 4 factors
+            double rawWithAum = (momR2.get(c) + kerR2.get(c) + shR2.get(c) + aumR2.get(c)) / 4.0;
+            scoredWithAum.add(new ScoredSatSim(c.ticker(), rawWithAum * disc * 100.0, rawWithAum * 100.0, disc, c.mom(), c.r2Twii(), c.aum()));
+
+            // Without AUM: 3 factors (Current spec)
+            double rawWithoutAum = (momR2.get(c) + kerR2.get(c) + shR2.get(c)) / 3.0;
+            scoredWithoutAum.add(new ScoredSatSim(c.ticker(), rawWithoutAum * disc * 100.0, rawWithoutAum * 100.0, disc, c.mom(), c.r2Twii(), c.aum()));
+        }
+        scoredWithAum.sort(Comparator.comparing(ScoredSatSim::score).reversed());
+        scoredWithoutAum.sort(Comparator.comparing(ScoredSatSim::score).reversed());
+
+        log.info("--- Top 15 Satellites WITH AUM Factor (25% AUM) ---");
+        for (int i = 0; i < Math.min(15, scoredWithAum.size()); i++) {
+            var s = scoredWithAum.get(i);
+            log.info("Sat WITH AUM #{}: {} - Score={}, MOM={}%, AUM={}億, R2={}",
+                    i + 1, s.ticker(), String.format("%.2f", s.score()), String.format("%.2f", s.mom() * 100),
+                    s.aum() != null ? String.format("%.0f", s.aum().doubleValue() / 1e8) : "0", String.format("%.4f", s.r2Twii()));
+        }
+
+        for (int i = 0; i < scoredWithAum.size(); i++) {
+            if ("00701".equals(scoredWithAum.get(i).ticker())) {
+                log.info(">>> 00701 Rank WITH AUM Factor: #{} (AUM={}億)", i + 1,
+                        scoredWithAum.get(i).aum() != null ? String.format("%.0f", scoredWithAum.get(i).aum().doubleValue() / 1e8) : "0");
+            }
+        }
+        for (int i = 0; i < scoredWithoutAum.size(); i++) {
+            if ("00701".equals(scoredWithoutAum.get(i).ticker())) {
+                log.info(">>> 00701 Rank WITHOUT AUM Factor: #{}", i + 1);
+            }
+        }
+        log.info("===========================================");
+    }
+
     private BigDecimal findPriceNearDate(List<com.alphaharvester.domain.entity.MarketDailyQuote> quotes, LocalDate targetDate) {
         if (quotes.isEmpty()) return BigDecimal.ONE;
         com.alphaharvester.domain.entity.MarketDailyQuote closest = null;
