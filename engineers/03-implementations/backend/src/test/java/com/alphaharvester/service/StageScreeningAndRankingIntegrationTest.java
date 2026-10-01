@@ -113,8 +113,7 @@ class StageScreeningAndRankingIntegrationTest {
                 quotes.add(new MarketDailyQuote(
                         UUID.randomUUID(), UUID.randomUUID(), null, ticker, curr.atTime(13, 30),
                         BigDecimal.valueOf(p), BigDecimal.valueOf(p * 1.01), BigDecimal.valueOf(p * 0.99),
-                        BigDecimal.valueOf(p), 1_000_000L, BigDecimal.valueOf(50_000_000L),
-                        BigDecimal.valueOf(p), BigDecimal.ZERO
+                        BigDecimal.valueOf(p), 1_000_000L, BigDecimal.valueOf(50_000_000L)
                 ));
                 i++;
             }
@@ -193,7 +192,7 @@ class StageScreeningAndRankingIntegrationTest {
         // Low turnover quotes for lowTurnoverAsset
         List<MarketDailyQuote> illiquidQuotes = generateCalendarQuotes("00996", targetYm, 50.0, 0.0005, 0.01, 0).stream()
                 .map(q -> new MarketDailyQuote(q.getId(), q.getAssetId(), q.getBenchmarkId(), q.getTicker(), q.getTradeDate(),
-                        q.getOpenPrice(), q.getHighPrice(), q.getLowPrice(), q.getClosePrice(), 100_000L, BigDecimal.valueOf(5_000_000L), q.getNetAssetValue(), BigDecimal.ZERO))
+                        q.getOpenPrice(), q.getHighPrice(), q.getLowPrice(), q.getClosePrice(), 100_000L, BigDecimal.valueOf(5_000_000L)))
                 .toList();
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00996"), any(), any())).thenReturn(Flux.fromIterable(illiquidQuotes));
 

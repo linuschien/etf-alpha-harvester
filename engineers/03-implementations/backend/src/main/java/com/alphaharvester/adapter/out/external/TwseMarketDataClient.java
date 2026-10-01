@@ -107,7 +107,7 @@ public class TwseMarketDataClient {
                     return new MarketDailyQuote(
                             null, null, null, ticker, tradeDate,
                             openPrice, highPrice, lowPrice, closePrice,
-                            volume, tradeValue, null, null
+                            volume, tradeValue
                     );
                 })
                 .filter(q -> q.getClosePrice() != null)

@@ -99,8 +99,7 @@ class MarketDataSyncServiceTest {
 
         MarketDailyQuote quote50 = new MarketDailyQuote(null, id50, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
-                new BigDecimal("188.0"), 2000000L, new BigDecimal("376000000"),
-                new BigDecimal("188.10"), new BigDecimal("-0.05"));
+                new BigDecimal("188.0"), 2000000L, new BigDecimal("376000000"));
 
         MacroYieldSnapshot snapshot = new MacroYieldSnapshot(null, now, new BigDecimal("5.25"),
                 new BigDecimal("4.28"), new BigDecimal("4.58"), new BigDecimal("-0.15"));
@@ -169,15 +168,15 @@ class MarketDataSyncServiceTest {
         // Previous recorded date is 5 days ago (simulating shutdown/offline outage)
         MarketDailyQuote oldQuote = new MarketDailyQuote(null, id, null, "0050", now.minusDays(5),
                 new BigDecimal("180.0"), new BigDecimal("182.0"), new BigDecimal("179.0"),
-                new BigDecimal("181.0"), 1000000L, BigDecimal.ZERO, null, null);
+                new BigDecimal("181.0"), 1000000L, BigDecimal.ZERO);
 
         MarketDailyQuote todayQuote = new MarketDailyQuote(null, id, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("187.0"), new BigDecimal("184.0"),
-                new BigDecimal("186.0"), 1200000L, BigDecimal.ZERO, null, null);
+                new BigDecimal("186.0"), 1200000L, BigDecimal.ZERO);
 
         MarketDailyQuote backfillQuote = new MarketDailyQuote(null, id, null, "0050", now.minusDays(2),
                 new BigDecimal("182.0"), new BigDecimal("184.0"), new BigDecimal("181.0"),
-                new BigDecimal("183.0"), 1100000L, BigDecimal.ZERO, null, null);
+                new BigDecimal("183.0"), 1100000L, BigDecimal.ZERO);
 
         DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
                 UUID.randomUUID(), MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES, now.minusDays(5), now.minusDays(5), 10, "SUCCESS", null, now.minusDays(5)
@@ -215,13 +214,13 @@ class MarketDataSyncServiceTest {
 
         MarketDailyQuote etfQuote = new MarketDailyQuote(null, id, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
-                new BigDecimal("188.0"), 2000000L, new BigDecimal("376000000"), null, null);
+                new BigDecimal("188.0"), 2000000L, new BigDecimal("376000000"));
         MarketDailyQuote benchQuote = new MarketDailyQuote(null, null, null, "^TWII", now,
                 new BigDecimal("22000.0"), new BigDecimal("22100.0"), new BigDecimal("21950.0"),
-                new BigDecimal("22050.0"), 5000000000L, BigDecimal.ZERO, null, null);
+                new BigDecimal("22050.0"), 5000000000L, BigDecimal.ZERO);
         MarketDailyQuote cnnQuote = new MarketDailyQuote(null, null, null, "FEAR_GREED", now,
                 new BigDecimal("55.0"), new BigDecimal("55.0"), new BigDecimal("55.0"),
-                new BigDecimal("55.0"), 0L, BigDecimal.ZERO, null, null);
+                new BigDecimal("55.0"), 0L, BigDecimal.ZERO);
 
         MacroYieldSnapshot yieldSnapshot = new MacroYieldSnapshot(null, now, new BigDecimal("5.25"),
                 new BigDecimal("4.28"), new BigDecimal("4.58"), new BigDecimal("-0.15"));

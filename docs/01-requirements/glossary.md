@@ -22,7 +22,7 @@
 | 實體 / 物件 | 英文代碼 | 定義 | 關鍵屬性 |
 | --- | --- | --- | --- |
 | **全域基準指數** | `BenchmarkIndex` | 全球 9 大市場行情、波動度恐慌與綜合情緒基準指標。 | `ticker` (^TWII, ^GSPC, ^NDX, ^SOX, ^N225, ^VIX, ^VXN, ^MOVE, FEAR_GREED), `name`, `region`, `description` |
-| **市場行情快照** | `MarketDailyQuote` | 單一標的或基準在特定交易日的市場成交價量、淨值與折溢價（純客觀成交事實，無除息還原價）。 | `ticker`, `trade_date`, `open_price`, `high_price`, `low_price`, `close_price`, `volume_shares`, `trade_value_twd`, `net_asset_value`, `discount_premium_percentage` |
+| **市場行情快照** | `MarketDailyQuote` | 單一標的或基準在特定交易日的市場成交價量資訊（純客觀成交事實，無除息還原價）。 | `ticker`, `trade_date`, `open_price`, `high_price`, `low_price`, `close_price`, `volume_shares`, `trade_value_twd` |
 | **宏觀殖利率快照** | `MacroYieldSnapshot` | FRED API 定時拉取之美國公司債與公債殖利率事實（資料庫純資料化，無狀態旗標）。 | `record_date`, `us_corporate_bond_effective_yield`, `us_10_year_treasury_yield`, `us_20_year_treasury_yield`, `yield_spread_10y_minus_2y` |
 | **全域標的評分記錄** | `GlobalAssetScore` | 模組 G-02 每月/每半年對各組候選標的進行 Stage 2 客觀多因子百分位評分、組內獨立排名，以及 Stage 3 模式 A 正交標記。 | `ticker`, `evaluation_date`, `asset_class` (`CandidateAssetClass`), `class_rank`, `composite_score`, `fund_size_twd`, `orthogonal_status` (`OrthogonalStatus`), `collision_detail` |
 | **兩兩正交矩陣記錄** | `GlobalAssetPairwiseMatrix` | 模組 G-02 持久化儲存之 Top 候選標的兩兩近 365 日曆天原始日報酬判定係數 $R^2$ 與相關係數 $\rho$。 | `evaluation_date`, `asset_class`, `base_ticker`, `target_ticker`, `r_squared`, `correlation_coefficient` |

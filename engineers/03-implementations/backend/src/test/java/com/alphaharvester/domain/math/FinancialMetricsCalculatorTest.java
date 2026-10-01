@@ -23,9 +23,9 @@ class FinancialMetricsCalculatorTest {
         LocalDateTime day2 = LocalDateTime.of(2026, 8, 2, 13, 30);
         LocalDateTime day3 = LocalDateTime.of(2026, 8, 3, 13, 30);
 
-        MarketDailyQuote q1 = new MarketDailyQuote(null, null, null, "0050", day1, null, null, null, new BigDecimal("100.00"), null, null, null, null);
-        MarketDailyQuote q2 = new MarketDailyQuote(null, null, null, "0050", day2, null, null, null, new BigDecimal("105.00"), null, null, null, null);
-        MarketDailyQuote q3 = new MarketDailyQuote(null, null, null, "0050", day3, null, null, null, new BigDecimal("102.90"), null, null, null, null);
+        MarketDailyQuote q1 = new MarketDailyQuote(null, null, null, "0050", day1, null, null, null, new BigDecimal("100.00"), null, null);
+        MarketDailyQuote q2 = new MarketDailyQuote(null, null, null, "0050", day2, null, null, null, new BigDecimal("105.00"), null, null);
+        MarketDailyQuote q3 = new MarketDailyQuote(null, null, null, "0050", day3, null, null, null, new BigDecimal("102.90"), null, null);
 
         // Pass in reverse order
         Map<LocalDate, Double> returns = FinancialMetricsCalculator.calculateDailyReturns(List.of(q3, q1, q2));
@@ -171,16 +171,16 @@ class FinancialMetricsCalculatorTest {
 
         MarketDailyQuote q1 = new MarketDailyQuote(null, null, null, "0050", d1,
                 new BigDecimal("159.00"), new BigDecimal("161.00"), new BigDecimal("158.50"), new BigDecimal("160.00"),
-                1000L, new BigDecimal("160000"), null, null);
+                1000L, new BigDecimal("160000"));
         MarketDailyQuote q2 = new MarketDailyQuote(null, null, null, "0050", d2,
                 new BigDecimal("160.00"), new BigDecimal("164.00"), new BigDecimal("160.00"), new BigDecimal("164.00"),
-                1200L, new BigDecimal("196800"), null, null);
+                1200L, new BigDecimal("196800"));
         MarketDailyQuote q3 = new MarketDailyQuote(null, null, null, "0050", d3SplitDay,
                 new BigDecimal("41.00"), new BigDecimal("42.00"), new BigDecimal("40.50"), new BigDecimal("41.00"),
-                4800L, new BigDecimal("196800"), null, null);
+                4800L, new BigDecimal("196800"));
         MarketDailyQuote q4 = new MarketDailyQuote(null, null, null, "0050", d4,
                 new BigDecimal("41.00"), new BigDecimal("42.50"), new BigDecimal("41.00"), new BigDecimal("42.00"),
-                4500L, new BigDecimal("189000"), null, null);
+                4500L, new BigDecimal("189000"));
 
         CorporateAction split1to4 = new CorporateAction(
                 null, null, "0050", CorporateActionType.SPLIT, d3SplitDay, 4, 1
@@ -219,9 +219,9 @@ class FinancialMetricsCalculatorTest {
         LocalDateTime splitDate2 = LocalDateTime.of(2024, 12, 1, 9, 0); // 1 to 3
         LocalDateTime d3 = LocalDateTime.of(2025, 1, 15, 9, 0);
 
-        MarketDailyQuote q1 = new MarketDailyQuote(null, null, null, "TEST", d1, null, null, null, new BigDecimal("120.00"), null, null, null, null);
-        MarketDailyQuote q2 = new MarketDailyQuote(null, null, null, "TEST", d2, null, null, null, new BigDecimal("60.00"), null, null, null, null);
-        MarketDailyQuote q3 = new MarketDailyQuote(null, null, null, "TEST", d3, null, null, null, new BigDecimal("25.00"), null, null, null, null);
+        MarketDailyQuote q1 = new MarketDailyQuote(null, null, null, "TEST", d1, null, null, null, new BigDecimal("120.00"), null, null);
+        MarketDailyQuote q2 = new MarketDailyQuote(null, null, null, "TEST", d2, null, null, null, new BigDecimal("60.00"), null, null);
+        MarketDailyQuote q3 = new MarketDailyQuote(null, null, null, "TEST", d3, null, null, null, new BigDecimal("25.00"), null, null);
 
         CorporateAction split1 = new CorporateAction(null, null, "TEST", CorporateActionType.SPLIT, splitDate1, 2, 1);
         CorporateAction split2 = new CorporateAction(null, null, "TEST", CorporateActionType.SPLIT, splitDate2, 3, 1);
@@ -249,11 +249,11 @@ class FinancialMetricsCalculatorTest {
         LocalDateTime now = LocalDateTime.of(2026, 9, 1, 13, 30);
         // Current quote: close = 100.0
         MarketDailyQuote current = new MarketDailyQuote(null, null, null, "0050", now,
-                null, new BigDecimal("102.0"), null, new BigDecimal("100.0"), null, null, null, null);
+                null, new BigDecimal("102.0"), null, new BigDecimal("100.0"), null, null);
 
         // Peak quote 100 days ago: high = 200.0, close = 195.0
         MarketDailyQuote peak = new MarketDailyQuote(null, null, null, "0050", now.minusDays(100),
-                null, new BigDecimal("200.0"), null, new BigDecimal("195.0"), null, null, null, null);
+                null, new BigDecimal("200.0"), null, new BigDecimal("195.0"), null, null);
 
         // Drawdown = (100 - 200) / 200 = -0.50 (-50%)
         double dd = FinancialMetricsCalculator.calculate52WeekDrawdown(List.of(current, peak));
@@ -265,15 +265,15 @@ class FinancialMetricsCalculatorTest {
     void shouldExcludeQuotesOlderThanOneNaturalYear() {
         LocalDateTime now = LocalDateTime.of(2026, 9, 1, 13, 30);
         MarketDailyQuote current = new MarketDailyQuote(null, null, null, "0050", now,
-                null, new BigDecimal("100.0"), null, new BigDecimal("100.0"), null, null, null, null);
+                null, new BigDecimal("100.0"), null, new BigDecimal("100.0"), null, null);
 
         // Peak within 1 year (180 days ago): high = 120.0
         MarketDailyQuote peakRecent = new MarketDailyQuote(null, null, null, "0050", now.minusDays(180),
-                null, new BigDecimal("120.0"), null, new BigDecimal("115.0"), null, null, null, null);
+                null, new BigDecimal("120.0"), null, new BigDecimal("115.0"), null, null);
 
         // Peak beyond 1 year (380 days ago): high = 300.0 (must be ignored!)
         MarketDailyQuote peakOld = new MarketDailyQuote(null, null, null, "0050", now.minusDays(380),
-                null, new BigDecimal("300.0"), null, new BigDecimal("290.0"), null, null, null, null);
+                null, new BigDecimal("300.0"), null, new BigDecimal("290.0"), null, null);
 
         // Drawdown should be based on 120.0, not 300.0: (100 - 120) / 120 = -16.67%
         double dd = FinancialMetricsCalculator.calculate52WeekDrawdown(List.of(current, peakRecent, peakOld));
@@ -288,9 +288,9 @@ class FinancialMetricsCalculatorTest {
         LocalDateTime oneYearAgo = LocalDateTime.of(2023, 3, 1, 13, 30);
 
         MarketDailyQuote current = new MarketDailyQuote(null, null, null, "0050", leapYearNow,
-                null, new BigDecimal("100.0"), null, new BigDecimal("100.0"), null, null, null, null);
+                null, new BigDecimal("100.0"), null, new BigDecimal("100.0"), null, null);
         MarketDailyQuote peakLeap = new MarketDailyQuote(null, null, null, "0050", oneYearAgo,
-                null, new BigDecimal("200.0"), null, new BigDecimal("190.0"), null, null, null, null);
+                null, new BigDecimal("200.0"), null, new BigDecimal("190.0"), null, null);
 
         // With minusYears(1), 2023-03-01 is included! Drawdown = (100 - 200) / 200 = -50%
         double dd = FinancialMetricsCalculator.calculate52WeekDrawdown(List.of(current, peakLeap));

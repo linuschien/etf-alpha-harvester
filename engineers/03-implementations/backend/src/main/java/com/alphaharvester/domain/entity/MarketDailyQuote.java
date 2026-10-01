@@ -56,10 +56,4 @@ public class MarketDailyQuote {
 
     @Column("trade_value_twd")
     private BigDecimal tradeValueTwd;
-
-    @Column("net_asset_value")
-    private BigDecimal netAssetValue;
-
-    @Column("discount_premium_percentage")
-    private BigDecimal discountPremiumPercentage;
 }

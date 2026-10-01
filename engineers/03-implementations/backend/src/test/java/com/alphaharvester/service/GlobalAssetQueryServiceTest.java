@@ -113,8 +113,7 @@ class GlobalAssetQueryServiceTest {
         LocalDateTime now = LocalDateTime.now();
         MarketDailyQuote quote = new MarketDailyQuote(id, null, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
-                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"),
-                new BigDecimal("188.2"), new BigDecimal("-0.1"));
+                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"));
 
         when(quoteRepository.findAll()).thenReturn(Flux.just(quote));
         when(quoteRepository.findById(id)).thenReturn(Mono.just(quote));

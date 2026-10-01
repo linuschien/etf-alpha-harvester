@@ -37,8 +37,6 @@ CREATE TABLE IF NOT EXISTS market_daily_quote (
     close_price DECIMAL(12,4) NOT NULL,
     volume_shares BIGINT,
     trade_value_twd DECIMAL(18,2),
-    net_asset_value DECIMAL(12,4),
-    discount_premium_percentage DECIMAL(6,4),
     CONSTRAINT uq_market_daily_quote UNIQUE (ticker, trade_date)
 );
 

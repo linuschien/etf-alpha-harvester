@@ -463,8 +463,6 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     }
                     existing.setVolumeShares(q.getVolumeShares());
                     existing.setTradeValueTwd(q.getTradeValueTwd());
-                    if (q.getNetAssetValue() != null) existing.setNetAssetValue(q.getNetAssetValue());
-                    if (q.getDiscountPremiumPercentage() != null) existing.setDiscountPremiumPercentage(q.getDiscountPremiumPercentage());
                     return quoteRepository.save(existing);
                 })
                 .switchIfEmpty(Mono.defer(() -> {

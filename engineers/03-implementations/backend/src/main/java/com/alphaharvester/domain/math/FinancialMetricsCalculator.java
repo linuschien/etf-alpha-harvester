@@ -94,9 +94,7 @@ public final class FinancialMetricsCalculator {
                         adjLow,
                         adjClose,
                         q.getVolumeShares(),
-                        q.getTradeValueTwd(),
-                        q.getNetAssetValue(),
-                        q.getDiscountPremiumPercentage()
+                        q.getTradeValueTwd()
                 );
                 adjustedQuotes.add(adjQuote);
             }

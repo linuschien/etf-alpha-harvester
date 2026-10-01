@@ -58,13 +58,13 @@ class DipBuyOpportunityServiceTest {
         // 52-week high is 200.0, current price is 110.0 (Drawdown = -45% >= 38.2%)
         quotes.add(new MarketDailyQuote(null, null, null, "0050", baseTime,
                 new BigDecimal("112.0"), new BigDecimal("113.0"), new BigDecimal("109.0"),
-                new BigDecimal("110.0"), 1000000L, new BigDecimal("110000000"), null, null));
+                new BigDecimal("110.0"), 1000000L, new BigDecimal("110000000")));
 
         // Prior 30 quotes around 170.0 ~ 200.0 to create wide BB and high MAs
         for (int i = 1; i <= 60; i++) {
             quotes.add(new MarketDailyQuote(null, null, null, "0050", baseTime.minusDays(i),
                     new BigDecimal("180.0"), new BigDecimal("200.0"), new BigDecimal("175.0"),
-                    new BigDecimal("185.0"), 1000000L, new BigDecimal("185000000"), null, null));
+                    new BigDecimal("185.0"), 1000000L, new BigDecimal("185000000")));
         }
 
         // VIX = 36.0 (Panic >= 35 -> 20 pts)
@@ -88,12 +88,12 @@ class DipBuyOpportunityServiceTest {
         // High 190.0, current 175.0 (Drawdown ~ -7.8% < 14.6% -> 0 pts)
         quotes.add(new MarketDailyQuote(null, null, null, "0050", baseTime,
                 new BigDecimal("176.0"), new BigDecimal("178.0"), new BigDecimal("174.0"),
-                new BigDecimal("175.0"), 1000000L, new BigDecimal("175000000"), null, null));
+                new BigDecimal("175.0"), 1000000L, new BigDecimal("175000000")));
 
         for (int i = 1; i <= 30; i++) {
             quotes.add(new MarketDailyQuote(null, null, null, "0050", baseTime.minusDays(i),
                     new BigDecimal("180.0"), new BigDecimal("190.0"), new BigDecimal("178.0"),
-                    new BigDecimal("180.0"), 1000000L, new BigDecimal("180000000"), null, null));
+                    new BigDecimal("180.0"), 1000000L, new BigDecimal("180000000")));
         }
 
         // VIX = 26.0 (8 pts)
@@ -109,11 +109,11 @@ class DipBuyOpportunityServiceTest {
         LocalDateTime baseTime = LocalDateTime.now();
         MarketDailyQuote quote = new MarketDailyQuote(null, null, null, "0050", baseTime,
                 new BigDecimal("180.0"), new BigDecimal("185.0"), new BigDecimal("178.0"),
-                new BigDecimal("182.0"), 1000000L, new BigDecimal("182000000"), null, null);
+                new BigDecimal("182.0"), 1000000L, new BigDecimal("182000000"));
 
         MarketDailyQuote vixQuote = new MarketDailyQuote(null, null, null, "^VIX", baseTime,
                 new BigDecimal("21.0"), new BigDecimal("23.0"), new BigDecimal("20.5"),
-                new BigDecimal("22.5"), 0L, BigDecimal.ZERO, null, null);
+                new BigDecimal("22.5"), 0L, BigDecimal.ZERO);
 
         when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.empty());
         when(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(quote));
@@ -134,16 +134,16 @@ class DipBuyOpportunityServiceTest {
         // Suppose current quote is post-split at 50.0 TWD
         MarketDailyQuote postSplitQuote = new MarketDailyQuote(null, null, null, "0050", now,
                 new BigDecimal("50.0"), new BigDecimal("51.0"), new BigDecimal("49.5"),
-                new BigDecimal("50.0"), 1000000L, new BigDecimal("50000000"), null, null);
+                new BigDecimal("50.0"), 1000000L, new BigDecimal("50000000"));
 
         // Pre-split quote from 10 days ago at 200.0 TWD
         MarketDailyQuote preSplitQuote = new MarketDailyQuote(null, null, null, "0050", now.minusDays(10),
                 new BigDecimal("200.0"), new BigDecimal("205.0"), new BigDecimal("198.0"),
-                new BigDecimal("200.0"), 1000000L, new BigDecimal("200000000"), null, null);
+                new BigDecimal("200.0"), 1000000L, new BigDecimal("200000000"));
 
         MarketDailyQuote vixQuote = new MarketDailyQuote(null, null, null, "^VIX", now,
                 new BigDecimal("15.0"), new BigDecimal("16.0"), new BigDecimal("14.5"),
-                new BigDecimal("15.0"), 0L, BigDecimal.ZERO, null, null);
+                new BigDecimal("15.0"), 0L, BigDecimal.ZERO);
 
         // 1-to-4 split: splitToShares=4, splitFromShares=1, effective 5 days ago
         CorporateAction splitAction = new CorporateAction(
@@ -176,21 +176,21 @@ class DipBuyOpportunityServiceTest {
         // Current price at 100.0 TWD
         MarketDailyQuote currentQuote = new MarketDailyQuote(null, null, null, "0050", now,
                 new BigDecimal("100.0"), new BigDecimal("102.0"), new BigDecimal("99.0"),
-                new BigDecimal("100.0"), 1000000L, new BigDecimal("100000000"), null, null);
+                new BigDecimal("100.0"), 1000000L, new BigDecimal("100000000"));
 
         // Within 52 weeks (180 days ago) at 110.0 TWD
         MarketDailyQuote quote180d = new MarketDailyQuote(null, null, null, "0050", now.minusDays(180),
                 new BigDecimal("108.0"), new BigDecimal("110.0"), new BigDecimal("107.0"),
-                new BigDecimal("109.0"), 1000000L, new BigDecimal("109000000"), null, null);
+                new BigDecimal("109.0"), 1000000L, new BigDecimal("109000000"));
 
         // Beyond 52 weeks (380 days ago, which would be included if taking fixed 252 trading bars) at 200.0 TWD!
         MarketDailyQuote quote380d = new MarketDailyQuote(null, null, null, "0050", now.minusDays(380),
                 new BigDecimal("195.0"), new BigDecimal("200.0"), new BigDecimal("190.0"),
-                new BigDecimal("198.0"), 1000000L, new BigDecimal("198000000"), null, null);
+                new BigDecimal("198.0"), 1000000L, new BigDecimal("198000000"));
 
         MarketDailyQuote vixQuote = new MarketDailyQuote(null, null, null, "^VIX", now,
                 new BigDecimal("15.0"), new BigDecimal("16.0"), new BigDecimal("14.5"),
-                new BigDecimal("15.0"), 0L, BigDecimal.ZERO, null, null);
+                new BigDecimal("15.0"), 0L, BigDecimal.ZERO);
 
         when(quoteRepository.findTop240ByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(currentQuote, quote180d, quote380d));
         when(corporateActionRepository.findByTicker("0050")).thenReturn(Flux.empty());
@@ -217,16 +217,16 @@ class DipBuyOpportunityServiceTest {
 
         MarketDailyQuote currentQuote = new MarketDailyQuote(null, null, null, "0050", leapYearNow,
                 new BigDecimal("100.0"), new BigDecimal("100.0"), new BigDecimal("99.0"),
-                new BigDecimal("100.0"), 1000000L, new BigDecimal("100000000"), null, null);
+                new BigDecimal("100.0"), 1000000L, new BigDecimal("100000000"));
 
         // Peak price 200.0 occurred on 2023-03-01 (366 calendar days ago)
         MarketDailyQuote peakQuoteOneYearAgo = new MarketDailyQuote(null, null, null, "0050", exactlyOneYearAgo,
                 new BigDecimal("195.0"), new BigDecimal("200.0"), new BigDecimal("190.0"),
-                new BigDecimal("198.0"), 1000000L, new BigDecimal("198000000"), null, null);
+                new BigDecimal("198.0"), 1000000L, new BigDecimal("198000000"));
 
         MarketDailyQuote vixQuote = new MarketDailyQuote(null, null, null, "^VIX", leapYearNow,
                 new BigDecimal("15.0"), new BigDecimal("16.0"), new BigDecimal("14.5"),
-                new BigDecimal("15.0"), 0L, BigDecimal.ZERO, null, null);
+                new BigDecimal("15.0"), 0L, BigDecimal.ZERO);
 
         // evaluatePure directly tests the pure domain logic
         DipBuyOpportunityScore score = service.evaluatePure("0050", List.of(currentQuote, peakQuoteOneYearAgo), 15.0);

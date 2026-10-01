@@ -45,7 +45,7 @@
   5. `^N225`：日本日經 225 指數 (亞洲成熟市場對標、日圓利差交易風險風向球，同日曆天對齊)
   6. `^VIX`, `^VXN`, `^MOVE`：三大市場恐慌波動率指數
   7. `FEAR_GREED`：CNN 恐懼與貪婪指數
-  成功拉取包含 `ticker`、`trade_date` (YYYY-MM-DD)、`close_price` (原始收盤價)、`open_price`、`high_price`、`low_price`、`volume_shares`、`trade_value_twd` 與 `net_asset_value` 之數據，並寫入 `MarketDailyQuote` 資料表。
+  成功拉取包含 `ticker`、`trade_date` (YYYY-MM-DD)、`close_price` (原始收盤價)、`open_price`、`high_price`、`low_price`、`volume_shares` 與 `trade_value_twd` 之數據，並寫入 `MarketDailyQuote` 資料表。
 - **AC2 (原始未還原收盤價真實性原則 - Raw Close)**：
   - 資料庫中儲存之 `close_price` 必須為交易所官方公布之原始成交市價（Raw Close）。
   - 嚴禁引入向前復權價格（Adjusted Close），避免每次除息回溯覆寫歷史價格、破壞整數心理關卡，並消除因除息事件簿延遲導致系統中斷的風險。

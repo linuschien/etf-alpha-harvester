@@ -128,7 +128,7 @@ public class MarketDailyQuoteDumpIntegrationTest {
                 int end = Math.min(i + BATCH_SIZE, monthQuotes.size());
                 List<MarketDailyQuote> batch = monthQuotes.subList(i, end);
 
-                sql.append("INSERT INTO market_daily_quote (id, asset_id, benchmark_id, ticker, trade_date, open_price, high_price, low_price, close_price, volume_shares, trade_value_twd, net_asset_value, discount_premium_percentage)\n");
+                sql.append("INSERT INTO market_daily_quote (id, asset_id, benchmark_id, ticker, trade_date, open_price, high_price, low_price, close_price, volume_shares, trade_value_twd)\n");
                 sql.append("VALUES\n");
 
                 for (int j = 0; j < batch.size(); j++) {
@@ -200,10 +200,8 @@ public class MarketDailyQuoteDumpIntegrationTest {
         String close = q.getClosePrice().setScale(4, RoundingMode.HALF_UP).toPlainString();
         String volume = q.getVolumeShares() != null ? q.getVolumeShares().toString() : "0";
         String tradeValue = q.getTradeValueTwd() != null ? q.getTradeValueTwd().setScale(2, RoundingMode.HALF_UP).toPlainString() : "0.00";
-        String nav = q.getNetAssetValue() != null ? q.getNetAssetValue().setScale(4, RoundingMode.HALF_UP).toPlainString() : "NULL";
-        String discPrem = q.getDiscountPremiumPercentage() != null ? q.getDiscountPremiumPercentage().setScale(4, RoundingMode.HALF_UP).toPlainString() : "NULL";
-
-        return String.format("    ('%s', %s, %s, '%s', %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                idStr, assetIdStr, benchmarkIdStr, ticker, tradeDate, open, high, low, close, volume, tradeValue, nav, discPrem);
+ 
+        return String.format("    ('%s', %s, %s, '%s', %s, %s, %s, %s, %s, %s, %s)",
+                idStr, assetIdStr, benchmarkIdStr, ticker, tradeDate, open, high, low, close, volume, tradeValue);
     }
 }

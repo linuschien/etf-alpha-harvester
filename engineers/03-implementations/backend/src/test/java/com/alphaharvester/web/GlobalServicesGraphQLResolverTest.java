@@ -50,7 +50,7 @@ class GlobalServicesGraphQLResolverTest {
         BenchmarkIndex benchmark = new BenchmarkIndex(id, "^TWII", "加權指數", "TW", "台股大盤", 1, now, now, null);
         MarketDailyQuote quote = new MarketDailyQuote(id, id, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
-                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"), null, null);
+                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"));
         MacroYieldSnapshot snap = new MacroYieldSnapshot(id, now, new BigDecimal("5.25"),
                 new BigDecimal("4.20"), new BigDecimal("4.50"), new BigDecimal("-0.10"));
         GlobalAssetScore score = new GlobalAssetScore(id, id, "0050", now, CandidateAssetClass.CORE, 1,
@@ -156,7 +156,7 @@ class GlobalServicesGraphQLResolverTest {
         BenchmarkIndex benchmark = new BenchmarkIndex(id, "^TWII", "加權指數", "TW", "台股大盤", 1, now, now, null);
         MarketDailyQuote quote = new MarketDailyQuote(id, id, id, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
-                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"), null, null);
+                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"));
         MacroYieldSnapshot snap = new MacroYieldSnapshot(id, now, new BigDecimal("5.25"),
                 new BigDecimal("4.20"), new BigDecimal("4.50"), new BigDecimal("-0.10"));
         GlobalAssetScore score = new GlobalAssetScore(id, id, "0050", now, CandidateAssetClass.CORE, 1,

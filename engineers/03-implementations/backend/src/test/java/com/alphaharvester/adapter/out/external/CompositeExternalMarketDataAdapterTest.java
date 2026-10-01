@@ -109,17 +109,17 @@ class CompositeExternalMarketDataAdapterTest {
         MarketDailyQuote twseQuote = new MarketDailyQuote(
                 null, null, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
-                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000"), null, null
+                new BigDecimal("188.0"), 1000000L, new BigDecimal("188000000")
         );
         MarketDailyQuote tpexQuote = new MarketDailyQuote(
                 null, null, null, "00679B", now,
                 new BigDecimal("30.0"), new BigDecimal("31.0"), new BigDecimal("29.5"),
-                new BigDecimal("30.5"), 500000L, new BigDecimal("15250000"), null, null
+                new BigDecimal("30.5"), 500000L, new BigDecimal("15250000")
         );
         MarketDailyQuote recovered006208 = new MarketDailyQuote(
                 null, null, null, "006208", now,
                 new BigDecimal("113.0"), new BigDecimal("115.0"), new BigDecimal("112.5"),
-                new BigDecimal("114.5"), 800000L, new BigDecimal("91600000"), null, null
+                new BigDecimal("114.5"), 800000L, new BigDecimal("91600000")
         );
 
         when(twseClient.fetchTwseDailyQuotes()).thenReturn(Flux.just(twseQuote));
@@ -155,7 +155,7 @@ class CompositeExternalMarketDataAdapterTest {
         MarketDailyQuote fearGreedQuote = new MarketDailyQuote(
                 null, null, null, "FEAR_GREED", LocalDateTime.now(),
                 new BigDecimal("45.5"), new BigDecimal("45.5"), new BigDecimal("45.5"),
-                new BigDecimal("45.5"), 0L, BigDecimal.ZERO, null, null
+                new BigDecimal("45.5"), 0L, BigDecimal.ZERO
         );
         when(cnnSentimentClient.fetchFearAndGreedIndex()).thenReturn(Mono.just(fearGreedQuote));
         StepVerifier.create(adapter.fetchCnnSentimentQuote())

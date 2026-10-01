@@ -78,8 +78,6 @@ type MarketDailyQuote {
     closePrice: Float!
     volumeShares: Int
     tradeValueTwd: Float
-    netAssetValue: Float
-    discountPremiumPercentage: Float
 }
 
 type MacroYieldSnapshot {

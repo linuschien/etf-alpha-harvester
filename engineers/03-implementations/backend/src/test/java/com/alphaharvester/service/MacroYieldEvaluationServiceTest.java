@@ -268,12 +268,12 @@ class MacroYieldEvaluationServiceTest {
         // Post-split 0050 quote at 50.0 TWD
         MarketDailyQuote postSplitQuote = new MarketDailyQuote(null, null, null, "0050", now,
                 new BigDecimal("50.0"), new BigDecimal("50.0"), new BigDecimal("50.0"),
-                new BigDecimal("50.0"), 1000000L, new BigDecimal("50000000"), null, null);
+                new BigDecimal("50.0"), 1000000L, new BigDecimal("50000000"));
 
         // Pre-split 0050 quote from 10 days ago at 200.0 TWD
         MarketDailyQuote preSplitQuote = new MarketDailyQuote(null, null, null, "0050", now.minusDays(10),
                 new BigDecimal("200.0"), new BigDecimal("200.0"), new BigDecimal("200.0"),
-                new BigDecimal("200.0"), 1000000L, new BigDecimal("200000000"), null, null);
+                new BigDecimal("200.0"), 1000000L, new BigDecimal("200000000"));
 
         com.alphaharvester.domain.entity.CorporateAction splitAction = new com.alphaharvester.domain.entity.CorporateAction(
                 null, null, "0050", com.alphaharvester.domain.model.CorporateActionType.SPLIT,

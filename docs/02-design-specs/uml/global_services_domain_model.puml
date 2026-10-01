@@ -32,8 +32,6 @@ package "Global Domain Entities (Persisted Data)" {
         +Decimal close_price
         +Integer volume_shares
         +Decimal trade_value_twd
-        +Decimal net_asset_value
-        +Decimal discount_premium_percentage
     }
 
     class MacroYieldSnapshot <<Entity>> {
@@ -196,7 +194,7 @@ note right of GlobalAssetScore : Segmented Ranking within CandidateAssetClass\nC
 note right of DcaPopularityRank : Year and month explicitly separated (e.g. 2026, 8)
 note right of MacroYieldSnapshot : Pure market interest rate facts from FRED\nState logic (Accumulate/Neutral/Harvest) computed in memory
 note right of CorporateAction : 1 split into 4 is split_from_shares=1, split_to_shares=4\nGuarantees exact integer division without floating-point errors
-note right of MarketDailyQuote : Parent links: asset_id for ETFs, benchmark_id for Benchmarks\nRaw unadjusted close_price. Splits factored via CorporateAction, dividends via DividendAnnouncement\nnet_asset_value and discount_premium_percentage are NULL for BenchmarkIndex
+note right of MarketDailyQuote : Parent links: asset_id for ETFs, benchmark_id for Benchmarks\nRaw unadjusted close_price. Splits factored via CorporateAction, dividends via DividendAnnouncement
 note as ImmutableFactNote
   **Architecture Rule: Master Data vs Immutable Ledgers**
   - Master Data (GlobalAssetMetadata, BenchmarkIndex): Mutable, requires version, created_at, updated_at, deleted_at.

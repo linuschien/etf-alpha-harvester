@@ -28,7 +28,7 @@
    - 內建「逢低超跌加碼雷達 (Dip-Buying Radar)」，在大盤出現黑天鵝暴跌時引導調用交割戶停利閒置資金進行整張精準撈底。
    - 提供「雙軌庫存與扣款校正機制」，精準克服台股無零碎股機制（以 1 股為單位）所產生的撮合價差。
 6. **Clean Code 意圖揭露與資料邏輯分離 (Clean Code & Pure Data Architecture)**：
-   - **杜絕晦澀黑話縮寫**：全領域實體欄位全面正名，採用自我意圖揭露（Intention-Revealing）之詞彙（如 `fund_size_twd`、`volume_shares`、`trade_value_twd`、`close_price`、`net_asset_value`、`discount_premium_percentage`、`split_from_shares`、`split_to_shares`、`distribution_frequency`）。
+   - **杜絕晦澀黑話縮寫**：全領域實體欄位全面正名，採用自我意圖揭露（Intention-Revealing）之詞彙（如 `fund_size_twd`、`volume_shares`、`trade_value_twd`、`close_price`、`split_from_shares`、`split_to_shares`、`distribution_frequency`）。
    - **資料歸資料，邏輯歸邏輯**：資料庫嚴格只儲存客觀市場價格與利率事實（如每日行情、FRED 殖利率、分割整數比率），所有衍生狀態（`MacroState`、`CrisisLevel`、`DipBuyingOpportunity`）與建議股債比率均為記憶體中純函數（Pure Functions）運算，絕不在持久層殘留業務狀態。
    - **候選池分組獨立爭鳴**：全域候選池（`CandidateAssetClass`）劃分為 `CORE`、`SATELLITE`、`DEFENSIVE`，各組依專屬多因子模型組內獨立排名（`class_rank`），徹底排除 `ORPHAN`（孤兒標的嚴格專屬於個人持倉層）。
 7. **四階段嚴格篩選與正交去共線 (Four-Stage Screening & Orthogonal Pipeline)**：

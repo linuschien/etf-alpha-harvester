@@ -96,7 +96,7 @@ public class YahooFinanceClient {
                                 BigDecimal tradeValue = close.multiply(BigDecimal.valueOf(volume)).setScale(2, RoundingMode.HALF_UP);
                                 list.add(new MarketDailyQuote(
                                         null, null, null, symbol, tradeDate,
-                                        open, high, low, close, volume, tradeValue, null, null
+                                        open, high, low, close, volume, tradeValue
                                 ));
                             }
                         }

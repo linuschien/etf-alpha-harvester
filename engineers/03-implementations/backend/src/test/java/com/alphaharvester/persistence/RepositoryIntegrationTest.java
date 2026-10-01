@@ -91,9 +91,7 @@ class RepositoryIntegrationTest {
                 new BigDecimal("22400.0"),
                 new BigDecimal("22750.0"),
                 1000000L,
-                new BigDecimal("400000000000"),
-                null,
-                null
+                new BigDecimal("400000000000")
         );
 
         StepVerifier.create(quoteRepository.save(quote))
@@ -114,12 +112,12 @@ class RepositoryIntegrationTest {
         MarketDailyQuote oldQuote = new MarketDailyQuote(
                 null, null, null, "^TEST", now.minusYears(2),
                 new BigDecimal("15000.0"), new BigDecimal("15100.0"), new BigDecimal("14900.0"),
-                new BigDecimal("15050.0"), 500000L, new BigDecimal("200000000"), null, null
+                new BigDecimal("15050.0"), 500000L, new BigDecimal("200000000")
         );
         MarketDailyQuote midQuote = new MarketDailyQuote(
                 null, null, null, "^TEST", now.minusMonths(6),
                 new BigDecimal("19000.0"), new BigDecimal("19200.0"), new BigDecimal("18900.0"),
-                new BigDecimal("19100.0"), 800000L, new BigDecimal("300000000"), null, null
+                new BigDecimal("19100.0"), 800000L, new BigDecimal("300000000")
         );
         quoteRepository.save(oldQuote).block();
         quoteRepository.save(midQuote).block();

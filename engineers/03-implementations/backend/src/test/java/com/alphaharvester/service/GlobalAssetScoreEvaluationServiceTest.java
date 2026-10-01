@@ -116,8 +116,7 @@ class GlobalAssetScoreEvaluationServiceTest {
                 quotes.add(new MarketDailyQuote(
                         UUID.randomUUID(), UUID.randomUUID(), null, ticker, curr.atTime(13, 30),
                         BigDecimal.valueOf(p), BigDecimal.valueOf(p * 1.01), BigDecimal.valueOf(p * 0.99),
-                        BigDecimal.valueOf(p), 1_000_000L, BigDecimal.valueOf(50_000_000L),
-                        BigDecimal.valueOf(p), BigDecimal.ZERO
+                        BigDecimal.valueOf(p), 1_000_000L, BigDecimal.valueOf(50_000_000L)
                 ));
                 i++;
             }
@@ -139,11 +138,11 @@ class GlobalAssetScoreEvaluationServiceTest {
             LocalDateTime d = now.minusDays(20 - i);
             bmQuotes.add(new MarketDailyQuote(
                     null, null, null, "^TWII", d,
-                    null, null, null, BigDecimal.valueOf(bmPrice), null, null, null, null
+                    null, null, null, BigDecimal.valueOf(bmPrice), null, null
             ));
             etfQuotes.add(new MarketDailyQuote(
                     null, null, null, "0050", d,
-                    null, null, null, BigDecimal.valueOf(etfPrice), null, null, null, null
+                    null, null, null, BigDecimal.valueOf(etfPrice), null, null
             ));
             // Simulate daily return: alternating +1% and -0.5%
             double factor = (i % 2 == 0) ? 1.01 : 0.995;
@@ -168,11 +167,11 @@ class GlobalAssetScoreEvaluationServiceTest {
             LocalDateTime d = now.minusDays(20 - i);
             bmQuotes.add(new MarketDailyQuote(
                     null, null, null, "^TWII", d,
-                    null, null, null, BigDecimal.valueOf(bmPrice), null, null, null, null
+                    null, null, null, BigDecimal.valueOf(bmPrice), null, null
             ));
             etfQuotes.add(new MarketDailyQuote(
                     null, null, null, "00632R", d,
-                    null, null, null, BigDecimal.valueOf(etfPrice), null, null, null, null
+                    null, null, null, BigDecimal.valueOf(etfPrice), null, null
             ));
             // Benchmark goes up 1%, ETF goes down 1%
             double bmFactor = (i % 2 == 0) ? 1.01 : 0.99;
@@ -545,7 +544,7 @@ class GlobalAssetScoreEvaluationServiceTest {
                 rawQuotesWithSplit.add(new MarketDailyQuote(
                         q.getId(), q.getAssetId(), q.getBenchmarkId(), q.getTicker(), q.getTradeDate(),
                         postSplitPrice, postSplitPrice, postSplitPrice, postSplitPrice,
-                        q.getVolumeShares() * 4, q.getTradeValueTwd(), postSplitPrice, BigDecimal.ZERO
+                        q.getVolumeShares() * 4, q.getTradeValueTwd()
                 ));
             } else {
                 rawQuotesWithSplit.add(q);

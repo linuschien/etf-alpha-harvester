@@ -79,7 +79,7 @@ public class CnnSentimentClient {
                             quotes.add(new MarketDailyQuote(
                                     null, null, null, "FEAR_GREED", tradeDate,
                                     score, score, score, score,
-                                    0L, BigDecimal.ZERO, null, null
+                                    0L, BigDecimal.ZERO
                             ));
                         }
                         log.info("Successfully fetched {} historical records for CNN Fear & Greed Index.", quotes.size());
@@ -118,7 +118,7 @@ public class CnnSentimentClient {
                         MarketDailyQuote quote = new MarketDailyQuote(
                                 null, null, null, "FEAR_GREED", now,
                                 score, score, score, score,
-                                0L, BigDecimal.ZERO, null, null
+                                0L, BigDecimal.ZERO
                         );
                         return Mono.just(quote);
                     } catch (Exception e) {
