@@ -37,6 +37,10 @@ public class YahooFinanceClient {
     private static final String YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart/";
     private static final String DEFAULT_RECENT_RANGE = "5d";
 
+    private static final Retry RETRY_SPEC = Retry.backoff(3, Duration.ofSeconds(1))
+            .maxBackoff(Duration.ofSeconds(4))
+            .filter(t -> !(t instanceof WebClientResponseException e && e.getStatusCode().is4xxClientError() && e.getStatusCode().value() != 429));
+
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
@@ -56,10 +60,7 @@ public class YahooFinanceClient {
                 .uri(url)
                 .retrieve()
                 .bodyToMono(String.class)
-                .retryWhen(Retry.backoff(3, Duration.ofMillis(500))
-                        .maxBackoff(Duration.ofSeconds(3))
-                        .filter(t -> t instanceof WebClientResponseException e &&
-                                (e.getStatusCode().value() == 429 || e.getStatusCode().is5xxServerError())))
+                .retryWhen(RETRY_SPEC)
                 .flatMapMany(jsonStr -> {
                     try {
                         JsonNode root = objectMapper.readTree(jsonStr);
@@ -175,6 +176,7 @@ public class YahooFinanceClient {
                 .uri(url)
                 .retrieve()
                 .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
                 .map(jsonStr -> {
                     try {
                         return parseDividendsAndSplits(objectMapper.readTree(jsonStr), ticker);

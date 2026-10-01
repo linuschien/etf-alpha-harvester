@@ -12,10 +12,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
+import reactor.util.retry.Retry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +28,10 @@ import java.util.regex.Pattern;
 public class TpexMarketDataClient {
 
     private static final Logger log = LoggerFactory.getLogger(TpexMarketDataClient.class);
+
+    private static final Retry RETRY_SPEC = Retry.backoff(3, Duration.ofSeconds(1))
+            .maxBackoff(Duration.ofSeconds(4))
+            .filter(t -> !(t instanceof WebClientResponseException e && e.getStatusCode().is4xxClientError() && e.getStatusCode().value() != 429));
 
     public static final Pattern STAGE_0_ALLOWLIST_PATTERN = Pattern.compile("^00\\d{2,4}B?$");
 
@@ -51,11 +58,9 @@ public class TpexMarketDataClient {
                 .uri(TPEX_MASTER_CSV_URL)
                 .retrieve()
                 .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
                 .flatMapMany(csv -> Flux.fromIterable(parseTpexMasterCsv(csv, now)))
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch TPEx OTC ETF master universe: {}", e.getMessage(), e);
-                    return Flux.empty();
-                });
+                .doOnError(e -> log.error("Failed to fetch TPEx OTC ETF master universe: {}", e.getMessage(), e));
     }
 
     private List<GlobalAssetMetadata> parseTpexMasterCsv(String csvContent, LocalDateTime now) {
@@ -155,12 +160,13 @@ public class TpexMarketDataClient {
                 .uri(TPEX_QUOTES_URL)
                 .retrieve()
                 .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
                 .flatMapMany(jsonStr -> {
                     try {
                         JsonNode root = objectMapper.readTree(jsonStr);
                         return (root != null && root.isArray()) ? Flux.fromIterable(root) : Flux.empty();
                     } catch (Exception e) {
-                        return Flux.empty();
+                        return Flux.error(e);
                     }
                 })
                 .filter(node -> {
@@ -189,10 +195,7 @@ public class TpexMarketDataClient {
                     );
                 })
                 .filter(q -> q.getClosePrice() != null)
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch TPEx OTC daily quotes: {}", e.getMessage(), e);
-                    return Flux.empty();
-                });
+                .doOnError(e -> log.error("Failed to fetch TPEx OTC daily quotes: {}", e.getMessage(), e));
     }
 
     private long parseLongSafe(String str) {

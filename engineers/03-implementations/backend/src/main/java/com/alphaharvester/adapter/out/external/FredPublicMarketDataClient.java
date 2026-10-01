@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -32,6 +33,10 @@ public class FredPublicMarketDataClient {
     private static final Logger log = LoggerFactory.getLogger(FredPublicMarketDataClient.class);
     private static final String FRED_CSV_BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=";
 
+    private static final Retry RETRY_SPEC = Retry.backoff(3, Duration.ofSeconds(1))
+            .maxBackoff(Duration.ofSeconds(4))
+            .filter(t -> !(t instanceof WebClientResponseException e && e.getStatusCode().is4xxClientError() && e.getStatusCode().value() != 429));
+
     private final WebClient webClient;
 
     public FredPublicMarketDataClient(WebClient webClient) {
@@ -54,12 +59,8 @@ public class FredPublicMarketDataClient {
                 .map(this::parseLatestObservationFromCsv)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .retryWhen(Retry.backoff(3, Duration.ofMillis(500))
-                        .maxBackoff(Duration.ofSeconds(3)))
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch FRED series '{}': {}", seriesId, e.getMessage());
-                    return Mono.empty();
-                });
+                .retryWhen(RETRY_SPEC)
+                .doOnError(e -> log.error("Failed to fetch FRED series '{}': {}", seriesId, e.getMessage(), e));
     }
 
     /**
@@ -93,10 +94,7 @@ public class FredPublicMarketDataClient {
                     y20.value(),
                     spread.value()
             );
-        }).onErrorResume(e -> {
-            log.error("Failed to fetch FRED macro yields: {}", e.getMessage(), e);
-            return Mono.empty();
-        });
+        }).doOnError(e -> log.error("Failed to fetch FRED macro yields: {}", e.getMessage(), e));
     }
 
     /**
@@ -111,11 +109,8 @@ public class FredPublicMarketDataClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(this::parseAllObservationsFromCsv)
-                .retryWhen(Retry.backoff(3, Duration.ofMillis(500)).maxBackoff(Duration.ofSeconds(3)))
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch historical FRED series '{}': {}", seriesId, e.getMessage());
-                    return Mono.just(Collections.emptyMap());
-                });
+                .retryWhen(RETRY_SPEC)
+                .doOnError(e -> log.error("Failed to fetch historical FRED series '{}': {}", seriesId, e.getMessage(), e));
     }
 
     /**

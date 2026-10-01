@@ -9,11 +9,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,6 +30,10 @@ public class CnnSentimentClient {
     private static final Logger log = LoggerFactory.getLogger(CnnSentimentClient.class);
 
     private static final String CNN_FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata";
+
+    private static final Retry RETRY_SPEC = Retry.backoff(3, Duration.ofSeconds(1))
+            .maxBackoff(Duration.ofSeconds(4))
+            .filter(t -> !(t instanceof WebClientResponseException e && e.getStatusCode().is4xxClientError() && e.getStatusCode().value() != 429));
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -50,6 +57,7 @@ public class CnnSentimentClient {
                 .header(HttpHeaders.ORIGIN, "https://www.cnn.com")
                 .retrieve()
                 .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
                 .flatMapMany(jsonStr -> {
                     try {
                         JsonNode root = objectMapper.readTree(jsonStr);
@@ -65,7 +73,7 @@ public class CnnSentimentClient {
                             double scoreVal = item.path("y").asDouble();
                             BigDecimal score = BigDecimal.valueOf(scoreVal).setScale(2, RoundingMode.HALF_UP);
                             LocalDateTime tradeDate = LocalDateTime.ofInstant(
-                                    Instant.ofEpochMilli(epochMillis), ZoneId.of("America/New_York")
+                                     Instant.ofEpochMilli(epochMillis), ZoneId.of("America/New_York")
                             ).toLocalDate().atStartOfDay();
 
                             quotes.add(new MarketDailyQuote(
@@ -77,14 +85,10 @@ public class CnnSentimentClient {
                         log.info("Successfully fetched {} historical records for CNN Fear & Greed Index.", quotes.size());
                         return Flux.fromIterable(quotes);
                     } catch (Exception e) {
-                        log.error("Failed to parse CNN Fear & Greed historical response: {}", e.getMessage(), e);
-                        return Flux.empty();
+                        return Flux.error(e);
                     }
                 })
-                .onErrorResume(e -> {
-                    log.error("Error fetching CNN Fear & Greed historical index from '{}': {}", url, e.getMessage());
-                    return Flux.empty();
-                });
+                .doOnError(e -> log.error("Error fetching CNN Fear & Greed historical index from '{}': {}", url, e.getMessage(), e));
     }
 
     /**
@@ -98,13 +102,14 @@ public class CnnSentimentClient {
                 .header(HttpHeaders.ORIGIN, "https://www.cnn.com")
                 .retrieve()
                 .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
                 .flatMap(jsonStr -> {
                     try {
                         JsonNode root = objectMapper.readTree(jsonStr);
                         JsonNode scoreNode = root.path("fear_and_greed").path("score");
                         if (scoreNode.isMissingNode() || scoreNode.isNull()) {
                             log.warn("CNN Fear & Greed score missing in response");
-                            return Mono.empty();
+                            return Mono.error(new IllegalStateException("CNN Fear & Greed score missing in response"));
                         }
                         double scoreVal = scoreNode.asDouble();
                         BigDecimal score = BigDecimal.valueOf(scoreVal).setScale(2, RoundingMode.HALF_UP);
@@ -117,14 +122,10 @@ public class CnnSentimentClient {
                         );
                         return Mono.just(quote);
                     } catch (Exception e) {
-                        log.error("Failed to parse CNN Fear & Greed response: {}", e.getMessage(), e);
-                        return Mono.empty();
+                        return Mono.error(e);
                     }
                 })
-                .onErrorResume(e -> {
-                    log.error("Error fetching CNN Fear & Greed index from '{}': {}", CNN_FEAR_GREED_URL, e.getMessage());
-                    return Mono.empty();
-                });
+                .doOnError(e -> log.error("Error fetching CNN Fear & Greed index from '{}': {}", CNN_FEAR_GREED_URL, e.getMessage(), e));
     }
 }
 

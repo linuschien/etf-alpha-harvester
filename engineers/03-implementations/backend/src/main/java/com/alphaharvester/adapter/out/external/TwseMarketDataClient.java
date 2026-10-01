@@ -11,11 +11,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -24,6 +27,10 @@ import java.util.regex.Pattern;
 public class TwseMarketDataClient {
 
     private static final Logger log = LoggerFactory.getLogger(TwseMarketDataClient.class);
+
+    private static final Retry RETRY_SPEC = Retry.backoff(3, Duration.ofSeconds(1))
+            .maxBackoff(Duration.ofSeconds(4))
+            .filter(t -> !(t instanceof WebClientResponseException e && e.getStatusCode().is4xxClientError() && e.getStatusCode().value() != 429));
 
     /**
      * Stage 0 positive allowlist pattern:
@@ -70,10 +77,7 @@ public class TwseMarketDataClient {
                     );
                 })
                 .filter(asset -> !asset.getTicker().isBlank() && STAGE_0_ALLOWLIST_PATTERN.matcher(asset.getTicker()).matches())
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch TWSE ETF master universe: {}", e.getMessage(), e);
-                    return Flux.empty();
-                });
+                .doOnError(e -> log.error("Failed to fetch TWSE ETF master universe: {}", e.getMessage(), e));
     }
 
     /**
@@ -107,10 +111,7 @@ public class TwseMarketDataClient {
                     );
                 })
                 .filter(q -> q.getClosePrice() != null)
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch TWSE daily quotes: {}", e.getMessage(), e);
-                    return Flux.empty();
-                });
+                .doOnError(e -> log.error("Failed to fetch TWSE daily quotes: {}", e.getMessage(), e));
     }
 
     /**
@@ -121,6 +122,7 @@ public class TwseMarketDataClient {
                 .uri(TWSE_MIS_NAV_URL)
                 .retrieve()
                 .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
                 .map(json -> {
                     Map<String, NavSnapshot> map = new HashMap<>();
                     try {
@@ -165,10 +167,7 @@ public class TwseMarketDataClient {
                     );
                 })
                 .filter(r -> !r.getTicker().isBlank() && r.getRankPosition() > 0)
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch TWSE DCA rankings: {}", e.getMessage(), e);
-                    return Flux.empty();
-                });
+                .doOnError(e -> log.error("Failed to fetch TWSE DCA rankings: {}", e.getMessage(), e));
     }
 
     private Flux<JsonNode> fetchJsonArray(String url) {
@@ -176,6 +175,7 @@ public class TwseMarketDataClient {
                 .uri(url)
                 .retrieve()
                 .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
                 .flatMapMany(json -> {
                     try {
                         JsonNode root = objectMapper.readTree(json);

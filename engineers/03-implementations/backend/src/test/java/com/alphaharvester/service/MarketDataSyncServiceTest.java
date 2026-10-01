@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -427,6 +428,123 @@ class MarketDataSyncServiceTest {
                     assertThat(res.status()).isEqualTo("SUCCESS");
                     assertThat(res.syncedRecords().dcaPopularityRanksCount()).isEqualTo(1);
                     verify(externalMarketDataPort).fetchDcaPopularityRanks(reportMonth.getYear(), reportMonth.getMonthValue());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should mark watermark FAILED and NOT advance latestRecordDate when quote sync produces 0 records")
+    void shouldMarkWatermarkFailedAndNotAdvanceDateWhenSyncProducesZeroQuotes() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oldDate = now.minusDays(5);
+        DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES,
+                oldDate, oldDate, 10, "SUCCESS", null, oldDate
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES))
+                .thenReturn(Mono.just(watermark));
+        when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.empty());
+        when(metadataRepository.findAll()).thenReturn(Flux.empty());
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.QUOTES, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.syncedRecords().dailyQuotesCount()).isEqualTo(0);
+                    verify(watermarkRepository).save(argThat(wm ->
+                            wm.getFeedName().equals(MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES)
+                                    && "FAILED".equals(wm.getStatus())
+                                    && oldDate.equals(wm.getLatestRecordDate())
+                                    && oldDate.equals(wm.getLastSuccessfulSyncAt())
+                                    && wm.getRecordsSyncedCount() == 0
+                    ));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should mark watermark FAILED and NOT advance latestRecordDate when port throws exception")
+    void shouldMarkWatermarkFailedAndNotAdvanceDateWhenPortThrowsException() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oldDate = now.minusDays(10);
+        DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA,
+                oldDate, oldDate, 50, "SUCCESS", null, oldDate
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA))
+                .thenReturn(Mono.just(watermark));
+        when(externalMarketDataPort.fetchEtfMasterUniverse())
+                .thenReturn(Flux.error(new RuntimeException("TWSE 503 Service Unavailable")));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.METADATA, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.syncedRecords().etfAssetsCount()).isEqualTo(0);
+                    verify(watermarkRepository).save(argThat(wm ->
+                            wm.getFeedName().equals(MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA)
+                                    && "FAILED".equals(wm.getStatus())
+                                    && wm.getErrorMessage().contains("TWSE 503")
+                                    && oldDate.equals(wm.getLatestRecordDate())
+                                    && oldDate.equals(wm.getLastSuccessfulSyncAt())
+                    ));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should retry metadata sync when previous watermark status was FAILED even in current month")
+    void shouldRetryMetadataWhenWatermarkStatusIsFailedEvenInCurrentMonth() {
+        LocalDateTime now = LocalDateTime.now();
+        DataFeedSyncWatermark failedWatermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA,
+                null, now, 0, "FAILED", "Network timeout", now.minusHours(1)
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA))
+                .thenReturn(Mono.just(failedWatermark));
+
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(UUID.randomUUID(), "0050", "元大台灣50", now, null, 1, now, now, null);
+        when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset));
+        when(metadataRepository.findByTicker("0050")).thenReturn(Mono.empty());
+        when(metadataRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.syncedRecords().etfAssetsCount()).isEqualTo(1);
+                    verify(externalMarketDataPort).fetchEtfMasterUniverse();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should retry dividends and splits when previous watermark status was FAILED even in current month")
+    void shouldRetryDividendsWhenWatermarkStatusIsFailedEvenInCurrentMonth() {
+        LocalDateTime now = LocalDateTime.now();
+        DataFeedSyncWatermark failedWatermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_DIVIDENDS_AND_SPLITS,
+                null, now, 0, "FAILED", "502 Bad Gateway", now.minusHours(2)
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_DIVIDENDS_AND_SPLITS))
+                .thenReturn(Mono.just(failedWatermark));
+
+        UUID id = UUID.randomUUID();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null, 1, now, now, null);
+        DividendAnnouncement div = new DividendAnnouncement(null, null, "0050", now.plusDays(5), now.plusDays(30), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C);
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
+        when(externalMarketDataPort.fetchDividendsAndSplits(eq("0050"), anyString()))
+                .thenReturn(Mono.just(new ExternalMarketDataPort.DividendsAndSplits(List.of(div), List.of())));
+        when(dividendRepository.findByTickerAndExDate(any(), any())).thenReturn(Mono.empty());
+        when(dividendRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.ALL, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.syncedRecords().dividendAnnouncementsCount()).isEqualTo(1);
+                    verify(externalMarketDataPort).fetchDividendsAndSplits(eq("0050"), anyString());
                 })
                 .verifyComplete();
     }

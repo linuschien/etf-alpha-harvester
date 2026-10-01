@@ -122,4 +122,18 @@ class TpexMarketDataClientTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should propagate error when TPEx master CSV endpoint fails")
+    void shouldPropagateErrorWhenTpexMasterCsvFails() {
+        when(webClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.error(new RuntimeException("TPEx connection refused")));
+
+        StepVerifier.create(client.fetchTpexEtfMasterUniverse())
+                .expectErrorMatches(e -> (e.getMessage() != null && e.getMessage().contains("TPEx connection refused"))
+                        || (e.getCause() != null && e.getCause().getMessage().contains("TPEx connection refused")))
+                .verify();
+    }
 }

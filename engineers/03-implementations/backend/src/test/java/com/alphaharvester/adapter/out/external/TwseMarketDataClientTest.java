@@ -232,4 +232,18 @@ class TwseMarketDataClientTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should propagate error when TWSE master universe endpoint fails")
+    void shouldPropagateErrorWhenTwseMasterUniverseFails() {
+        when(webClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.error(new RuntimeException("TWSE 500 Internal Server Error")));
+
+        StepVerifier.create(client.fetchEtfMasterUniverse())
+                .expectErrorMatches(e -> (e.getMessage() != null && e.getMessage().contains("TWSE 500"))
+                        || (e.getCause() != null && e.getCause().getMessage().contains("TWSE 500")))
+                .verify();
+    }
 }

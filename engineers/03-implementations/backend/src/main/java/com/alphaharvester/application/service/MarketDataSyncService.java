@@ -175,11 +175,13 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         if (scope == SyncScope.ALL && watermarkRepository != null) {
             return watermarkRepository.findByFeedName(WATERMARK_TWSE_ETF_METADATA)
                     .flatMap(wm -> {
-                        if ("SUCCESS".equalsIgnoreCase(wm.getStatus()) && wm.getLatestRecordDate() != null) {
+                        if ("SUCCESS".equalsIgnoreCase(wm.getStatus())
+                                && wm.getRecordsSyncedCount() != null && wm.getRecordsSyncedCount() > 0
+                                && wm.getLatestRecordDate() != null) {
                             if (wm.getLatestRecordDate().getYear() == now.getYear()
                                     && wm.getLatestRecordDate().getMonthValue() == now.getMonthValue()) {
-                                log.info("TWSE ETF metadata for {}-{} has already been synced (Watermark SUCCESS). Skipping monthly sync.",
-                                        now.getYear(), now.getMonthValue());
+                                log.info("TWSE ETF metadata for {}-{} has already been synced (Watermark SUCCESS, count={}). Skipping monthly sync.",
+                                        now.getYear(), now.getMonthValue(), wm.getRecordsSyncedCount());
                                 return Mono.just(0);
                             }
                         }
@@ -209,8 +211,20 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                         .switchIfEmpty(Mono.defer(() -> metadataRepository.save(asset))))
                 .count()
                 .map(Long::intValue)
-                .flatMap(metaCount -> updateWatermark(WATERMARK_TWSE_ETF_METADATA, now, now, metaCount)
-                        .thenReturn(metaCount));
+                .flatMap(metaCount -> {
+                    if (metaCount > 0) {
+                        return updateWatermarkSuccess(WATERMARK_TWSE_ETF_METADATA, now, now, metaCount)
+                                .thenReturn(metaCount);
+                    } else {
+                        return updateWatermarkFailed(WATERMARK_TWSE_ETF_METADATA, now, "No ETF metadata records fetched")
+                                .thenReturn(0);
+                    }
+                })
+                .onErrorResume(e -> {
+                    log.error("Failed to sync ETF metadata: {}", e.getMessage(), e);
+                    return updateWatermarkFailed(WATERMARK_TWSE_ETF_METADATA, now, extractErrorMessage(e))
+                            .thenReturn(0);
+                });
     }
 
     private Mono<Integer> syncQuotes(SyncScope scope, LocalDateTime now, Integer backfillDays) {
@@ -238,7 +252,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             : now.minusDays(1);
                     long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
                     long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus());
+                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
                     boolean force = backfillDays != null && backfillDays > 0;
 
                     log.info("Watermark comparison for '{}': latestRecordDate={}, status={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
@@ -274,21 +288,33 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     return primaryCountMono.flatMap(primaryCount ->
                             backfillCountMono.flatMap(backfillCount -> {
                                 int total = primaryCount + backfillCount;
-                                return updateWatermark(WATERMARK_TAIWAN_ETF_QUOTES, now, now, total)
-                                        .thenReturn(total);
+                                if (total > 0) {
+                                    return updateWatermarkSuccess(WATERMARK_TAIWAN_ETF_QUOTES, now, now, total)
+                                            .thenReturn(total);
+                                } else {
+                                    return updateWatermarkFailed(WATERMARK_TAIWAN_ETF_QUOTES, now, "No Taiwan ETF quotes synced")
+                                            .thenReturn(0);
+                                }
                             })
                     );
+                })
+                .onErrorResume(e -> {
+                    log.error("Failed to sync Taiwan ETF quotes: {}", e.getMessage(), e);
+                    return updateWatermarkFailed(WATERMARK_TAIWAN_ETF_QUOTES, now, extractErrorMessage(e))
+                            .thenReturn(0);
                 });
     }
 
     private Mono<Integer> syncBenchmarkQuotes(LocalDateTime now, Integer backfillDays) {
         return watermarkRepository.findByFeedName(WATERMARK_GLOBAL_BENCHMARKS)
-                .map(DataFeedSyncWatermark::getLatestRecordDate)
-                .defaultIfEmpty(now.minusDays(1))
-                .flatMap(latestRecordDate -> {
+                .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_GLOBAL_BENCHMARKS, null, now.minusDays(1), 0, "PENDING", null, now))
+                .flatMap(watermark -> {
+                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
+                            ? watermark.getLatestRecordDate()
+                            : now.minusDays(1);
                     long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
                     long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap;
+                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
                     boolean force = backfillDays != null && backfillDays > 0;
 
                     int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
@@ -301,19 +327,33 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             .flatMap(this::upsertDailyQuote)
                             .count()
                             .map(Long::intValue)
-                            .flatMap(count -> updateWatermark(WATERMARK_GLOBAL_BENCHMARKS, now, now, count)
-                                    .thenReturn(count));
+                            .flatMap(count -> {
+                                if (count > 0) {
+                                    return updateWatermarkSuccess(WATERMARK_GLOBAL_BENCHMARKS, now, now, count)
+                                            .thenReturn(count);
+                                } else {
+                                    return updateWatermarkFailed(WATERMARK_GLOBAL_BENCHMARKS, now, "No benchmark quotes synced")
+                                            .thenReturn(0);
+                                }
+                            });
+                })
+                .onErrorResume(e -> {
+                    log.error("Failed to sync benchmark quotes: {}", e.getMessage(), e);
+                    return updateWatermarkFailed(WATERMARK_GLOBAL_BENCHMARKS, now, extractErrorMessage(e))
+                            .thenReturn(0);
                 });
     }
 
     private Mono<Integer> syncCnnSentiment(LocalDateTime now, Integer backfillDays) {
         return watermarkRepository.findByFeedName(WATERMARK_CNN_FEAR_GREED)
-                .map(DataFeedSyncWatermark::getLatestRecordDate)
-                .defaultIfEmpty(now.minusDays(1))
-                .flatMap(latestRecordDate -> {
+                .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_CNN_FEAR_GREED, null, now.minusDays(1), 0, "PENDING", null, now))
+                .flatMap(watermark -> {
+                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
+                            ? watermark.getLatestRecordDate()
+                            : now.minusDays(1);
                     long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
                     long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap;
+                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
                     boolean force = backfillDays != null && backfillDays > 0;
 
                     int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
@@ -330,12 +370,27 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             .flatMap(this::upsertDailyQuote)
                             .count()
                             .map(Long::intValue)
-                            .flatMap(count -> updateWatermark(WATERMARK_CNN_FEAR_GREED, now, now, count)
-                                    .thenReturn(count));
+                            .flatMap(count -> {
+                                if (count > 0) {
+                                    return updateWatermarkSuccess(WATERMARK_CNN_FEAR_GREED, now, now, count)
+                                            .thenReturn(count);
+                                } else {
+                                    return updateWatermarkFailed(WATERMARK_CNN_FEAR_GREED, now, "No CNN sentiment quotes synced")
+                                            .thenReturn(0);
+                                }
+                            });
+                })
+                .onErrorResume(e -> {
+                    log.error("Failed to sync CNN sentiment: {}", e.getMessage(), e);
+                    return updateWatermarkFailed(WATERMARK_CNN_FEAR_GREED, now, extractErrorMessage(e))
+                            .thenReturn(0);
                 });
     }
 
-    private Mono<Void> updateWatermark(String feedName, LocalDateTime syncTime, LocalDateTime recordDate, int recordsCount) {
+    private Mono<Void> updateWatermarkSuccess(String feedName, LocalDateTime syncTime, LocalDateTime recordDate, int recordsCount) {
+        if (recordsCount <= 0) {
+            return updateWatermarkFailed(feedName, syncTime, "Synced records count is 0");
+        }
         return watermarkRepository.findByFeedName(feedName)
                 .flatMap(wm -> {
                     wm.setLastSuccessfulSyncAt(syncTime);
@@ -353,6 +408,33 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     return watermarkRepository.save(newWm);
                 }))
                 .then();
+    }
+
+    private Mono<Void> updateWatermarkFailed(String feedName, LocalDateTime syncTime, String reason) {
+        return watermarkRepository.findByFeedName(feedName)
+                .flatMap(wm -> {
+                    wm.setStatus("FAILED");
+                    wm.setErrorMessage(reason);
+                    wm.setRecordsSyncedCount(0);
+                    wm.setUpdatedAt(syncTime);
+                    // Crucial: preserve wm.getLatestRecordDate() and wm.getLastSuccessfulSyncAt()
+                    return watermarkRepository.save(wm);
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    DataFeedSyncWatermark newWm = new DataFeedSyncWatermark(
+                            UUID.randomUUID(), feedName, null, null, 0, "FAILED", reason, syncTime
+                    );
+                    return watermarkRepository.save(newWm);
+                }))
+                .then();
+    }
+
+    private String extractErrorMessage(Throwable e) {
+        if (e == null) return "Unknown error";
+        if (e.getCause() != null && e.getCause().getMessage() != null && !e.getCause().getMessage().isBlank()) {
+            return e.getMessage() + ": " + e.getCause().getMessage();
+        }
+        return e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.getClass().getSimpleName();
     }
 
     private Mono<Void> markWatermarksHalt(LocalDateTime syncTime, String reason) {
@@ -413,12 +495,14 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         }
         log.info("Fetching and syncing macroeconomic yields from FRED...");
         return watermarkRepository.findByFeedName(WATERMARK_MACRO_YIELD_SNAPSHOT)
-                .map(DataFeedSyncWatermark::getLatestRecordDate)
-                .defaultIfEmpty(now.minusDays(1))
-                .flatMap(latestRecordDate -> {
+                .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_MACRO_YIELD_SNAPSHOT, null, now.minusDays(1), 0, "PENDING", null, now))
+                .flatMap(watermark -> {
+                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
+                            ? watermark.getLatestRecordDate()
+                            : now.minusDays(1);
                     long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
                     long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap;
+                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
                     boolean force = backfillDays != null && backfillDays > 0;
 
                     if (hasGap || force) {
@@ -432,15 +516,30 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                 .flatMap(this::upsertMacroYieldSnapshot)
                                 .count()
                                 .map(Long::intValue)
-                                .flatMap(count -> updateWatermark(WATERMARK_MACRO_YIELD_SNAPSHOT, now, now, count)
-                                        .thenReturn(count));
+                                .flatMap(count -> {
+                                    if (count > 0) {
+                                        return updateWatermarkSuccess(WATERMARK_MACRO_YIELD_SNAPSHOT, now, now, count)
+                                                .thenReturn(count);
+                                    } else {
+                                        return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "No historical macro yields synced")
+                                                .thenReturn(0);
+                                    }
+                                });
                     }
 
                     return externalMarketDataPort.fetchLatestMacroYield()
                             .flatMap(this::upsertMacroYieldSnapshot)
-                            .flatMap(saved -> updateWatermark(WATERMARK_MACRO_YIELD_SNAPSHOT, now, saved.getRecordDate(), 1)
+                            .flatMap(saved -> updateWatermarkSuccess(WATERMARK_MACRO_YIELD_SNAPSHOT, now, saved.getRecordDate(), 1)
                                     .thenReturn(1))
-                            .defaultIfEmpty(0);
+                            .switchIfEmpty(Mono.defer(() ->
+                                    updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "Latest macro yield snapshot unavailable")
+                                            .thenReturn(0)
+                            ));
+                })
+                .onErrorResume(e -> {
+                    log.error("Failed to sync macro yields: {}", e.getMessage(), e);
+                    return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, extractErrorMessage(e))
+                            .thenReturn(0);
                 });
     }
 
@@ -503,9 +602,19 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                 .count()
                 .map(Long::intValue)
                 .flatMap(dcaCount -> {
-                    LocalDateTime recordDate = reportMonth.atEndOfMonth().atStartOfDay();
-                    return updateWatermark(WATERMARK_TWSE_DCA_RANKINGS, now, recordDate, dcaCount)
-                            .thenReturn(dcaCount);
+                    if (dcaCount > 0) {
+                        LocalDateTime recordDate = reportMonth.atEndOfMonth().atStartOfDay();
+                        return updateWatermarkSuccess(WATERMARK_TWSE_DCA_RANKINGS, now, recordDate, dcaCount)
+                                .thenReturn(dcaCount);
+                    } else {
+                        return updateWatermarkFailed(WATERMARK_TWSE_DCA_RANKINGS, now, "No DCA rankings fetched for " + reportYear + "-" + reportMonthVal)
+                                .thenReturn(0);
+                    }
+                })
+                .onErrorResume(e -> {
+                    log.error("Failed to sync DCA rankings: {}", e.getMessage(), e);
+                    return updateWatermarkFailed(WATERMARK_TWSE_DCA_RANKINGS, now, extractErrorMessage(e))
+                            .thenReturn(0);
                 });
     }
 
@@ -534,11 +643,13 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         if (scope == SyncScope.ALL && !forceBackfill && watermarkRepository != null) {
             return watermarkRepository.findByFeedName(WATERMARK_DIVIDENDS_AND_SPLITS)
                     .flatMap(wm -> {
-                        if ("SUCCESS".equalsIgnoreCase(wm.getStatus()) && wm.getLatestRecordDate() != null) {
+                        if ("SUCCESS".equalsIgnoreCase(wm.getStatus())
+                                && wm.getRecordsSyncedCount() != null && wm.getRecordsSyncedCount() > 0
+                                && wm.getLatestRecordDate() != null) {
                             if (wm.getLatestRecordDate().getYear() == now.getYear()
                                     && wm.getLatestRecordDate().getMonthValue() == now.getMonthValue()) {
-                                log.info("Dividends and stock splits for {}-{} have already been synced (Watermark SUCCESS). Skipping monthly sync.",
-                                        now.getYear(), now.getMonthValue());
+                                log.info("Dividends and stock splits for {}-{} have already been synced (Watermark SUCCESS, count={}). Skipping monthly sync.",
+                                        now.getYear(), now.getMonthValue(), wm.getRecordsSyncedCount());
                                 return Mono.just(new int[]{0, 0});
                             }
                         }
@@ -612,8 +723,21 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                     }), 8
                             )
                             .reduce(new int[]{0, 0}, (acc, cur) -> new int[]{acc[0] + cur[0], acc[1] + cur[1]})
-                            .flatMap(counts -> updateWatermark(WATERMARK_DIVIDENDS_AND_SPLITS, now, now, counts[0] + counts[1])
-                                    .thenReturn(counts));
+                            .flatMap(counts -> {
+                                int total = counts[0] + counts[1];
+                                if (total > 0) {
+                                    return updateWatermarkSuccess(WATERMARK_DIVIDENDS_AND_SPLITS, now, now, total)
+                                            .thenReturn(counts);
+                                } else {
+                                    return updateWatermarkFailed(WATERMARK_DIVIDENDS_AND_SPLITS, now, "No dividend or split records synced")
+                                            .thenReturn(counts);
+                                }
+                            });
+                })
+                .onErrorResume(e -> {
+                    log.error("Failed to sync dividends and splits: {}", e.getMessage(), e);
+                    return updateWatermarkFailed(WATERMARK_DIVIDENDS_AND_SPLITS, now, extractErrorMessage(e))
+                            .thenReturn(new int[]{0, 0});
                 });
     }
 }
