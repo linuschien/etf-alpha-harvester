@@ -50,59 +50,9 @@ public class MonthlyTopListDumpIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(MonthlyTopListDumpIntegrationTest.class);
     private static final DateTimeFormatter TS_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private static final Map<String, BigDecimal> TEST_AUM_MAP = Map.ofEntries(
-            Map.entry("0050", new BigDecimal("2484642985000")),
-            Map.entry("006208", new BigDecimal("475963342800")),
-            Map.entry("0056", new BigDecimal("802926731200")),
-            Map.entry("00878", new BigDecimal("653651313300")),
-            Map.entry("00919", new BigDecimal("607173698550")),
-            Map.entry("00929", new BigDecimal("156158783820")),
-            Map.entry("00918", new BigDecimal("158305790280")),
-            Map.entry("00881", new BigDecimal("154680143090")),
-            Map.entry("0052", new BigDecimal("165662140000")),
-            Map.entry("00922", new BigDecimal("94294498680")),
-            Map.entry("00830", new BigDecimal("77979727800")),
-            Map.entry("00692", new BigDecimal("59071992000")),
-            Map.entry("00935", new BigDecimal("52938962560")),
-            Map.entry("00850", new BigDecimal("39862807200")),
-            Map.entry("00939", new BigDecimal("28002285880")),
-            Map.entry("00915", new BigDecimal("16665287300")),
-            Map.entry("00961", new BigDecimal("15331945200")),
-            Map.entry("00892", new BigDecimal("13708056000")),
-            Map.entry("00735", new BigDecimal("12363784020")),
-            Map.entry("00947", new BigDecimal("11421623800")),
-            Map.entry("00905", new BigDecimal("9927626930")),
-            Map.entry("00701", new BigDecimal("6995465220")),
-            Map.entry("00887", new BigDecimal("6913735200")),
-            Map.entry("00690", new BigDecimal("6880766400")),
-            Map.entry("00946", new BigDecimal("6740990620")),
-            Map.entry("00910", new BigDecimal("6367379294")),
-            Map.entry("00877", new BigDecimal("5895128640")),
-            Map.entry("00951", new BigDecimal("4420933980")),
-            Map.entry("00938", new BigDecimal("2787628800")),
-            Map.entry("00728", new BigDecimal("2757638850")),
-            Map.entry("00757", new BigDecimal("38000000000")),
-            Map.entry("00662", new BigDecimal("42000000000")),
-            Map.entry("00955", new BigDecimal("8500000000")),
-            Map.entry("009805", new BigDecimal("3200000000")),
-            Map.entry("00965", new BigDecimal("5600000000")),
-            Map.entry("00909", new BigDecimal("4900000000")),
-            Map.entry("00904", new BigDecimal("6898035880")),
-            Map.entry("009803", new BigDecimal("6253834320")),
-            Map.entry("009804", new BigDecimal("3468295840")),
-            Map.entry("00923", new BigDecimal("39588711030")),
-            Map.entry("00913", new BigDecimal("3051200120")),
-            Map.entry("00888", new BigDecimal("22606103600")),
-            Map.entry("00937B", new BigDecimal("234148883293.50")),
-            Map.entry("00725B", new BigDecimal("122351652782.80")),
-            Map.entry("00768B", new BigDecimal("36180721170.00")),
-            Map.entry("00722B", new BigDecimal("48214656644.10")),
-            Map.entry("00720B", new BigDecimal("123233254503.90"))
-    );
-
     public record ScoredSat(String ticker, double score, double mom, double ker, double sharpe, double r2Twii, BigDecimal aum) {}
 
-    @MockitoBean
+    @Autowired
     private ExternalMarketDataPort externalMarketDataPort;
 
     @Autowired
@@ -133,8 +83,6 @@ public class MonthlyTopListDumpIntegrationTest {
     @DisplayName("Evaluate 2026-09 Monthly Top List and dump into Flyway V8 script")
     void shouldEvaluateAndDumpSeptember2026TopListToFlywayV8() throws IOException {
         log.info("=== Starting Evaluation and Flyway V8 Dump for 2026-09 Monthly Top List ===");
-
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(TEST_AUM_MAP));
 
         // 1. Verify prerequisite metadata (V3 seed data) is populated
         long totalMetadata = metadataRepository.count().block();
@@ -257,6 +205,142 @@ public class MonthlyTopListDumpIntegrationTest {
 
         Files.writeString(filePath, sql.toString(), StandardCharsets.UTF_8);
         log.info("Successfully generated Flyway V8 migration file: {} ({} scores, {} pairwise matrices)",
+                filePath.toAbsolutePath(), allScores.size(), allMatrices.size());
+
+        assertThat(Files.exists(filePath)).isTrue();
+        assertThat(Files.size(filePath)).isGreaterThan(1000L);
+    }
+
+    @Test
+    @DisplayName("Evaluate 2026-10 Monthly Top List and dump into Flyway V9 script")
+    void shouldEvaluateAndDumpOctober2026TopListToFlywayV9() throws IOException {
+        log.info("=== Starting Evaluation and Flyway V9 Dump for 2026-10 Monthly Top List ===");
+
+
+        // 1. Verify prerequisite metadata (V3 seed data) is populated
+        long totalMetadata = metadataRepository.count().block();
+        log.info("Current universe has {} ETFs in metadataRepository.", totalMetadata);
+        assertThat(totalMetadata).isGreaterThanOrEqualTo(300);
+
+        // 2. Clear existing scores & matrices for 2026-10-01 to ensure clean generation
+        LocalDateTime evalDate = LocalDateTime.of(2026, 10, 1, 0, 0);
+        scoreRepository.deleteByEvaluationDate(evalDate).block();
+        pairwiseMatrixRepository.deleteByEvaluationDate(evalDate).block();
+
+        // 3. Trigger Top List evaluation for 2026-10 via Service layer
+        GlobalAssetScoreEvaluationResponse response = scoreEvaluationUseCase.evaluateGlobalAssetScores("2026-10", true).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isEqualTo("SUCCESS");
+        log.info("Evaluation completed: status={}, total={}, core={}, satellite={}, defensive={}",
+                response.status(), response.evaluatedCandidatesCount(),
+                response.coreCount(), response.satelliteCount(), response.defensiveCount());
+
+        // 4. Retrieve evaluated scores and pairwise matrices from DB
+        List<GlobalAssetScore> allScores = scoreRepository.findByEvaluationDateOrderByClassRankAsc(evalDate)
+                .collectList().block();
+        int expectedScores = response.coreCount() + response.satelliteCount() + response.defensiveCount();
+        int expectedMatrices = (response.coreCount() * (response.coreCount() - 1) / 2)
+                + (response.satelliteCount() * (response.satelliteCount() - 1) / 2);
+        assertThat(allScores).isNotNull().hasSize(expectedScores);
+
+        List<GlobalAssetPairwiseMatrix> allMatrices = pairwiseMatrixRepository.findAll()
+                .filter(m -> evalDate.equals(m.getEvaluationDate()))
+                .collectList().block();
+        assertThat(allMatrices).isNotNull().hasSize(expectedMatrices);
+
+        // Sort scores deterministically: AssetClass, then ClassRank
+        allScores.sort(Comparator.comparing(GlobalAssetScore::getAssetClass)
+                .thenComparing(GlobalAssetScore::getClassRank));
+
+        // Sort matrices deterministically: AssetClass, BaseTicker, TargetTicker
+        allMatrices.sort(Comparator.comparing(GlobalAssetPairwiseMatrix::getAssetClass)
+                .thenComparing(GlobalAssetPairwiseMatrix::getBaseTicker)
+                .thenComparing(GlobalAssetPairwiseMatrix::getTargetTicker));
+
+        // 5. Resolve target migration directory
+        Path targetDir = Paths.get("src/main/resources/db/migration");
+        if (!Files.exists(targetDir)) {
+            targetDir = Paths.get("engineers/03-implementations/backend/src/main/resources/db/migration");
+        }
+
+        String fileName = "V9__seed_monthly_top_list.sql";
+        Path filePath = targetDir.resolve(fileName);
+
+        StringBuilder sql = new StringBuilder();
+        sql.append("-- ").append(fileName).append("\n");
+        sql.append("-- Seed official 2026-10 Monthly Candidate Screening, Multi-Factor Top List & Pairwise Matrix\n");
+        sql.append("-- Evaluation Date: 2026-10-01 (Cutoff: 2026-09-30)\n");
+        sql.append("-- Total Scores: ").append(allScores.size()).append(" (")
+                .append(response.coreCount()).append(" Core, ")
+                .append(response.satelliteCount()).append(" Satellite, ")
+                .append(response.defensiveCount()).append(" Defensive)\n");
+        sql.append("-- Total Pairwise Matrices: ").append(allMatrices.size()).append("\n\n");
+
+        // 6. Generate GlobalAssetScore INSERT
+        sql.append("INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12_1, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)\nVALUES\n");
+        for (int i = 0; i < allScores.size(); i++) {
+            GlobalAssetScore s = allScores.get(i);
+            String isLast = (i == allScores.size() - 1) ? ";" : ",";
+            sql.append(String.format("    ('%s', '%s', '%s', TIMESTAMP '%s', '%s', %d, %s, %s, %s, %s, %s, %s, %s, %s, %s)%s\n",
+                    s.getId(),
+                    s.getAssetId(),
+                    s.getTicker(),
+                    s.getEvaluationDate().format(TS_FORMATTER),
+                    s.getAssetClass().name(),
+                    s.getClassRank(),
+                    formatDecimal(s.getCompositeScore()),
+                    formatDecimal(s.getFundSizeTwd()),
+                    formatDecimal(s.getRSquared()),
+                    formatDecimal(s.getMomentum121()),
+                    formatDecimal(s.getKaufmanEr()),
+                    formatDecimal(s.getSharpeRatio()),
+                    formatDecimal(s.getVolatility90d()),
+                    formatDecimal(s.getYtm()),
+                    s.getDcaRank() != null ? s.getDcaRank().toString() : "NULL",
+                    isLast
+            ));
+        }
+        sql.append("\n");
+
+        // 7. Generate GlobalAssetPairwiseMatrix INSERT in chunks of 50 rows
+        int chunkSize = 50;
+        for (int i = 0; i < allMatrices.size(); i += chunkSize) {
+            int end = Math.min(i + chunkSize, allMatrices.size());
+            List<GlobalAssetPairwiseMatrix> chunk = allMatrices.subList(i, end);
+
+            sql.append("INSERT INTO global_asset_pairwise_matrix (id, evaluation_date, asset_class, base_ticker, target_ticker, r_squared, correlation_coefficient)\nVALUES\n");
+            for (int j = 0; j < chunk.size(); j++) {
+                GlobalAssetPairwiseMatrix m = chunk.get(j);
+                String isLast = (j == chunk.size() - 1) ? ";\n\n" : ",\n";
+                sql.append(String.format("    ('%s', TIMESTAMP '%s', '%s', '%s', '%s', %s, %s)%s",
+                        m.getId(),
+                        m.getEvaluationDate().format(TS_FORMATTER),
+                        m.getAssetClass().name(),
+                        m.getBaseTicker(),
+                        m.getTargetTicker(),
+                        formatDecimal(m.getRSquared()),
+                        formatDecimal(m.getCorrelationCoefficient()),
+                        isLast
+                ));
+            }
+        }
+
+        // 8. Update Watermark for MONTHLY_TOP_LIST
+        sql.append("-- Update watermark for MONTHLY_TOP_LIST\n");
+        sql.append(String.format(
+                "UPDATE data_feed_sync_watermark\n" +
+                "SET latest_record_date = TIMESTAMP '%s',\n" +
+                "    records_synced_count = %d,\n" +
+                "    status = 'PASS',\n" +
+                "    updated_at = CURRENT_TIMESTAMP\n" +
+                "WHERE feed_name = 'MONTHLY_TOP_LIST';\n",
+                evalDate.format(TS_FORMATTER),
+                allScores.size()
+        ));
+
+        Files.writeString(filePath, sql.toString(), StandardCharsets.UTF_8);
+        log.info("Successfully generated Flyway V9 migration file: {} ({} scores, {} pairwise matrices)",
                 filePath.toAbsolutePath(), allScores.size(), allMatrices.size());
 
         assertThat(Files.exists(filePath)).isTrue();
