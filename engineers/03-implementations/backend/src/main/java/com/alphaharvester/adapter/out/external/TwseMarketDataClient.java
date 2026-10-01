@@ -86,6 +86,13 @@ public class TwseMarketDataClient {
                 .filter(node -> STAGE_0_ALLOWLIST_PATTERN.matcher(node.path("Code").asText("").trim()).matches())
                 .map(node -> {
                     String ticker = node.path("Code").asText("").trim();
+                    String dateStr = node.path("Date").asText("");
+                    LocalDateTime tradeDate = RocDateUtil.parseRocDate(dateStr, now);
+                    if (tradeDate != null) {
+                        tradeDate = tradeDate.toLocalDate().atStartOfDay();
+                    } else {
+                        tradeDate = now;
+                    }
                     BigDecimal openPrice = parseBigDecimalSafe(node.path("OpeningPrice").asText(""));
                     BigDecimal highPrice = parseBigDecimalSafe(node.path("HighestPrice").asText(""));
                     BigDecimal lowPrice = parseBigDecimalSafe(node.path("LowestPrice").asText(""));
@@ -94,7 +101,7 @@ public class TwseMarketDataClient {
                     BigDecimal tradeValue = parseBigDecimalSafe(node.path("TradeValue").asText("0"));
 
                     return new MarketDailyQuote(
-                            null, null, null, ticker, now,
+                            null, null, null, ticker, tradeDate,
                             openPrice, highPrice, lowPrice, closePrice,
                             volume, tradeValue, null, null
                     );

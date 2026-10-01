@@ -1,6 +1,7 @@
 package com.alphaharvester.adapter.out.external;
 
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
+import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -174,6 +175,60 @@ class TwseMarketDataClientTest {
                     assertThat(rank.getRegularInvestorCount()).isEqualTo(338456);
                     assertThat(rank.getRankingYear()).isEqualTo(2026);
                     assertThat(rank.getRankingMonth()).isEqualTo(8);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should fetch TWSE daily quotes, parse authentic ROC date, and filter non-matching tickers")
+    void shouldFetchTwseDailyQuotesAndParseAuthenticDate() throws Exception {
+        String json = """
+                [
+                  {
+                    "Date": "1150930",
+                    "Code": "0050",
+                    "Name": "元大台灣50",
+                    "TradeVolume": "60951975",
+                    "TradeValue": "6863160831",
+                    "OpeningPrice": "112.50",
+                    "HighestPrice": "113.05",
+                    "LowestPrice": "112.05",
+                    "ClosingPrice": "112.05",
+                    "Change": "0.7500",
+                    "Transaction": "61201"
+                  },
+                  {
+                    "Date": "1150930",
+                    "Code": "2330",
+                    "Name": "台積電",
+                    "TradeVolume": "30527318",
+                    "TradeValue": "76118233400",
+                    "OpeningPrice": "2495.00",
+                    "HighestPrice": "2510.00",
+                    "LowestPrice": "2480.00",
+                    "ClosingPrice": "2480.00",
+                    "Change": "-10.00",
+                    "Transaction": "45210"
+                  }
+                ]
+                """;
+
+        when(webClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(json));
+
+        StepVerifier.create(client.fetchTwseDailyQuotes())
+                .assertNext(quote -> {
+                    assertThat(quote.getTicker()).isEqualTo("0050");
+                    // 1150930 -> 2026-09-30 00:00:00
+                    assertThat(quote.getTradeDate()).isEqualTo(LocalDateTime.of(2026, 9, 30, 0, 0));
+                    assertThat(quote.getOpenPrice()).isEqualByComparingTo(new BigDecimal("112.50"));
+                    assertThat(quote.getHighPrice()).isEqualByComparingTo(new BigDecimal("113.05"));
+                    assertThat(quote.getLowPrice()).isEqualByComparingTo(new BigDecimal("112.05"));
+                    assertThat(quote.getClosePrice()).isEqualByComparingTo(new BigDecimal("112.05"));
+                    assertThat(quote.getVolumeShares()).isEqualTo(60951975L);
+                    assertThat(quote.getTradeValueTwd()).isEqualByComparingTo(new BigDecimal("6863160831"));
                 })
                 .verifyComplete();
     }

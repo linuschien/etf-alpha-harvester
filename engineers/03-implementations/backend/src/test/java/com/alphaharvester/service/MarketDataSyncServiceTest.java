@@ -336,7 +336,7 @@ class MarketDataSyncServiceTest {
         LocalDateTime now = LocalDateTime.now();
         DataFeedSyncWatermark watermark = new DataFeedSyncWatermark(
                 UUID.randomUUID(), MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA,
-                now.minusDays(3), now.minusDays(3), 150, "SUCCESS", null, now.minusDays(3)
+                now, now, 150, "SUCCESS", null, now
         );
         when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TWSE_ETF_METADATA))
                 .thenReturn(Mono.just(watermark));
