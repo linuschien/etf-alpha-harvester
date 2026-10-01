@@ -25,15 +25,27 @@ import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+import java.util.regex.Pattern;
+
 @Service
 public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvaluationUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalAssetScoreEvaluationService.class);
 
     public static final String WATERMARK_MONTHLY_TOP_LIST = "MONTHLY_TOP_LIST";
-    public static final double CORE_R2_THRESHOLD = 0.80;
+    public static final double CORE_R2_THRESHOLD = 0.90;
     public static final double SATELLITE_VOLATILITY_THRESHOLD = 0.18; // 18%
     public static final double ORTHOGONAL_R2_THRESHOLD = 0.50; // R^2 < 0.50
+    public static final Pattern NON_INVESTMENT_GRADE_BOND_PATTERN =
+            Pattern.compile("非投資等級|非投等|高收益|High Yield", Pattern.CASE_INSENSITIVE);
+
+    public static boolean isNonInvestmentGradeBond(GlobalAssetMetadata asset) {
+        if (asset == null) return false;
+        String name = asset.getName() != null ? asset.getName() : "";
+        String index = asset.getUnderlyingIndex() != null ? asset.getUnderlyingIndex() : "";
+        return NON_INVESTMENT_GRADE_BOND_PATTERN.matcher(name).find()
+                || NON_INVESTMENT_GRADE_BOND_PATTERN.matcher(index).find();
+    }
 
     private static final BigDecimal UNIVERSAL_MIN_AUM = new BigDecimal("2000000000"); // 20 億 TWD
     private static final BigDecimal UNIVERSAL_MIN_30D_TURNOVER = new BigDecimal("20000000"); // 2,000 萬 TWD
@@ -172,15 +184,12 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     }
 
     private Mono<Map<String, Map<LocalDate, Double>>> prefetchBenchmarks(LocalDateTime from, LocalDateTime to) {
-        List<String> bms = List.of("^TWII", "^GSPC", "^NDX", "^N225");
-        return Flux.fromIterable(bms)
-                .flatMap(bm -> quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(bm, from, to)
-                        .collectList()
-                        .map(quotes -> {
-                            Map<LocalDate, Double> returns = FinancialMetricsCalculator.calculateDailyReturns(quotes);
-                            return Map.entry(bm, returns);
-                        }))
-                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+        return quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", from, to)
+                .collectList()
+                .map(quotes -> {
+                    Map<LocalDate, Double> returns = FinancialMetricsCalculator.calculateDailyReturns(quotes);
+                    return Map.of("^TWII", returns);
+                });
     }
 
     private Mono<Map<String, Integer>> prefetchDcaRanks() {
@@ -319,6 +328,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                 boolean isBond = asset.getTicker().endsWith("B");
 
                                 if (isBond) {
+                                    // 債券專用一票否決：排除非投資等級債 (High Yield)
+                                    if (isNonInvestmentGradeBond(asset)) {
+                                        return Optional.<EvaluatedCandidate>empty();
+                                    }
+
                                     // Qualified for Defensive Bond Pool: bypass equity benchmark regressions
                                     double ytm = calculateDividendYield(asset, quotes365d, dividendMap.get(asset.getTicker()), cutoffDateTime);
                                     return Optional.of(new EvaluatedCandidate(
@@ -327,12 +341,9 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                     ));
                                 }
 
-                                // Benchmark regressions for equity ETFs (Core vs Satellite routing)
+                                // Benchmark regression for equity ETFs: only compare against Taiwan Weighted Index (^TWII)
                                 double r2Twii = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^TWII"), 0);
-                                double r2Gspc = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^GSPC"), 1);
-                                double r2Ndx  = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^NDX"), 1);
-                                double r2N225 = calcR2WithBm(dailyReturns365d, benchmarkReturnsMap.get("^N225"), 0);
-                                double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
+                                double maxR2 = r2Twii;
 
                                 // Routing logic
                                 if (maxR2 >= CORE_R2_THRESHOLD) {

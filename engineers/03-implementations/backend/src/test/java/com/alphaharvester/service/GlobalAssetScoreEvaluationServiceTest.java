@@ -270,33 +270,101 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should promote asset matching S&P500 benchmark to CORE")
-    void shouldPromoteAssetMatchingSP500ToCore() {
+    @DisplayName("Should only evaluate against ^TWII with R^2 >= 0.90 for CORE pool promotion")
+    void shouldPromoteAssetWithR2AboveNinetyPercentToCore() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime longAgo = now.minusYears(8);
 
-        // 00646 tracking S&P500
-        GlobalAssetMetadata asset = new GlobalAssetMetadata(
-                UUID.randomUUID(), "00646", "元大S&P500", longAgo, "標普500",
+        // Asset A: high correlation with TWII (R^2 >= 0.90) -> CORE
+        GlobalAssetMetadata coreAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0050", "元大台灣50", longAgo, "臺灣50",
                 1, now, now, null
         );
 
-        List<MarketDailyQuote> gspcQuotes = generateQuotesForWindow("^GSPC", 5000.0, 0.0005, 0.01, 0);
-        List<MarketDailyQuote> etfQuotes = generateQuotesForWindow("00646", 50.0, 0.0005, 0.01, 2);
+        // Asset B: correlation with TWII is lower (R^2 < 0.90) -> SATELLITE (vol >= 18% & mom > 0)
+        GlobalAssetMetadata satAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0052", "富邦科技", longAgo, "科技指數",
+                1, now, now, null
+        );
+
+        List<MarketDailyQuote> twiiQuotes = generateQuotesForWindow("^TWII", 20000.0, 0.0005, 0.01, 0);
+        List<MarketDailyQuote> coreQuotes = generateQuotesForWindow("0050", 180.0, 0.0005, 0.01, 0); // R^2 ~ 1.0
+        List<MarketDailyQuote> satQuotes = generateQuotesForWindow("0052", 150.0, 0.001, 0.02, 1);
 
         when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
-                "00646", new BigDecimal("35000000000")
+                "0050", new BigDecimal("350000000000"),
+                "0052", new BigDecimal("50000000000")
         )));
-        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^GSPC"), any(), any())).thenReturn(Flux.fromIterable(gspcQuotes));
-        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00646"), any(), any())).thenReturn(Flux.fromIterable(etfQuotes));
+        when(metadataRepository.findAll()).thenReturn(Flux.just(coreAsset, satAsset));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(coreQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0052"), any(), any())).thenReturn(Flux.fromIterable(satQuotes));
 
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
         StepVerifier.create(service.evaluateGlobalAssetScores())
                 .assertNext(res -> {
-                    assertThat(res.coreCount()).isEqualTo(1); // Promoted to CORE via ^GSPC match
-                    assertThat(res.satelliteCount()).isEqualTo(0);
+                    assertThat(res.coreCount()).isEqualTo(1); // 0050 promoted to CORE (R^2 >= 0.90)
+                    assertThat(res.satelliteCount()).isEqualTo(1); // 0052 routed to SATELLITE (R^2 < 0.90)
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should veto non-investment grade bond ETFs from entering DEFENSIVE pool")
+    void shouldVetoNonInvestmentGradeBondsFromDefensivePool() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime longAgo = now.minusYears(5);
+
+        // Investment grade bond: 00679B
+        GlobalAssetMetadata igBond = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00679B", "元大美債20年", longAgo, "彭博20年期以上美國公債指數",
+                1, now, now, null
+        );
+
+        // Non-investment grade bonds (vetoed)
+        GlobalAssetMetadata hyBond1 = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00953B", "群益優選收益非投資等級債券ETF", longAgo, "ICE成熟市場非投資等級債券指數",
+                1, now, now, null
+        );
+        GlobalAssetMetadata hyBond2 = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00727B", "國泰1-5年美元非投等債", longAgo, "彭博優選短期美元非投等債指數",
+                1, now, now, null
+        );
+        GlobalAssetMetadata hyBond3 = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00710B", "復華全球非投資等級債", longAgo, "彭博美元高收益債券指數",
+                1, now, now, null
+        );
+        GlobalAssetMetadata hyBond4 = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00945B", "凱基美國優選收益非投資等級債券", longAgo, "Bloomberg US High Yield",
+                1, now, now, null
+        );
+
+        // Verify helper method directly
+        assertThat(GlobalAssetScoreEvaluationService.isNonInvestmentGradeBond(igBond)).isFalse();
+        assertThat(GlobalAssetScoreEvaluationService.isNonInvestmentGradeBond(hyBond1)).isTrue();
+        assertThat(GlobalAssetScoreEvaluationService.isNonInvestmentGradeBond(hyBond2)).isTrue();
+        assertThat(GlobalAssetScoreEvaluationService.isNonInvestmentGradeBond(hyBond3)).isTrue();
+        assertThat(GlobalAssetScoreEvaluationService.isNonInvestmentGradeBond(hyBond4)).isTrue();
+
+        List<MarketDailyQuote> twiiQuotes = generateQuotesForWindow("^TWII", 20000.0, 0.0005, 0.01, 0);
+        List<MarketDailyQuote> igQuotes = generateQuotesForWindow("00679B", 30.0, 0.0001, 0.0, 1);
+        List<MarketDailyQuote> hyQuotes = generateQuotesForWindow("00953B", 10.0, 0.0001, 0.0, 2);
+
+        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
+                "00679B", new BigDecimal("250000000000"),
+                "00953B", new BigDecimal("40000000000")
+        )));
+        when(metadataRepository.findAll()).thenReturn(Flux.just(igBond, hyBond1));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00679B"), any(), any())).thenReturn(Flux.fromIterable(igQuotes));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00953B"), any(), any())).thenReturn(Flux.fromIterable(hyQuotes));
+
+        when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
+
+        StepVerifier.create(service.evaluateGlobalAssetScores())
+                .assertNext(res -> {
+                    assertThat(res.defensiveCount()).isEqualTo(1); // Only 00679B allowed; 00953B vetoed
                 })
                 .verifyComplete();
     }

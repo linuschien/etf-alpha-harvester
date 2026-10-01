@@ -99,13 +99,13 @@ public class MonthlyTopListDumpIntegrationTest {
         List<GlobalAssetScore> allScores = scoreRepository.findByEvaluationDateOrderByClassRankAsc(evalDate)
                 .collectList().block();
         assertThat(allScores).isNotNull();
-        assertThat(allScores).hasSize(35);
+        assertThat(allScores).hasSize(29);
 
         List<GlobalAssetPairwiseMatrix> allMatrices = pairwiseMatrixRepository.findAll()
                 .filter(m -> evalDate.equals(m.getEvaluationDate()))
                 .collectList().block();
         assertThat(allMatrices).isNotNull();
-        assertThat(allMatrices).hasSize(235); // 45 Core pairs + 190 Satellite pairs
+        assertThat(allMatrices).hasSize(196); // 6 Core pairs (4*(4-1)/2) + 190 Satellite pairs (20*(20-1)/2)
 
         // Sort scores deterministically: AssetClass, then ClassRank
         allScores.sort(Comparator.comparing(GlobalAssetScore::getAssetClass)
@@ -129,8 +129,8 @@ public class MonthlyTopListDumpIntegrationTest {
         sql.append("-- ").append(fileName).append("\n");
         sql.append("-- Seed official 2026-09 Monthly Candidate Screening, Multi-Factor Top List & Pairwise Matrix\n");
         sql.append("-- Evaluation Date: 2026-09-01 (Cutoff: 2026-08-31)\n");
-        sql.append("-- Total Scores: ").append(allScores.size()).append(" (10 Core, 20 Satellite, 5 Defensive)\n");
-        sql.append("-- Total Pairwise Matrices: ").append(allMatrices.size()).append(" (45 Core pairs, 190 Satellite pairs)\n\n");
+        sql.append("-- Total Scores: ").append(allScores.size()).append(" (4 Core, 20 Satellite, 5 Defensive)\n");
+        sql.append("-- Total Pairwise Matrices: ").append(allMatrices.size()).append(" (6 Core pairs, 190 Satellite pairs)\n\n");
 
         // 6. Generate GlobalAssetScore INSERT
         sql.append("INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12_1, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)\nVALUES\n");
