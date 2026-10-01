@@ -108,12 +108,12 @@ class FinancialMetricsCalculatorTest {
     }
 
     @Test
-    @DisplayName("Should calculate 12-1 momentum correctly")
-    void shouldCalculateMomentum12_1() {
-        BigDecimal p30d = new BigDecimal("120.00");
+    @DisplayName("Should calculate 12M momentum correctly")
+    void shouldCalculateMomentum12M() {
+        BigDecimal pLatest = new BigDecimal("120.00");
         BigDecimal p365d = new BigDecimal("100.00");
 
-        double mom = FinancialMetricsCalculator.calculateMomentum12_1(p30d, p365d);
+        double mom = FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365d);
         assertThat(mom).isCloseTo(0.20, within(1e-4));
     }
 
@@ -295,6 +295,24 @@ class FinancialMetricsCalculatorTest {
         // With minusYears(1), 2023-03-01 is included! Drawdown = (100 - 200) / 200 = -50%
         double dd = FinancialMetricsCalculator.calculate52WeekDrawdown(List.of(current, peakLeap));
         assertThat(dd).isCloseTo(-0.50, within(1e-4));
+    }
+
+    @Test
+    @DisplayName("Should correctly calculate median for odd, even, and empty lists")
+    void shouldCalculateMedianCorrectly() {
+        assertThat(FinancialMetricsCalculator.calculateMedian(null)).isEqualTo(0.0);
+        assertThat(FinancialMetricsCalculator.calculateMedian(List.of())).isEqualTo(0.0);
+
+        // Odd size
+        List<Double> odd = List.of(50.0, 10.0, 20.0, 40.0, 30.0);
+        assertThat(FinancialMetricsCalculator.calculateMedian(odd)).isEqualTo(30.0);
+
+        // Even size
+        List<Double> even = List.of(40.0, 10.0, 30.0, 20.0);
+        assertThat(FinancialMetricsCalculator.calculateMedian(even)).isEqualTo(25.0);
+
+        // Single element
+        assertThat(FinancialMetricsCalculator.calculateMedian(List.of(42.0))).isEqualTo(42.0);
     }
 }
 

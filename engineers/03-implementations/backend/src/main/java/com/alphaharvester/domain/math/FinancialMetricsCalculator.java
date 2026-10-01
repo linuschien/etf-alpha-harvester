@@ -327,14 +327,14 @@ public final class FinancialMetricsCalculator {
     }
 
     /**
-     * Calculates 12-1 Month Momentum:
-     * MOM(12-1) = [P(T - 30d) / P(T - 365d)] - 1.
+     * Calculates 12 Month Momentum (12M / 12-0M):
+     * MOM(12M) = [P(T) / P(T - 365d)] - 1.
      */
-    public static double calculateMomentum12_1(BigDecimal p30d, BigDecimal p365d) {
-        if (p30d == null || p365d == null || p365d.compareTo(BigDecimal.ZERO) <= 0) {
+    public static double calculateMomentum12M(BigDecimal pLatest, BigDecimal p365d) {
+        if (pLatest == null || p365d == null || p365d.compareTo(BigDecimal.ZERO) <= 0) {
             return 0.0;
         }
-        return p30d.divide(p365d, 8, RoundingMode.HALF_UP).subtract(BigDecimal.ONE).doubleValue();
+        return pLatest.divide(p365d, 8, RoundingMode.HALF_UP).subtract(BigDecimal.ONE).doubleValue();
     }
 
     /**
@@ -433,6 +433,24 @@ public final class FinancialMetricsCalculator {
             }
         }
         return maxPrice > 0.0 ? (currentPrice - maxPrice) / maxPrice : 0.0;
+    }
+
+    /**
+     * Calculates the median of a list of numeric values.
+     * Returns 0.0 if empty or null.
+     */
+    public static double calculateMedian(List<Double> values) {
+        if (values == null || values.isEmpty()) {
+            return 0.0;
+        }
+        List<Double> sorted = new ArrayList<>(values);
+        Collections.sort(sorted);
+        int size = sorted.size();
+        if (size % 2 == 1) {
+            return sorted.get(size / 2);
+        } else {
+            return (sorted.get(size / 2 - 1) + sorted.get(size / 2)) / 2.0;
+        }
     }
 }
 

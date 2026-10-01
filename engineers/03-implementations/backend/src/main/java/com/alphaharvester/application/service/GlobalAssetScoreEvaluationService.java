@@ -173,14 +173,30 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                 window365dStart, window90dStart, window30dStart
                         );
                     });
+                })
+                .onErrorResume(e -> {
+                    log.error("Monthly Top List evaluation failed: {}", e.getMessage(), e);
+                    return updateMonthlyWatermarkFailed(evaluationDateTime, e.getMessage())
+                            .thenReturn(new GlobalAssetScoreEvaluationResponse(
+                                    "FAILED",
+                                    "Evaluation pipeline failed: " + e.getMessage(),
+                                    evaluationDateTime.toString(),
+                                    0, 0, 0, 0
+                            ));
                 });
     }
 
     private Mono<Map<String, BigDecimal>> prefetchAumMap() {
         if (externalMarketDataPort != null) {
-            return externalMarketDataPort.fetchCurrentAumMap().defaultIfEmpty(Collections.emptyMap());
+            return externalMarketDataPort.fetchCurrentAumMap()
+                    .flatMap(map -> {
+                        if (map == null || map.isEmpty()) {
+                            return Mono.error(new IllegalStateException("AUM dataset is empty; cannot evaluate monthly Top List without fund sizes."));
+                        }
+                        return Mono.just(map);
+                    });
         }
-        return Mono.just(Collections.emptyMap());
+        return Mono.error(new IllegalStateException("ExternalMarketDataPort is not configured."));
     }
 
     private Mono<Map<String, Map<LocalDate, Double>>> prefetchBenchmarks(LocalDateTime from, LocalDateTime to) {
@@ -306,18 +322,17 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
 
-                                // Universal Gatekeeper 3: 30d Avg Daily Turnover >= 2,000 萬 TWD
+                                // Universal Gatekeeper 3: 30d Median Daily Turnover >= 2,000 萬 TWD
                                 List<MarketDailyQuote> quotes30d = quotes365d.stream()
                                         .filter(q -> !q.getTradeDate().toLocalDate().isBefore(window30dStart))
                                         .toList();
-                                double totalTurnover30d = 0.0;
-                                for (MarketDailyQuote q : quotes30d) {
-                                    if (q.getTradeValueTwd() != null) {
-                                        totalTurnover30d += q.getTradeValueTwd().doubleValue();
-                                    }
-                                }
-                                double avgTurnover30d = quotes30d.isEmpty() ? 0.0 : totalTurnover30d / quotes30d.size();
-                                if (avgTurnover30d < UNIVERSAL_MIN_30D_TURNOVER.doubleValue()) {
+                                List<Double> turnovers30d = quotes30d.stream()
+                                        .map(MarketDailyQuote::getTradeValueTwd)
+                                        .filter(Objects::nonNull)
+                                        .map(BigDecimal::doubleValue)
+                                        .toList();
+                                double medianTurnover30d = FinancialMetricsCalculator.calculateMedian(turnovers30d);
+                                if (medianTurnover30d < UNIVERSAL_MIN_30D_TURNOVER.doubleValue()) {
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
 
@@ -364,11 +379,11 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                         return Optional.<EvaluatedCandidate>empty();
                                     }
 
-                                    // 2. MOM(12-1) > 0
-                                    BigDecimal p30d = findPriceNearDate(quotes365d, window30dStart);
+                                    // 2. MOM(12M) > 0 (Standard 12M Momentum using P(T) and P(T - 365d))
+                                    BigDecimal pLatest = quotes365d.isEmpty() ? BigDecimal.ONE : quotes365d.get(quotes365d.size() - 1).getClosePrice();
                                     BigDecimal p365d = findPriceNearDate(quotes365d, window365dStart);
-                                    double mom121 = FinancialMetricsCalculator.calculateMomentum12_1(p30d, p365d);
-                                    if (mom121 <= 0.0) {
+                                    double mom12 = FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365d);
+                                    if (mom12 <= 0.0) {
                                         return Optional.<EvaluatedCandidate>empty();
                                     }
 
@@ -379,7 +394,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
 
                                     return Optional.of(new EvaluatedCandidate(
                                             asset, CandidateAssetClass.SATELLITE, quotes365d, dailyReturns365d,
-                                            maxR2, r2Twii, mom121, ker, sharpe, vol90d, 0.0, dcaRank, currentAum
+                                            maxR2, r2Twii, mom12, ker, sharpe, vol90d, 0.0, dcaRank, currentAum
                                     ));
                                 }
                             });
@@ -401,9 +416,9 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     List<GlobalAssetScore> bondScores = scoreBondCandidates(bondCandidates, evaluationDateTime);
 
                     // Stage 3 Pairwise Matrix & Greedy Orthogonal Engine
-                    // Limit: Core Top 10, Sat Top 20, Bond Top 5
+                    // Limit: Core Top 10, Sat Top 50, Bond Top 5
                     List<GlobalAssetScore> topCore = coreScores.stream().limit(10).toList();
-                    List<GlobalAssetScore> topSat = satScores.stream().limit(20).toList();
+                    List<GlobalAssetScore> topSat = satScores.stream().limit(50).toList();
                     List<GlobalAssetScore> topBond = bondScores.stream().limit(5).toList();
 
                     // Generate pairwise matrices
@@ -425,6 +440,18 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     finalScoresToSave.addAll(topSat);
                     finalScoresToSave.addAll(topBond);
 
+                    if (finalScoresToSave.isEmpty()) {
+                        String errorMsg = "Zero candidate scores produced after screening and ranking";
+                        log.error(errorMsg);
+                        return updateMonthlyWatermarkFailed(evaluationDateTime, errorMsg)
+                                .thenReturn(new GlobalAssetScoreEvaluationResponse(
+                                        "FAILED",
+                                        errorMsg,
+                                        evaluationDateTime.toString(),
+                                        0, 0, 0, 0
+                                ));
+                    }
+
                     Mono<Void> cleanOld = Mono.empty();
                     if (pairwiseMatrixRepository != null) {
                         cleanOld = cleanOld.then(pairwiseMatrixRepository.deleteByEvaluationDate(evaluationDateTime));
@@ -438,7 +465,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     return cleanOld
                             .then(scoreRepository.saveAll(finalScoresToSave).collectList())
                             .then(savePairwise)
-                            .then(updateMonthlyWatermark(evaluationDateTime, finalScoresToSave.size()))
+                            .then(updateMonthlyWatermarkPass(evaluationDateTime, finalScoresToSave.size()))
                             .thenReturn(new GlobalAssetScoreEvaluationResponse(
                                     "SUCCESS",
                                     "Monthly Candidate Screening, Multi-Factor Ranking & Orthogonal Engine completed successfully.",
@@ -539,9 +566,9 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             double momPct = momRanks.getOrDefault(c, 0.0);
             double kerPct = kerRanks.getOrDefault(c, 0.0);
             double sharpePct = sharpeRanks.getOrDefault(c, 0.0);
-            double shadowDiscount = Math.max(0.0, 1.0 - c.r2Taiex());
 
-            double composite = ( (1.0 / 3.0) * momPct + (1.0 / 3.0) * kerPct + (1.0 / 3.0) * sharpePct ) * shadowDiscount * 100.0;
+            // Plan A: 50% MOM(12M) + 25% KER + 25% Sharpe
+            double composite = (0.50 * momPct + 0.25 * kerPct + 0.25 * sharpePct) * 100.0;
 
             GlobalAssetScore score = new GlobalAssetScore();
             score.setAssetId(c.metadata().getId());
@@ -640,21 +667,46 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         return matrix;
     }
 
-    private Mono<Void> updateMonthlyWatermark(LocalDateTime evaluationDateTime, int recordsCount) {
+    private Mono<Void> updateMonthlyWatermarkPass(LocalDateTime evaluationDateTime, int recordsCount) {
         if (watermarkRepository == null) return Mono.empty();
+        LocalDateTime now = LocalDateTime.now();
         return watermarkRepository.findByFeedName(WATERMARK_MONTHLY_TOP_LIST)
-                .defaultIfEmpty(new DataFeedSyncWatermark(
-                        UUID.randomUUID(), WATERMARK_MONTHLY_TOP_LIST, evaluationDateTime, evaluationDateTime,
-                        recordsCount, "PASS", null, LocalDateTime.now()
-                ))
                 .flatMap(wm -> {
-                    wm.setLastSuccessfulSyncAt(LocalDateTime.now());
+                    wm.setLastSuccessfulSyncAt(now);
                     wm.setLatestRecordDate(evaluationDateTime);
                     wm.setRecordsSyncedCount(recordsCount);
                     wm.setStatus("PASS");
-                    wm.setUpdatedAt(LocalDateTime.now());
+                    wm.setErrorMessage(null);
+                    wm.setUpdatedAt(now);
                     return watermarkRepository.save(wm);
                 })
+                .switchIfEmpty(Mono.defer(() -> {
+                    DataFeedSyncWatermark newWm = new DataFeedSyncWatermark(
+                            UUID.randomUUID(), WATERMARK_MONTHLY_TOP_LIST, now, evaluationDateTime,
+                            recordsCount, "PASS", null, now
+                    );
+                    return watermarkRepository.save(newWm);
+                }))
+                .then();
+    }
+
+    private Mono<Void> updateMonthlyWatermarkFailed(LocalDateTime evaluationDateTime, String errorMessage) {
+        if (watermarkRepository == null) return Mono.empty();
+        LocalDateTime now = LocalDateTime.now();
+        return watermarkRepository.findByFeedName(WATERMARK_MONTHLY_TOP_LIST)
+                .flatMap(wm -> {
+                    wm.setStatus("FAILED");
+                    wm.setErrorMessage(errorMessage != null ? errorMessage : "Evaluation failed");
+                    wm.setUpdatedAt(now);
+                    return watermarkRepository.save(wm);
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    DataFeedSyncWatermark newWm = new DataFeedSyncWatermark(
+                            UUID.randomUUID(), WATERMARK_MONTHLY_TOP_LIST, null, null,
+                            0, "FAILED", errorMessage, now
+                    );
+                    return watermarkRepository.save(newWm);
+                }))
                 .then();
     }
 

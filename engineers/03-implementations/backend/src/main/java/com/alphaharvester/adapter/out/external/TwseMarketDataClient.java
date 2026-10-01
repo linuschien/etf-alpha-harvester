@@ -147,10 +147,7 @@ public class TwseMarketDataClient {
                     }
                     return map;
                 })
-                .onErrorResume(e -> {
-                    log.error("Failed to fetch TWSE MIS NAV: {}", e.getMessage(), e);
-                    return Mono.just(Map.of());
-                });
+                .doOnError(e -> log.error("Failed to fetch TWSE MIS NAV: {}", e.getMessage(), e));
     }
 
     /**

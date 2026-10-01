@@ -83,6 +83,26 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
+    @DisplayName("Should fail fast with IllegalStateException when TWSE MIS returns empty NAV map")
+    void shouldFailFastWhenTwseMisReturnsEmptyNavMap() {
+        when(twseClient.fetchMisNavData()).thenReturn(Mono.just(Map.of()));
+
+        StepVerifier.create(adapter.fetchCurrentAumMap())
+                .expectErrorMatches(e -> e instanceof IllegalStateException && e.getMessage().contains("unable to compute ETF AUM"))
+                .verify();
+    }
+
+    @Test
+    @DisplayName("Should propagate upstream error when TWSE MIS client fails")
+    void shouldPropagateErrorWhenTwseMisFails() {
+        when(twseClient.fetchMisNavData()).thenReturn(Mono.error(new RuntimeException("Connection timed out")));
+
+        StepVerifier.create(adapter.fetchCurrentAumMap())
+                .expectErrorMatches(e -> e instanceof RuntimeException && e.getMessage().contains("Connection timed out"))
+                .verify();
+    }
+
+    @Test
     @DisplayName("Should combine quotes and recover missing ETF from Yahoo Finance without daily NAV calls")
     void shouldCombineQuotesAndRecoverMissingWithoutDailyNavCalls() {
         LocalDateTime now = LocalDateTime.now();

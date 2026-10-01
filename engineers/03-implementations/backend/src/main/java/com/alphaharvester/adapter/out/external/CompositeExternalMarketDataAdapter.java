@@ -54,7 +54,7 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     public Mono<java.util.Map<String, java.math.BigDecimal>> fetchCurrentAumMap() {
         log.info("Fetching current AUM map from TWSE MIS for monthly Top List evaluation...");
         return twseClient.fetchMisNavData()
-                .map(navMap -> {
+                .flatMap(navMap -> {
                     java.util.Map<String, java.math.BigDecimal> aumMap = new java.util.HashMap<>();
                     for (var entry : navMap.entrySet()) {
                         var snap = entry.getValue();
@@ -65,9 +65,11 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
                             aumMap.put(entry.getKey(), aum);
                         }
                     }
-                    return aumMap;
-                })
-                .defaultIfEmpty(java.util.Map.of());
+                    if (aumMap.isEmpty()) {
+                        return Mono.error(new IllegalStateException("TWSE MIS returned empty or invalid NAV data; unable to compute ETF AUM"));
+                    }
+                    return Mono.just(aumMap);
+                });
     }
 
     @Override

@@ -12,6 +12,8 @@ import com.alphaharvester.application.service.GlobalAssetQueryService;
 import com.alphaharvester.domain.entity.GlobalAssetPairwiseMatrix;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
 import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.application.port.out.ExternalMarketDataPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -36,6 +40,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 @Tag("integration")
 @SpringBootTest
@@ -45,7 +50,60 @@ public class MonthlyTopListDumpIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(MonthlyTopListDumpIntegrationTest.class);
     private static final DateTimeFormatter TS_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private static final Map<String, BigDecimal> TEST_AUM_MAP = Map.ofEntries(
+            Map.entry("0050", new BigDecimal("2484642985000")),
+            Map.entry("006208", new BigDecimal("475963342800")),
+            Map.entry("0056", new BigDecimal("802926731200")),
+            Map.entry("00878", new BigDecimal("653651313300")),
+            Map.entry("00919", new BigDecimal("607173698550")),
+            Map.entry("00929", new BigDecimal("156158783820")),
+            Map.entry("00918", new BigDecimal("158305790280")),
+            Map.entry("00881", new BigDecimal("154680143090")),
+            Map.entry("0052", new BigDecimal("165662140000")),
+            Map.entry("00922", new BigDecimal("94294498680")),
+            Map.entry("00830", new BigDecimal("77979727800")),
+            Map.entry("00692", new BigDecimal("59071992000")),
+            Map.entry("00935", new BigDecimal("52938962560")),
+            Map.entry("00850", new BigDecimal("39862807200")),
+            Map.entry("00939", new BigDecimal("28002285880")),
+            Map.entry("00915", new BigDecimal("16665287300")),
+            Map.entry("00961", new BigDecimal("15331945200")),
+            Map.entry("00892", new BigDecimal("13708056000")),
+            Map.entry("00735", new BigDecimal("12363784020")),
+            Map.entry("00947", new BigDecimal("11421623800")),
+            Map.entry("00905", new BigDecimal("9927626930")),
+            Map.entry("00701", new BigDecimal("6995465220")),
+            Map.entry("00887", new BigDecimal("6913735200")),
+            Map.entry("00690", new BigDecimal("6880766400")),
+            Map.entry("00946", new BigDecimal("6740990620")),
+            Map.entry("00910", new BigDecimal("6367379294")),
+            Map.entry("00877", new BigDecimal("5895128640")),
+            Map.entry("00951", new BigDecimal("4420933980")),
+            Map.entry("00938", new BigDecimal("2787628800")),
+            Map.entry("00728", new BigDecimal("2757638850")),
+            Map.entry("00757", new BigDecimal("38000000000")),
+            Map.entry("00662", new BigDecimal("42000000000")),
+            Map.entry("00955", new BigDecimal("8500000000")),
+            Map.entry("009805", new BigDecimal("3200000000")),
+            Map.entry("00965", new BigDecimal("5600000000")),
+            Map.entry("00909", new BigDecimal("4900000000")),
+            Map.entry("00904", new BigDecimal("6898035880")),
+            Map.entry("009803", new BigDecimal("6253834320")),
+            Map.entry("009804", new BigDecimal("3468295840")),
+            Map.entry("00923", new BigDecimal("39588711030")),
+            Map.entry("00913", new BigDecimal("3051200120")),
+            Map.entry("00888", new BigDecimal("22606103600")),
+            Map.entry("00937B", new BigDecimal("234148883293.50")),
+            Map.entry("00725B", new BigDecimal("122351652782.80")),
+            Map.entry("00768B", new BigDecimal("36180721170.00")),
+            Map.entry("00722B", new BigDecimal("48214656644.10")),
+            Map.entry("00720B", new BigDecimal("123233254503.90"))
+    );
+
     public record ScoredSat(String ticker, double score, double mom, double ker, double sharpe, double r2Twii, BigDecimal aum) {}
+
+    @MockitoBean
+    private ExternalMarketDataPort externalMarketDataPort;
 
     @Autowired
     private GlobalAssetScoreEvaluationUseCase scoreEvaluationUseCase;
@@ -76,6 +134,8 @@ public class MonthlyTopListDumpIntegrationTest {
     void shouldEvaluateAndDumpSeptember2026TopListToFlywayV8() throws IOException {
         log.info("=== Starting Evaluation and Flyway V8 Dump for 2026-09 Monthly Top List ===");
 
+        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(TEST_AUM_MAP));
+
         // 1. Verify prerequisite metadata (V3 seed data) is populated
         long totalMetadata = metadataRepository.count().block();
         log.info("Current universe has {} ETFs in metadataRepository.", totalMetadata);
@@ -98,14 +158,15 @@ public class MonthlyTopListDumpIntegrationTest {
         // 4. Retrieve evaluated scores and pairwise matrices from DB
         List<GlobalAssetScore> allScores = scoreRepository.findByEvaluationDateOrderByClassRankAsc(evalDate)
                 .collectList().block();
-        assertThat(allScores).isNotNull();
-        assertThat(allScores).hasSize(29);
+        int expectedScores = response.coreCount() + response.satelliteCount() + response.defensiveCount();
+        int expectedMatrices = (response.coreCount() * (response.coreCount() - 1) / 2)
+                + (response.satelliteCount() * (response.satelliteCount() - 1) / 2);
+        assertThat(allScores).isNotNull().hasSize(expectedScores);
 
         List<GlobalAssetPairwiseMatrix> allMatrices = pairwiseMatrixRepository.findAll()
                 .filter(m -> evalDate.equals(m.getEvaluationDate()))
                 .collectList().block();
-        assertThat(allMatrices).isNotNull();
-        assertThat(allMatrices).hasSize(196); // 6 Core pairs (4*(4-1)/2) + 190 Satellite pairs (20*(20-1)/2)
+        assertThat(allMatrices).isNotNull().hasSize(expectedMatrices);
 
         // Sort scores deterministically: AssetClass, then ClassRank
         allScores.sort(Comparator.comparing(GlobalAssetScore::getAssetClass)
@@ -202,8 +263,7 @@ public class MonthlyTopListDumpIntegrationTest {
         assertThat(Files.size(filePath)).isGreaterThan(1000L);
     }
 
-    @Autowired(required = false)
-    private com.alphaharvester.application.port.out.ExternalMarketDataPort externalMarketDataPort;
+
 
     @Autowired
     private com.alphaharvester.adapter.out.persistence.CorporateActionRepository corporateActionRepository;
@@ -407,9 +467,9 @@ public class MonthlyTopListDumpIntegrationTest {
             double vol90d = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(returns90d);
             boolean passVol = vol90d >= 0.18;
 
-            BigDecimal p30d = findPriceNearDate(quotes365d, window30dStart);
+            BigDecimal pLatest = (quotes365d.isEmpty()) ? BigDecimal.ONE : quotes365d.get(quotes365d.size() - 1).getClosePrice();
             BigDecimal p365d = findPriceNearDate(quotes365d, start365d.toLocalDate());
-            double mom121 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30d, p365d);
+            double mom121 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365d);
             boolean passMom = mom121 > 0.0;
 
             List<BigDecimal> prices365d = quotes365d.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
@@ -458,9 +518,9 @@ public class MonthlyTopListDumpIntegrationTest {
             double vol = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(r90);
             if (vol < 0.18) continue;
 
-            var p30 = findPriceNearDate(quotes, window30dStart);
+            var pLatest = (quotes.isEmpty()) ? BigDecimal.ONE : quotes.get(0).getClosePrice();
             var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
-            double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+            double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365);
             if (mom <= 0.0) continue;
 
             var prices = quotes.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
@@ -478,7 +538,7 @@ public class MonthlyTopListDumpIntegrationTest {
         record ScoredSat(String ticker, double score, double raw, double discount, double mom, double ker, double sh, double r2Twii) {}
         List<ScoredSat> scoredList = new ArrayList<>();
         for (var c : satCands) {
-            double raw = (momR.get(c) + kerR.get(c) + shR.get(c)) / 3.0;
+            double raw = 0.50 * momR.get(c) + 0.25 * kerR.get(c) + 0.25 * shR.get(c);
             double disc = Math.max(0.0, 1.0 - c.r2Twii());
             scoredList.add(new ScoredSat(c.ticker(), raw * disc * 100.0, raw * 100.0, disc, c.mom(), c.ker(), c.sharpe(), c.r2Twii()));
         }
@@ -602,11 +662,11 @@ public class MonthlyTopListDumpIntegrationTest {
                     continue;
                 }
 
-                var p30 = findPriceNearDate(quotes, window30dStart);
+                var pLatest = (quotes.isEmpty()) ? BigDecimal.ONE : quotes.get(0).getClosePrice();
                 var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
-                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365);
                 if (mom <= 0.0) {
-                    log.info("[EXCLUDED] {}: Satellite Gate FAILED - Momentum 12-1 {} <= 0", t, String.format("%.2f%%", mom * 100));
+                    log.info("[EXCLUDED] {}: Satellite Gate FAILED - Momentum 12M {} <= 0", t, String.format("%.2f%%", mom * 100));
                     continue;
                 }
 
@@ -716,9 +776,9 @@ public class MonthlyTopListDumpIntegrationTest {
                     continue;
                 }
 
-                var p30 = findPriceNearDate(quotes, window30dStart);
+                var pLatest = (quotes.isEmpty()) ? BigDecimal.ONE : quotes.get(0).getClosePrice();
                 var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
-                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365);
                 if (mom <= 0.0) {
                     satFailedMom++;
                     failedMomTickers.add(asset.getTicker());
@@ -894,9 +954,9 @@ public class MonthlyTopListDumpIntegrationTest {
                 var r90 = ret.entrySet().stream().filter(e -> !e.getKey().isBefore(window90dStart)).map(Map.Entry::getValue).toList();
                 double vol = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateAnnualizedVolatility(r90);
                 if (vol < 0.18) continue;
-                var p30 = findPriceNearDate(quotes, window30dStart);
+                var pLatest = (quotes.isEmpty()) ? BigDecimal.ONE : quotes.get(0).getClosePrice();
                 var p365 = findPriceNearDate(quotes, start365d.toLocalDate());
-                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12_1(p30, p365);
+                double mom = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365);
                 if (mom <= 0.0) continue;
 
                 var prices = quotes.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
@@ -985,11 +1045,32 @@ public class MonthlyTopListDumpIntegrationTest {
                     String.format("%.4f", sat.r2Twii()), String.format("%.0f", sat.aum().doubleValue() / 1e8));
         }
 
-        // --- STAGE 3 GREEDY ORTHOGONAL FILTRATION SIMULATION ---
-        log.info("========== STAGE 3 GREEDY ORTHOGONAL FILTRATION SIMULATION (Threshold R2 < 0.50) ==========");
-        runStage3GreedyFilter("Model 2 (Additive 5-Factor)", userAdditive5F, satDailyReturns, 10);
-        runStage3GreedyFilter("Model 3 (Alpha-focused 5-Factor)", alphaFocused5F, satDailyReturns, 10);
-        runStage3GreedyFilter("Baseline (Old Multiplicative)", oldMultiplicative, satDailyReturns, 10);
+        List<ScoredSat> pure3F = new ArrayList<>();
+        for (var c : newSatCands) {
+            double m = momR.get(c);
+            double k = kerR.get(c);
+            double s = shR.get(c);
+            double s3F = (0.50 * m + 0.25 * k + 0.25 * s) * 100.0;
+            pure3F.add(new ScoredSat(c.ticker(), s3F, c.mom(), c.ker(), c.sharpe(), c.r2Twii(), c.aum()));
+        }
+        pure3F.sort(Comparator.comparing(ScoredSat::score).reversed());
+
+        log.info("========== PURE 3F RANKINGS (ALL {} SATELLITES) ==========", pure3F.size());
+        for (int i = 0; i < pure3F.size(); i++) {
+            var sat = pure3F.get(i);
+            log.info("  Rank #{}: {} - Score={}, MOM={}%, KER={}, Sharpe={}, R2_TWII={}, AUM={}億",
+                    i + 1, sat.ticker(), String.format("%.2f", sat.score()),
+                    String.format("%.2f", sat.mom() * 100), String.format("%.4f", sat.ker()),
+                    String.format("%.2f", sat.sharpe()), String.format("%.4f", sat.r2Twii()),
+                    String.format("%.0f", sat.aum().doubleValue() / 1e8));
+        }
+
+        // --- STAGE 3 GREEDY ORTHOGONAL FILTRATION SIMULATION (ANCHORED AT 0052) ---
+        log.info("========== STAGE 3 GREEDY ORTHOGONAL FILTRATION ANCHORED AT 0052 ==========");
+        runStage3GreedyFilter("Pure 3F (Top 30 Candidates)", pure3F.subList(0, Math.min(30, pure3F.size())), satDailyReturns, 50);
+        runStage3GreedyFilter("Pure 3F (Top 40 Candidates)", pure3F.subList(0, Math.min(40, pure3F.size())), satDailyReturns, 50);
+        runStage3GreedyFilter("Pure 3F (Top 50 Candidates)", pure3F.subList(0, Math.min(50, pure3F.size())), satDailyReturns, 50);
+        runStage3GreedyFilter("Pure 3F (ALL Candidates, Depth = " + pure3F.size() + ")", pure3F, satDailyReturns, 50);
         log.info("=========================================================================================");
     }
 

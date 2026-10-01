@@ -199,10 +199,14 @@ class StageScreeningAndRankingIntegrationTest {
 
         StepVerifier.create(evaluationService.evaluateGlobalAssetScores("2026-09", true))
                 .assertNext(res -> {
-                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.status()).isEqualTo("FAILED");
                     assertThat(res.evaluatedCandidatesCount()).isEqualTo(0);
+                    assertThat(res.message()).contains("Zero candidate scores produced");
                 })
                 .verifyComplete();
+
+        verify(scoreRepository, never()).deleteByEvaluationDate(any());
+        verify(pairwiseMatrixRepository, never()).deleteByEvaluationDate(any());
     }
 
     @Test

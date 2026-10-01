@@ -2,6 +2,7 @@ package com.alphaharvester.service;
 
 import com.alphaharvester.adapter.out.persistence.CorporateActionRepository;
 import com.alphaharvester.adapter.out.persistence.DcaPopularityRankRepository;
+import com.alphaharvester.adapter.out.persistence.DataFeedSyncWatermarkRepository;
 import com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
@@ -9,6 +10,7 @@ import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
 import com.alphaharvester.domain.entity.CorporateAction;
+import com.alphaharvester.domain.entity.DataFeedSyncWatermark;
 import com.alphaharvester.domain.entity.DividendAnnouncement;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
@@ -66,6 +68,9 @@ class GlobalAssetScoreEvaluationServiceTest {
     private CorporateActionRepository corporateActionRepository;
 
     @Mock
+    private DataFeedSyncWatermarkRepository watermarkRepository;
+
+    @Mock
     private ExternalMarketDataPort externalMarketDataPort;
 
     private GlobalAssetScoreEvaluationService service;
@@ -78,7 +83,9 @@ class GlobalAssetScoreEvaluationServiceTest {
         lenient().when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any())).thenReturn(Flux.empty());
         lenient().when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(any(), any(), any())).thenReturn(Flux.empty());
         lenient().when(scoreRepository.deleteByEvaluationDate(any())).thenReturn(Mono.empty());
-        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, null, null, externalMarketDataPort, corporateActionRepository);
+        lenient().when(watermarkRepository.findByFeedName(any())).thenReturn(Mono.empty());
+        lenient().when(watermarkRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, null, externalMarketDataPort, corporateActionRepository);
     }
 
     private List<MarketDailyQuote> generateQuotesForWindow(String ticker, double startPrice, double growthRate, double noiseFactor, int pattern) {
@@ -565,6 +572,95 @@ class GlobalAssetScoreEvaluationServiceTest {
                     // R^2 with TWII should remain high (>= 0.80) because split was adjusted in memory,
                     // so 0050 correctly qualifies for CORE pool!
                     assertThat(res.coreCount()).isEqualTo(1);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should mark watermark FAILED, protect DB from deletion when AUM fetch fails")
+    void shouldMarkWatermarkFailedAndProtectDbWhenAumFetchFails() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata asset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(5), "臺灣50",
+                1, now, now, null
+        );
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
+        when(externalMarketDataPort.fetchCurrentAumMap())
+                .thenReturn(Mono.error(new RuntimeException("Connection timeout to TWSE MIS")));
+
+        StepVerifier.create(service.evaluateGlobalAssetScores("2026-09", true))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("FAILED");
+                    assertThat(res.message()).contains("Connection timeout to TWSE MIS");
+                    assertThat(res.evaluatedCandidatesCount()).isEqualTo(0);
+                })
+                .verifyComplete();
+
+        // Verify existing database records were never deleted
+        verify(scoreRepository, never()).deleteByEvaluationDate(any());
+
+        // Verify watermark was saved with FAILED status and error message
+        ArgumentCaptor<DataFeedSyncWatermark> wmCaptor = ArgumentCaptor.forClass(DataFeedSyncWatermark.class);
+        verify(watermarkRepository).save(wmCaptor.capture());
+        DataFeedSyncWatermark savedWm = wmCaptor.getValue();
+        assertThat(savedWm.getStatus()).isEqualTo("FAILED");
+        assertThat(savedWm.getErrorMessage()).contains("Connection timeout to TWSE MIS");
+    }
+
+    @Test
+    @DisplayName("Should mark watermark FAILED, protect DB from deletion when 0 candidates qualify")
+    void shouldMarkWatermarkFailedAndProtectDbWhenZeroCandidatesProduced() {
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetMetadata smallAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "00999", "微型ETF", now.minusYears(5), "某指數",
+                1, now, now, null
+        );
+
+        when(metadataRepository.findAll()).thenReturn(Flux.just(smallAsset));
+        when(externalMarketDataPort.fetchCurrentAumMap())
+                .thenReturn(Mono.just(Map.of("00999", new BigDecimal("1000000000")))); // < 2B AUM
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00999"), any(), any()))
+                .thenReturn(Flux.fromIterable(generateQuotesForWindow("00999", 50.0, 0.0005, 0.01, 0)));
+
+        StepVerifier.create(service.evaluateGlobalAssetScores("2026-09", true))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("FAILED");
+                    assertThat(res.message()).contains("Zero candidate scores produced");
+                    assertThat(res.evaluatedCandidatesCount()).isEqualTo(0);
+                })
+                .verifyComplete();
+
+        // Verify DB was protected from deletion
+        verify(scoreRepository, never()).deleteByEvaluationDate(any());
+
+        // Verify watermark was marked FAILED
+        ArgumentCaptor<DataFeedSyncWatermark> wmCaptor = ArgumentCaptor.forClass(DataFeedSyncWatermark.class);
+        verify(watermarkRepository).save(wmCaptor.capture());
+        DataFeedSyncWatermark savedWm = wmCaptor.getValue();
+        assertThat(savedWm.getStatus()).isEqualTo("FAILED");
+        assertThat(savedWm.getErrorMessage()).contains("Zero candidate scores produced");
+    }
+
+    @Test
+    @DisplayName("Should retry evaluation on next run when previous watermark status is FAILED")
+    void shouldRetryEvaluationWhenPreviousWatermarkStatusIsFailed() {
+        YearMonth targetYm = YearMonth.parse("2026-09");
+        LocalDate evalDate = targetYm.atDay(1);
+        LocalDateTime evalDateTime = evalDate.atStartOfDay();
+
+        DataFeedSyncWatermark failedWatermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), "MONTHLY_TOP_LIST", null, null, 0, "FAILED", "Previous failure", LocalDateTime.now()
+        );
+
+        when(watermarkRepository.findByFeedName("MONTHLY_TOP_LIST")).thenReturn(Mono.just(failedWatermark));
+        when(metadataRepository.findAll()).thenReturn(Flux.empty());
+
+        // Calling with force = false should NOT skip because status is FAILED (not PASS)!
+        StepVerifier.create(service.evaluateGlobalAssetScores("2026-09", false))
+                .assertNext(res -> {
+                    // It proceeded into pipeline rather than returning "SKIPPED"
+                    assertThat(res.status()).isNotEqualTo("SKIPPED");
                 })
                 .verifyComplete();
     }
