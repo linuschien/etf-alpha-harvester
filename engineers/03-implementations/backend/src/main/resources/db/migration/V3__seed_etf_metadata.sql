@@ -323,7 +323,7 @@ VALUES
 
 -- Update watermark for TWSE_ETF_METADATA
 UPDATE data_feed_sync_watermark
-SET latest_record_date = TIMESTAMP '2026-09-29 00:00:00',
+SET latest_record_date = TIMESTAMP '2026-10-01 00:00:00',
     records_synced_count = 316,
     status = 'SUCCESS',
     updated_at = CURRENT_TIMESTAMP

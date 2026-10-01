@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -81,9 +82,13 @@ public class MarketDailyQuoteDumpIntegrationTest {
         log.info("Successfully retrieved {} daily quote records from database.", allQuotes.size());
         assertThat(allQuotes.size()).isGreaterThanOrEqualTo(30000);
 
-        // 5. Group quotes by Year-Month (e.g., "202410", "202411", ..., "202609")
+        // 5. Group quotes by Year-Month for completed closed months (202410 through 202609)
+        LocalDate windowStart = LocalDate.of(2024, 10, 1);
+        LocalDate windowEnd = LocalDate.of(2026, 10, 1); // exclusive, strictly up to 2026-09-30
+
         TreeMap<String, List<MarketDailyQuote>> quotesByMonth = allQuotes.stream()
                 .filter(q -> q.getTradeDate() != null && q.getClosePrice() != null)
+                .filter(q -> !q.getTradeDate().toLocalDate().isBefore(windowStart) && q.getTradeDate().toLocalDate().isBefore(windowEnd))
                 .collect(Collectors.groupingBy(
                         q -> q.getTradeDate().format(MONTH_KEY_FMT),
                         TreeMap::new,
@@ -92,6 +97,9 @@ public class MarketDailyQuoteDumpIntegrationTest {
 
         log.info("Grouped quotes into {} distinct monthly buckets: {}", quotesByMonth.size(), quotesByMonth.keySet());
         assertThat(quotesByMonth).isNotEmpty();
+        assertThat(quotesByMonth).hasSize(24);
+        assertThat(quotesByMonth.firstKey()).isEqualTo("202410");
+        assertThat(quotesByMonth.lastKey()).isEqualTo("202609");
 
         // 6. Resolve target migration directory
         Path targetDir = Paths.get("src/main/resources/db/migration");
