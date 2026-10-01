@@ -110,7 +110,7 @@ This specification defines the integration with Yahoo Finance v8 Chart API. This
 
 | Category | Yahoo Ticker | Instrument Name | Primary Usage in AlphaHarvester |
 | :--- | :--- | :--- | :--- |
-| **Global Benchmark** | `^TWII` | TAIEX (台灣加權股價指數) | Benchmark for Taiwan Core & Broad Market ($R^2 \ge 0.80$) |
+| **Global Benchmark** | `^TWII` | TAIEX (台灣加權股價指數) | Benchmark for Taiwan Core & Broad Market ($R^2_{\text{TAIEX}} \ge 0.90$) |
 | **Global Benchmark** | `^GSPC` | S&P 500 Index | Benchmark for US Broad Market Core ETFs |
 | **Global Benchmark** | `^NDX` | NASDAQ 100 Index | Benchmark for Tech / Growth Satellite ETFs |
 | **Global Benchmark** | `^SOX` | PHLX Semiconductor Index | Benchmark for Semiconductor Satellite ETFs |
@@ -144,7 +144,7 @@ When calculating regression between a Taiwan ETF (`0050.TW`) and a foreign bench
 
 3. **Coefficient of Determination ($R^2$)**:
    $$R^2 = \frac{[\text{Cov}(r_{\text{etf}}, r_{\text{index}})]^2}{\text{Var}(r_{\text{etf}}) \cdot \text{Var}(r_{\text{index}})}$$
-   * **Core Benchmark Requirement**: $\max(R^2_{\text{bench}}) \ge 0.80$ (relative to `^TWII`, `^GSPC`, `^NDX`, or `^N225`). If correlation $\rho \le 0$, $R^2$ is safely zeroed out.
+   * **Core Benchmark Requirement**: $R^2_{\text{TAIEX}} \ge 0.90$ (relative to `^TWII`). If correlation $\rho \le 0$, $R^2$ is safely zeroed out.
 
 4. **Annualized Historical Volatility ($\sigma$)**:
    $$\sigma = \sqrt{252} \times \sqrt{\frac{1}{N-1} \sum_{t=1}^{N} (r_{\text{etf}, t} - \bar{r})^2}$$

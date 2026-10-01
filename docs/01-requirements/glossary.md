@@ -57,9 +57,9 @@
 ### 3.2 候選池分組與持倉狀態 (`CandidateAssetClass` vs `PositionAssetClass`)
 | 列舉範圍 | 代碼與所屬分組 | 業務定義 |
 | --- | --- | --- |
-| **全域候選池**<br>`CandidateAssetClass` | **`CORE` (核心大盤)** | 長期資產基石，成熟市場旗艦基準 $R^2 \ge 0.80$（產出 Core Top 10），永久豁免主動出清，落選絕不下放衛星池。 |
-| **全域候選池**<br>`CandidateAssetClass` | **`SATELLITE` (動能衛星)** | 排除核心與債券，近一季 $\sigma_{90d} \ge 18\%$ 且 $\text{MOM}(12-1) > 0$（產出 Sat Top 20），提供夏農波動收割超額利潤。 |
-| **全域候選池**<br>`CandidateAssetClass` | **`DEFENSIVE` (防禦債券)** | 現券型投資級公司債/公債 ETF（產出 Bond Top 5，Top 1 直接入選），鎖定高息防禦墊。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`CORE` (核心大盤)** | 長期資產基石，台灣加權指數 $R^2_{\text{TAIEX}} \ge 0.90$（產出 Core Top 10），永久豁免主動出清，落選絕不下放衛星池。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`SATELLITE` (動能衛星)** | 排除核心與債券，近一季 $\sigma_{90d} \ge 18\%$ 且 $\text{MOM}(12\text{M}) > 0$（產出 Sat Top 50），提供夏農波動收割超額利潤。 |
+| **全域候選池**<br>`CandidateAssetClass` | **`DEFENSIVE` (防禦債券)** | 投資級公司債/公債 ETF，一票否決排除非投資等級債（產出 Bond Top 5，Top 1 直接入選），鎖定高息防禦墊。 |
 | **個人專屬狀態**<br>`PositionAssetClass` | **`ORPHAN` (孤兒標的)** | **全域候選池嚴格排除**！僅當個人持有之舊標的跌出半年度 1.4N 緩衝區外時於個人層賦予，系統停止續扣並排定優先出清。 |
 
 ### 3.3 正交審查狀態 (`OrthogonalStatus`)
@@ -98,7 +98,8 @@
 | $\text{Raw Close}$ | 價格 (TWD) | 交易所原始未還原收盤價，所有日報酬、波動度、動能與 $R^2$ 回歸之強制計算基準（嚴禁 Adjusted Close）。 |
 | $\text{Calendar Days}$ | 天數 | 全時間維度統一窗口：365 日曆天（長期/回歸）、90 日曆天（季波動度）、30 日曆天（月流動性）。 |
 | $\sigma_{90d}$ | 百分比 (%) | 近 90 個日曆天滾動年化實現波動度（有效日報酬標準差 $\times \sqrt{252}$），衛星門禁門檻 $\ge 18\%$。 |
-| $\text{MOM}(12-1)$ | 百分比 (%) | 12-1 月經典動能：$[P(T-30\text{d}) / P(T-365\text{d})] - 1$，剔除近 30 天短線走勢，衛星門禁門檻 $> 0$。 |
+| $\text{MOM}(12\text{M})$ | 百分比 (%) | 12 個月累積動能：$[P(T) / P(T-365\text{d})] - 1$，衛星 Stage 1 門禁門檻 $> 0$。 |
+| $\text{MOM}(12-1)$ | 百分比 (%) | 12-1 月經典動能：$[P(T-30\text{d}) / P(T-365\text{d})] - 1$，剔除近 30 天短線走勢，衛星 Stage 2 評分主力因子。 |
 | $\text{KER}$ | 數值 $[0, 1]$ | 365 日曆天考夫曼效率比：$\frac{|\text{淨位移}|}{\text{總路徑長度}} = \frac{|P(t) - P(t-365\text{d})|}{\sum |P(i) - P(i-1)|}$，衡量推進平滑度。 |
 | $\text{Sharpe}$ | 數值 | 近 365 日曆天純年化夏普值：$\frac{\text{Mean}(r)}{\text{Std}(r)} \times \sqrt{252}$（不扣無風險利率，$r_f = 0$）。 |
 | $\text{Rank}(X)$ | 數值 $[0, 1]$ | Percentile Rank 連續變數百分位數排名，各池主力因子組內名次歸一化打分。 |

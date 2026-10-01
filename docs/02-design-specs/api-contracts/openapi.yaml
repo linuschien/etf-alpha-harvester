@@ -59,16 +59,16 @@ paths:
       description: >
         Executes four-stage screening and ranking pipeline (Stage 0 to Stage 3) for candidate ETF universe:
         1. Stage 0: Regex short-circuit blocking for leveraged, inverse, futures, active, and ETN symbols.
-        2. Stage 1: Universal hard gates: Listing age >= 365 calendar days, trading days N >= 220, dynamic AUM >= 2B TWD, 30d avg turnover >= 20M TWD.
+        2. Stage 1: Universal hard gates: Listing age >= 365 calendar days, trading days N >= 220, dynamic AUM >= 2B TWD (TWSE MIS real NAV * shares), 30d median daily turnover >= 20M TWD.
         3. Mutual exclusive pool classification:
-           - Core: max(R^2) >= 0.80 across 4 global benchmarks (^TWII, ^GSPC, ^NDX, ^N225). Falling out means permanent removal (never demoted to satellite).
-           - Defensive: Ticker ends with B or name contains '債'.
-           - Satellite: Non-core (max(R^2) < 0.80), Non-bond, 90d annualized volatility >= 18%, MOM(12-1) > 0.
+           - Core: R^2_TAIEX >= 0.90 against Taiwan Weighted Index (^TWII). Falling out means permanent removal (never demoted to satellite).
+           - Defensive: Ticker ends with B or name contains '債', excluding non-investment grade bonds (High Yield).
+           - Satellite: Non-core (R^2_TAIEX < 0.90), Non-bond, 90d annualized volatility >= 18%, MOM(12M) > 0.
         4. Stage 2: Continuous percentile scoring (Percentile Rank 0~1):
-           - Core Top 10: 1/3 Rank(R^2) + 1/3 Rank(DCA) + 1/3 Rank(AUM).
-           - Satellite Top 20: (1/3 Rank(MOM) + 1/3 Rank(KER) + 1/3 Rank(Sharpe)) * (1 - R^2_TAIEX).
+           - Core Top 10: 1/3 Rank(R^2_TAIEX) + 1/3 Rank(DCA) + 1/3 Rank(AUM).
+           - Satellite Top 50: (1/3 Rank(MOM) + 1/3 Rank(KER) + 1/3 Rank(Sharpe)) * (1 - R^2_TAIEX).
            - Bond Top 5: 0.70 Rank(YTM) + 0.30 Rank(AUM).
-        5. Stage 3: Upper-triangular pairwise matrix persistence and Greedy Orthogonal Engine (R^2 < 0.50).
+        5. Stage 3: Upper-triangular pairwise matrix persistence (Core max 45, Sat max 1,225) and Greedy Orthogonal Engine (R^2 < 0.50).
       operationId: evaluateGlobalAssetScores
       parameters:
         - name: yearMonth
