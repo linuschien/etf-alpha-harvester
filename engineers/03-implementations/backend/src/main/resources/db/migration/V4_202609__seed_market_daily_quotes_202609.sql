@@ -5436,21 +5436,21 @@ VALUES
 -- Update watermarks for market daily quotes
 UPDATE data_feed_sync_watermark
 SET latest_record_date = TIMESTAMP '2026-09-30 00:00:00',
-    records_synced_count = 115221,
+    records_synced_count = 114995,
     status = 'SUCCESS',
     updated_at = CURRENT_TIMESTAMP
 WHERE feed_name = 'TAIWAN_ETF_QUOTES';
 
 UPDATE data_feed_sync_watermark
 SET latest_record_date = TIMESTAMP '2026-09-30 00:00:00',
-    records_synced_count = 3977,
+    records_synced_count = 3974,
     status = 'SUCCESS',
     updated_at = CURRENT_TIMESTAMP
 WHERE feed_name = 'GLOBAL_BENCHMARKS';
 
 UPDATE data_feed_sync_watermark
 SET latest_record_date = TIMESTAMP '2026-09-30 00:00:00',
-    records_synced_count = 501,
+    records_synced_count = 500,
     status = 'SUCCESS',
     updated_at = CURRENT_TIMESTAMP
 WHERE feed_name = 'CNN_FEAR_GREED';

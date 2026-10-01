@@ -145,11 +145,14 @@ public class MarketDailyQuoteDumpIntegrationTest {
             // Append watermark updates to the latest month migration file
             if (monthKey.equals(quotesByMonth.lastKey())) {
                 sql.append("\n-- Update watermarks for market daily quotes\n");
-                MarketDailyQuote latest = allQuotes.get(allQuotes.size() - 1);
+                List<MarketDailyQuote> includedQuotes = quotesByMonth.values().stream()
+                        .flatMap(List::stream)
+                        .toList();
+                MarketDailyQuote latest = monthQuotes.get(monthQuotes.size() - 1);
                 String latestDateStr = latest.getTradeDate().format(SQL_TIMESTAMP_FMT);
-                long etfCount = allQuotes.stream().filter(q -> q.getBenchmarkId() == null).count();
-                long benchCount = allQuotes.stream().filter(q -> q.getBenchmarkId() != null && !"FEAR_GREED".equals(q.getTicker())).count();
-                long cnnCount = allQuotes.stream().filter(q -> "FEAR_GREED".equals(q.getTicker())).count();
+                long etfCount = includedQuotes.stream().filter(q -> q.getBenchmarkId() == null).count();
+                long benchCount = includedQuotes.stream().filter(q -> q.getBenchmarkId() != null && !"FEAR_GREED".equals(q.getTicker())).count();
+                long cnnCount = includedQuotes.stream().filter(q -> "FEAR_GREED".equals(q.getTicker())).count();
 
                 sql.append(String.format("""
                         UPDATE data_feed_sync_watermark
