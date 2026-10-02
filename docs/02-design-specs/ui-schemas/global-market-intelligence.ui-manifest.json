@@ -175,35 +175,70 @@
                     "abstract_type": "Metric",
                     "label": "^TWII 台股加權指數",
                     "data_ref": "listMarketDailyQuotes",
-                    "behavior_ref": "nielsen:visibility"
+                    "behavior_ref": "nielsen:visibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_click",
+                        "target_id": "drawdown-radar-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
                   },
                   {
                     "id": "metric-gspc",
                     "abstract_type": "Metric",
                     "label": "^GSPC 標普500指數",
                     "data_ref": "listMarketDailyQuotes",
-                    "behavior_ref": "nielsen:visibility"
+                    "behavior_ref": "nielsen:visibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_click",
+                        "target_id": "drawdown-radar-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
                   },
                   {
                     "id": "metric-ndx",
                     "abstract_type": "Metric",
                     "label": "^NDX 那斯達克100指數",
                     "data_ref": "listMarketDailyQuotes",
-                    "behavior_ref": "nielsen:visibility"
+                    "behavior_ref": "nielsen:visibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_click",
+                        "target_id": "drawdown-radar-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
                   },
                   {
                     "id": "metric-sox",
                     "abstract_type": "Metric",
                     "label": "^SOX 費城半導體指數",
                     "data_ref": "listMarketDailyQuotes",
-                    "behavior_ref": "nielsen:visibility"
+                    "behavior_ref": "nielsen:visibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_click",
+                        "target_id": "drawdown-radar-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
                   },
                   {
                     "id": "metric-n225",
                     "abstract_type": "Metric",
                     "label": "^N225 日經225指數",
                     "data_ref": "listMarketDailyQuotes",
-                    "behavior_ref": "nielsen:visibility"
+                    "behavior_ref": "nielsen:visibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_click",
+                        "target_id": "drawdown-radar-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
                   },
                   {
                     "id": "metric-vix",
@@ -614,6 +649,13 @@
                         "field": "rankingMonth",
                         "label": "統計月份",
                         "sortable": true
+                      }
+                    ],
+                    "interactions": [
+                      {
+                        "on_event": "on_click",
+                        "target_id": "asset-detail-drawer",
+                        "behavior_ref": "nielsen:recognition"
                       }
                     ]
                   }
