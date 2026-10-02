@@ -518,7 +518,7 @@
                       {
                         "id": "toggle-fib-switch",
                         "abstract_type": "Switch",
-                        "label": "黃金分割警戒線 (-23.6%, -38.2%, -61.8%)",
+                        "label": "黃金分割警戒線 (-23.6%, -38.2%, -50.0%, -61.8%, -76.4%)",
                         "behavior_ref": "nielsen:flexibility",
                         "interactions": [
                           {
@@ -585,31 +585,20 @@
                     ]
                   },
                   {
-                    "id": "orthogonal-mode-selector",
-                    "abstract_type": "Selection",
-                    "semantic_variant": "dropdown",
-                    "label": "正交模式 (模式 A: 全局 Rank 1 種子 / 模式 B: 自訂錨定種子)",
-                    "behavior_ref": "nielsen:control",
-                    "ux_hints": {
-                      "max_visible_options": 2
-                    },
-                    "interactions": [
-                      {
-                        "on_event": "on_change",
-                        "target_id": "qualified-leaderboard-table",
-                        "behavior_ref": "nielsen:feedback"
-                      }
-                    ]
+                    "id": "current-seed-badge-text",
+                    "abstract_type": "Text",
+                    "label": "當前錨定種子: 預設 Rank 1 (點擊下方任意標的即切換錨點)",
+                    "behavior_ref": "visual-hierarchy:weight"
                   },
                   {
-                    "id": "seed-ticker-selector",
-                    "abstract_type": "Selection",
-                    "semantic_variant": "dropdown",
-                    "label": "自訂錨定種子 S (限選所屬池 Top 標的)",
+                    "id": "reset-seed-trigger",
+                    "abstract_type": "Trigger",
+                    "semantic_variant": "secondary",
+                    "label": "↺ 重設為 Rank 1 種子",
                     "behavior_ref": "nielsen:control",
                     "interactions": [
                       {
-                        "on_event": "on_change",
+                        "on_event": "on_click",
                         "target_id": "qualified-leaderboard-table",
                         "behavior_ref": "nielsen:feedback"
                       }
@@ -1190,13 +1179,26 @@
                         "behavior_ref": "nielsen:feedback"
                       }
                     ]
+                  },
+                  {
+                    "id": "toggle-kline-fib-switch",
+                    "abstract_type": "Switch",
+                    "label": "黃金分割警戒線 (-23.6%, -38.2%, -50.0%, -61.8%, -76.4%)",
+                    "behavior_ref": "nielsen:flexibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "kline-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
                   }
                 ]
               },
               {
                 "id": "kline-chart",
                 "abstract_type": "Chart",
-                "label": "原始收盤日 K 線 (預設 6M，20/60/120/240MA & 月線布林通道)",
+                "label": "原始收盤日 K 線 (預設 6M，20/60/120/240MA、月線布林通道、黃金分割 23.6%/38.2%/50%/61.8%/76.4%)",
                 "data_ref": "getQuoteTimeSeries",
                 "behavior_ref": "visual-hierarchy:size"
               }
