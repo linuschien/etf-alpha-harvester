@@ -73,12 +73,25 @@ public class EtfMetadataDumpIntegrationTest {
         assertThat(dbAssets.stream().anyMatch(a -> a.getTicker().endsWith("B"))).isTrue();
         assertThat(dbAssets).allMatch(a -> STAGE_0_ALLOWLIST_PATTERN.matcher(a.getTicker()).matches());
 
+        // Validate scale / AUM snapshot
+        long withAumCount = dbAssets.stream().filter(a -> a.getFundSizeTwd() != null).count();
+        log.info("Total ETFs with captured fund size (AUM): {} / {}", withAumCount, dbAssets.size());
+        assertThat(withAumCount).isGreaterThan(200);
+
+        GlobalAssetMetadata etf0050 = dbAssets.stream().filter(a -> "0050".equals(a.getTicker())).findFirst().orElse(null);
+        assertThat(etf0050).isNotNull();
+        log.info("ETF 0050 snapshot: shares={}, nav={}, fundSize={}",
+                etf0050.getSharesOutstanding(), etf0050.getNetAssetValue(), etf0050.getFundSizeTwd());
+        assertThat(etf0050.getSharesOutstanding()).isNotNull().isGreaterThan(0L);
+        assertThat(etf0050.getNetAssetValue()).isNotNull().isGreaterThan(java.math.BigDecimal.ZERO);
+        assertThat(etf0050.getFundSizeTwd()).isNotNull().isGreaterThan(java.math.BigDecimal.ZERO);
+
         // 4. Generate Flyway V3 SQL seed script
         StringBuilder sql = new StringBuilder();
         sql.append("-- V3__seed_etf_metadata.sql\n");
         sql.append("-- Seed official TWSE & TPEx ETF master universe (Auto-generated from live OpenData)\n");
         sql.append("-- Total qualified prototype ETFs: ").append(dbAssets.size()).append("\n\n");
-        sql.append("INSERT INTO global_asset_metadata (id, ticker, name, listing_date, underlying_index, version, created_at, updated_at)\n");
+        sql.append("INSERT INTO global_asset_metadata (id, ticker, name, listing_date, underlying_index, shares_outstanding, net_asset_value, fund_size_twd, version, created_at, updated_at)\n");
         sql.append("VALUES\n");
 
         for (int i = 0; i < dbAssets.size(); i++) {
@@ -92,9 +105,12 @@ public class EtfMetadataDumpIntegrationTest {
             String index = (a.getUnderlyingIndex() != null && !a.getUnderlyingIndex().isBlank())
                     ? "'" + a.getUnderlyingIndex().replace("'", "''") + "'"
                     : "NULL";
+            String shares = a.getSharesOutstanding() != null ? a.getSharesOutstanding().toString() : "NULL";
+            String nav = a.getNetAssetValue() != null ? a.getNetAssetValue().toString() : "NULL";
+            String fundSize = a.getFundSizeTwd() != null ? a.getFundSizeTwd().toString() : "NULL";
 
-            sql.append(String.format("    ('%s', '%s', '%s', TIMESTAMP %s, %s, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-                    idStr, ticker, name, listingDate, index));
+            sql.append(String.format("    ('%s', '%s', '%s', TIMESTAMP %s, %s, %s, %s, %s, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                    idStr, ticker, name, listingDate, index, shares, nav, fundSize));
 
             if (i < dbAssets.size() - 1) {
                 sql.append(",\n");
