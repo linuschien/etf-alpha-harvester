@@ -154,26 +154,26 @@
             },
             "children": [
               {
-                "id": "sentiment-indices-heading",
+                "id": "benchmark-quotes-heading",
                 "abstract_type": "Heading",
-                "label": "5 大核心基準指數與恐慌情緒卡片",
+                "label": "5 大全球核心基準指數即時行情",
                 "behavior_ref": "visual-hierarchy:weight"
               },
               {
-                "id": "sentiment-kpi-grid",
+                "id": "benchmark-quotes-grid",
                 "abstract_type": "Grid",
                 "semantic_variant": "kpi-grid",
-                "label": "行情指數卡片網格",
+                "label": "全球基準指數行情網格",
                 "data_ref": "listMarketDailyQuotes",
                 "behavior_ref": "visual-hierarchy:size",
                 "ux_hints": {
-                  "group_size_hint": 7
+                  "group_size_hint": 5
                 },
                 "children": [
                   {
                     "id": "metric-twii",
                     "abstract_type": "Metric",
-                    "label": "^TWII 台股加權指數",
+                    "label": "^TWII 台股加權指數 (預設基準)",
                     "data_ref": "listMarketDailyQuotes",
                     "behavior_ref": "nielsen:visibility",
                     "interactions": [
@@ -239,74 +239,199 @@
                         "behavior_ref": "nielsen:feedback"
                       }
                     ]
-                  },
-                  {
-                    "id": "metric-vix",
-                    "abstract_type": "Metric",
-                    "label": "^VIX 波動率指數",
-                    "data_ref": "listMarketDailyQuotes",
-                    "behavior_ref": "nielsen:visibility"
-                  },
-                  {
-                    "id": "metric-fear-greed",
-                    "abstract_type": "Metric",
-                    "label": "FEAR_GREED 恐慌與貪婪指數",
-                    "data_ref": "listMarketDailyQuotes",
-                    "behavior_ref": "nielsen:visibility"
                   }
                 ]
               },
               {
-                "id": "macro-yield-heading",
-                "abstract_type": "Heading",
-                "label": "宏觀利率與殖利率曲線儀表盤",
-                "behavior_ref": "visual-hierarchy:weight"
-              },
-              {
-                "id": "macro-yield-grid",
-                "abstract_type": "Grid",
-                "semantic_variant": "kpi-grid",
-                "label": "宏觀利率指標網格",
-                "data_ref": "getLatestMacroYieldSnapshot",
+                "id": "panic-sentiment-container",
+                "abstract_type": "Container",
+                "semantic_variant": "card",
+                "label": "四大恐慌情緒指標 2x2 監控矩陣 (Panic Sentiment Matrix)",
                 "behavior_ref": "visual-hierarchy:size",
-                "ux_hints": {
-                  "group_size_hint": 5
-                },
                 "children": [
                   {
-                    "id": "metric-dgs10",
-                    "abstract_type": "Metric",
-                    "label": "10Y 美國公債殖利率 (DGS10)",
-                    "data_ref": "getLatestMacroYieldSnapshot",
-                    "behavior_ref": "nielsen:visibility"
+                    "id": "panic-sentiment-heading",
+                    "abstract_type": "Heading",
+                    "label": "跨市場恐慌風向球 (2x2 同步監控，均值回歸水平警戒線)",
+                    "behavior_ref": "visual-hierarchy:weight"
                   },
                   {
-                    "id": "metric-dgs20",
-                    "abstract_type": "Metric",
-                    "label": "20Y 美國公債殖利率 (DGS20)",
-                    "data_ref": "getLatestMacroYieldSnapshot",
-                    "behavior_ref": "nielsen:visibility"
+                    "id": "panic-sentiment-grid",
+                    "abstract_type": "Grid",
+                    "semantic_variant": "kpi-grid",
+                    "label": "2x2 恐慌指數矩陣",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "visual-hierarchy:size",
+                    "ux_hints": {
+                      "group_size_hint": 4
+                    },
+                    "children": [
+                      {
+                        "id": "metric-vix",
+                        "abstract_type": "Metric",
+                        "label": "^VIX 波動率指數 (警戒線: 25.0 / 30.0)",
+                        "data_ref": "listMarketDailyQuotes",
+                        "behavior_ref": "nielsen:visibility"
+                      },
+                      {
+                        "id": "metric-vxn",
+                        "abstract_type": "Metric",
+                        "label": "^VXN 那指波動率指數 (警戒線: 35.0 / 40.0)",
+                        "data_ref": "listMarketDailyQuotes",
+                        "behavior_ref": "nielsen:visibility"
+                      },
+                      {
+                        "id": "metric-fear-greed",
+                        "abstract_type": "Metric",
+                        "label": "FEAR_GREED 恐懼貪婪指數 (極度恐懼: <20 / 極度貪婪: >80)",
+                        "data_ref": "listMarketDailyQuotes",
+                        "behavior_ref": "nielsen:visibility"
+                      },
+                      {
+                        "id": "metric-move",
+                        "abstract_type": "Metric",
+                        "label": "^MOVE 美債波動率指數 (警戒線: 120.0 / 140.0)",
+                        "data_ref": "listMarketDailyQuotes",
+                        "behavior_ref": "nielsen:visibility"
+                      }
+                    ]
                   },
                   {
-                    "id": "metric-t10y2y",
-                    "abstract_type": "Metric",
-                    "label": "10Y-2Y 殖利率利差 (T10Y2Y)",
-                    "data_ref": "getLatestMacroYieldSnapshot",
-                    "behavior_ref": "nielsen:visibility"
+                    "id": "panic-sentiment-chart-grid",
+                    "abstract_type": "Grid",
+                    "semantic_variant": "card-grid",
+                    "label": "2x2 恐慌歷史趨勢微圖 (水平警戒線，無均線/布林帶)",
+                    "data_ref": "getQuoteTimeSeries",
+                    "behavior_ref": "visual-hierarchy:size",
+                    "ux_hints": {
+                      "group_size_hint": 4
+                    },
+                    "children": [
+                      {
+                        "id": "chart-vix-spark",
+                        "abstract_type": "Chart",
+                        "label": "^VIX 走勢圖 (預設 6M，水平警戒線: 25/30)",
+                        "data_ref": "getQuoteTimeSeries",
+                        "behavior_ref": "visual-hierarchy:size"
+                      },
+                      {
+                        "id": "chart-vxn-spark",
+                        "abstract_type": "Chart",
+                        "label": "^VXN 走勢圖 (預設 6M，水平警戒線: 35/40)",
+                        "data_ref": "getQuoteTimeSeries",
+                        "behavior_ref": "visual-hierarchy:size"
+                      },
+                      {
+                        "id": "chart-fear-greed-spark",
+                        "abstract_type": "Chart",
+                        "label": "FEAR_GREED 走勢圖 (預設 6M，水平警戒線: 20/80)",
+                        "data_ref": "getQuoteTimeSeries",
+                        "behavior_ref": "visual-hierarchy:size"
+                      },
+                      {
+                        "id": "chart-move-spark",
+                        "abstract_type": "Chart",
+                        "label": "^MOVE 走勢圖 (預設 6M，水平警戒線: 120/140)",
+                        "data_ref": "getQuoteTimeSeries",
+                        "behavior_ref": "visual-hierarchy:size"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "macro-yield-container",
+                "abstract_type": "Container",
+                "semantic_variant": "card",
+                "label": "宏觀利率與殖利率曲線單一整合走勢圖 (Macro Yield & Spread)",
+                "behavior_ref": "visual-hierarchy:size",
+                "children": [
+                  {
+                    "id": "macro-yield-heading",
+                    "abstract_type": "Heading",
+                    "label": "長短天期美債殖利率、企業債殖利率與 10Y-2Y 倒掛利差",
+                    "behavior_ref": "visual-hierarchy:weight"
                   },
                   {
-                    "id": "metric-corp-yield",
-                    "abstract_type": "Metric",
-                    "label": "ICE BofA 企業債殖利率 (BAMLC0A0CMEY)",
+                    "id": "macro-yield-grid",
+                    "abstract_type": "Grid",
+                    "semantic_variant": "kpi-grid",
+                    "label": "宏觀利率指標即時快照",
                     "data_ref": "getLatestMacroYieldSnapshot",
-                    "behavior_ref": "nielsen:visibility"
+                    "behavior_ref": "visual-hierarchy:size",
+                    "ux_hints": {
+                      "group_size_hint": 5
+                    },
+                    "children": [
+                      {
+                        "id": "metric-dgs10",
+                        "abstract_type": "Metric",
+                        "label": "10Y 美國公債殖利率 (DGS10)",
+                        "data_ref": "getLatestMacroYieldSnapshot",
+                        "behavior_ref": "nielsen:visibility"
+                      },
+                      {
+                        "id": "metric-dgs20",
+                        "abstract_type": "Metric",
+                        "label": "20Y 美國公債殖利率 (DGS20)",
+                        "data_ref": "getLatestMacroYieldSnapshot",
+                        "behavior_ref": "nielsen:visibility"
+                      },
+                      {
+                        "id": "metric-t10y2y",
+                        "abstract_type": "Metric",
+                        "label": "10Y-2Y 殖利率利差 (T10Y2Y)",
+                        "data_ref": "getLatestMacroYieldSnapshot",
+                        "behavior_ref": "nielsen:visibility"
+                      },
+                      {
+                        "id": "metric-corp-yield",
+                        "abstract_type": "Metric",
+                        "label": "ICE BofA 企業債殖利率 (BAMLC0A0CMEY)",
+                        "data_ref": "getLatestMacroYieldSnapshot",
+                        "behavior_ref": "nielsen:visibility"
+                      },
+                      {
+                        "id": "metric-macro-regime",
+                        "abstract_type": "Metric",
+                        "label": "宏觀景氣燈號 (Macro Regime)",
+                        "data_ref": "getMacroRegime",
+                        "behavior_ref": "nielsen:recognition"
+                      }
+                    ]
                   },
                   {
-                    "id": "metric-macro-regime",
-                    "abstract_type": "Metric",
-                    "label": "宏觀景氣燈號 (Macro Regime)",
-                    "data_ref": "getMacroRegime",
-                    "behavior_ref": "nielsen:recognition"
+                    "id": "macro-yield-toolbar-stack",
+                    "abstract_type": "Stack",
+                    "semantic_variant": "filter-bar",
+                    "label": "利率圖表控制工具列",
+                    "behavior_ref": "nielsen:control",
+                    "children": [
+                      {
+                        "id": "macro-yield-window-selector",
+                        "abstract_type": "Selection",
+                        "semantic_variant": "radio",
+                        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
+                        "behavior_ref": "nielsen:control",
+                        "ux_hints": {
+                          "max_visible_options": 4
+                        },
+                        "interactions": [
+                          {
+                            "on_event": "on_change",
+                            "target_id": "macro-yield-chart",
+                            "behavior_ref": "nielsen:feedback"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "macro-yield-chart",
+                    "abstract_type": "Chart",
+                    "label": "宏觀利率與利差整合走勢圖 (含 5.0% 蓄水線 / 3.5% 收割線 / 0.0% 倒掛線)",
+                    "data_ref": "getLatestMacroYieldSnapshot",
+                    "behavior_ref": "visual-hierarchy:size"
                   }
                 ]
               },
@@ -314,13 +439,13 @@
                 "id": "drawdown-radar-container",
                 "abstract_type": "Container",
                 "semantic_variant": "card",
-                "label": "52 週高點回撤率監控 (Drawdown Radar)",
+                "label": "全球 5 大基準指數走勢與黃金分割回撤雷達 (Benchmark Drawdown Radar)",
                 "behavior_ref": "visual-hierarchy:size",
                 "children": [
                   {
                     "id": "drawdown-heading",
                     "abstract_type": "Heading",
-                    "label": "52 週高點回撤雷達與生命線均線系統",
+                    "label": "單一基準專屬回撤雷達 (預設 ^TWII，LOCF 前值平滑遞延)",
                     "behavior_ref": "visual-hierarchy:weight"
                   },
                   {
@@ -334,7 +459,7 @@
                         "id": "drawdown-benchmark-selector",
                         "abstract_type": "Selection",
                         "semantic_variant": "dropdown",
-                        "label": "基準指數切換",
+                        "label": "基準指數切換 (預設: ^TWII 台灣加權指數)",
                         "behavior_ref": "nielsen:control",
                         "ux_hints": {
                           "max_visible_options": 5
@@ -348,9 +473,26 @@
                         ]
                       },
                       {
+                        "id": "drawdown-window-selector",
+                        "abstract_type": "Selection",
+                        "semantic_variant": "radio",
+                        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
+                        "behavior_ref": "nielsen:control",
+                        "ux_hints": {
+                          "max_visible_options": 4
+                        },
+                        "interactions": [
+                          {
+                            "on_event": "on_change",
+                            "target_id": "drawdown-radar-chart",
+                            "behavior_ref": "nielsen:feedback"
+                          }
+                        ]
+                      },
+                      {
                         "id": "toggle-ma-switch",
                         "abstract_type": "Switch",
-                        "label": "均線開關 (20/60/120/240MA)",
+                        "label": "四條均線開關 (20/60/120/240MA)",
                         "behavior_ref": "nielsen:flexibility",
                         "interactions": [
                           {
@@ -363,7 +505,7 @@
                       {
                         "id": "toggle-bb-switch",
                         "abstract_type": "Switch",
-                        "label": "布林通道開關 (20MA ± 2σ)",
+                        "label": "月線布林通道開關 (20MA ± 2σ)",
                         "behavior_ref": "nielsen:flexibility",
                         "interactions": [
                           {
@@ -391,7 +533,7 @@
                   {
                     "id": "drawdown-radar-chart",
                     "abstract_type": "Chart",
-                    "label": "52 週回撤雷達走勢圖 (含前值平滑遞延 LOCF)",
+                    "label": "52 週回撤雷達走勢圖 (單一基準聚焦，240MA 連續滾動計算，LOCF 休市平滑)",
                     "data_ref": "getQuoteTimeSeries",
                     "behavior_ref": "visual-hierarchy:size"
                   }
@@ -1000,9 +1142,61 @@
             "behavior_ref": "visual-hierarchy:size",
             "children": [
               {
+                "id": "drawer-kline-toolbar-stack",
+                "abstract_type": "Stack",
+                "semantic_variant": "filter-bar",
+                "label": "K 線圖表控制工具列",
+                "behavior_ref": "nielsen:control",
+                "children": [
+                  {
+                    "id": "kline-window-selector",
+                    "abstract_type": "Selection",
+                    "semantic_variant": "radio",
+                    "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
+                    "behavior_ref": "nielsen:control",
+                    "ux_hints": {
+                      "max_visible_options": 4
+                    },
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "kline-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "toggle-kline-ma-switch",
+                    "abstract_type": "Switch",
+                    "label": "四條均線開關 (20/60/120/240MA)",
+                    "behavior_ref": "nielsen:flexibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "kline-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "toggle-kline-bb-switch",
+                    "abstract_type": "Switch",
+                    "label": "月線布林通道開關 (20MA ± 2σ)",
+                    "behavior_ref": "nielsen:flexibility",
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "kline-chart",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
                 "id": "kline-chart",
                 "abstract_type": "Chart",
-                "label": "原始收盤日 K 線 (20/60/120/240MA & 月線布林通道)",
+                "label": "原始收盤日 K 線 (預設 6M，20/60/120/240MA & 月線布林通道)",
                 "data_ref": "getQuoteTimeSeries",
                 "behavior_ref": "visual-hierarchy:size"
               }
