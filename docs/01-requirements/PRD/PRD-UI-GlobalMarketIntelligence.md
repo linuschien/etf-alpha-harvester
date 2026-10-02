@@ -43,15 +43,15 @@
 │
 ├── Tab 2: 合規標的天梯榜 (Qualified Asset Leaderboard)
 │    ├── 2.1 標的組別切換：核心大盤 (Core) | 動能衛星 (Satellite) | 防禦債券 (Defensive)
-│    ├── 2.2 多天期含息總報酬率與前日收盤折溢價表格 (1M, 3M, 6M, 1Y, 2Y 雙向排序)
+│    ├── 2.2 多天期含息總報酬率表格 (1M, 3M, 6M, 1Y, 2Y 雙向排序)
 │    └── 2.3 標的詳細資訊側邊抽屜 (Drawer：基本面、配息週期、因子分解雷達、歷史 K 線)
 │
 ├── Tab 3: 市場動態與除息月曆 (Market Pulse & Dividend Calendar)
-│    ├── 3.1 📅 ETF 除息與分割月曆 (Calendar View：綠除息、藍發放、紫分割、76W標籤、週期篩選)
-│    └── 3.2 證交所定期定額 Top 20 散戶人氣榜 (Trading Accounts & MoM Sparkline)
+│    ├── 3.1 📅 ETF 除息與分割月曆 (Calendar View：綠除息、藍發放、紫分割、76W標籤、週期篩選，前端記憶體過濾)
+│    └── 3.2 證交所定期定額 Top 20 散戶人氣榜 (Trading Accounts & Popularity Rankings)
 │
 └── [頁尾] 極簡系統版本與版權宣告 (Footer: Version & Copyright only)
-     └── [Admin 專屬入口] 數據管線與守門員健康度 (/admin/system-health)
+     └── [Admin 專屬入口] 數據管線與水位線健康度 (/admin/system-health)
 ```
 
 ### 2.2 響應式佈局原則 (Responsive Breakpoints)
@@ -177,7 +177,6 @@
 | **正交狀態** | `orthogonal_status` | 支援篩選 | 🟢 `[ACCEPTED]`：正交入選標的（綠色膠囊）。<br>⚪ `[REJECTED_COLLINEAR]`：共線排除標的（灰色膠囊，Hover 浮現 Tooltip 如 `與 00757 共線 (R² = 0.71)`）。 |
 | **標的代碼/名稱** | `ticker`, `name` | 支援搜尋 | 點擊標的即開啟右側抽屜。名稱下方標註**配息週期**（如 `[季配 (1,4,7,10月)]`、`[半年配]`、`[不配息]`）。 |
 | **最新市價** | `close_price` | 支援 | 交易所原始未還原收盤價（Raw Close），副標題顯示當日漲跌幅 (如 `+1.2% ▲`)。 |
-| **收盤折溢價** | `discount_premium_percentage` | 雙向排序 | **就地防踩雷**：前一交易日收盤折溢價率。正常折溢價（$|\text{幅度}| < 0.5\%$）顯示綠色字體（如 `-0.08%`）；若溢價 $\ge +0.5\%$ 亮起醒目黃燈 `+1.2% ⚠️溢價過高`，防止追高買貴。 |
 | **1 個月 (1M)** | `return_1m` | 雙向排序 | 短線波段動能（近 30 日曆天）。正報酬紅字帶 `+`，負報酬綠字帶 `-`。 |
 | **3 個月 (3M)** | `return_3m` | 雙向排序 | 季線趨勢動能（近 90 日曆天）。 |
 | **6 個月 (6M)** | `return_6m` | 雙向排序 | 半年度再平衡對齊週期。 |
@@ -186,26 +185,26 @@
 | **綜合評分** | `composite_score` | 雙向排序 | Stage 2 多因子百分位數綜合得分（Percentile Rank, 0 ~ 100 分，如 `94.5`）。 |
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│  合規標的天梯榜與正交雷達 (Qualified Asset Leaderboard & Orthogonal Engine)                                                      │
-│  組別：[ 核心大盤 (Core Top 10) ]  [ 動能衛星 (Satellite Top 50) (選中) ]  [ 防禦債券 (Defensive Top 5) ]                       │
-│  正交模式：[ 模式 A：預設全局正交 (選中) ]  [ 模式 B：自訂種子錨定 ▾ (可選 Top 50 標的) ]       [ 📊 查看兩兩正交矩陣 (最多1225組) ] │
-├──────┬──────────────┬──────────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬───────────┬──────────────┤
-│ 排名 │   正交狀態   │ 標的代碼/名稱│ 最新市價 │收盤折溢價│ 1個月 ↕  │ 3個月 ↕  │ 6個月 ↕  │ 1年 ↕    │ 基金規模  │ 綜合評分(分) │
-├──────┼──────────────┼──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼───────────┼──────────────┤
-│  🥇  │  🟢 ACCEPTED │ 00757        │  98.50   │  -0.08%  │ +5.3% ▲  │ +18.1% ▲ │ +36.4% ▲ │ +78.5% ▲ │   280 億  │     98.2     │
-│  #1  │  (初始種子)  │ 統一FANG+    │ (+2.1%)  │  (折價)  │          │          │          │          │           │              │
-│      │              │ [不配息]     │          │          │          │          │          │          │           │              │
-│  🥈  │  ⚪ REJECTED │ 00662        │  78.20   │  +0.04%  │ +3.8% ▲  │ +12.9% ▲ │ +26.0% ▲ │ +52.8% ▲ │   350 億  │     95.4     │
-│  #2  │ (與00757共線)│ 富邦NASDAQ   │ (+1.4%)  │  (正常)  │          │          │          │          │           │              │
-│      │ (R² = 0.82)  │ [不配息]     │          │          │          │          │          │          │           │              │
-│  🥉  │  🟢 ACCEPTED │ 00830        │  52.10   │  +0.12%  │ +4.2% ▲  │ +14.2% ▲ │ +31.1% ▲ │ +69.1% ▲ │   190 億  │     92.1     │
-│  #3  │(自然正交入選)│ 國泰費城半導 │ (+1.8%)  │  (正常)  │          │          │          │          │           │              │
-│      │              │ [不配息]     │          │          │          │          │          │          │           │              │
-│  #4  │  ⚪ REJECTED │ 00xxx        │  22.50   │  -0.15%  │ +2.1% ▲  │  +8.2% ▲ │ +18.5% ▲ │ +38.0% ▲ │    45 億  │     88.0     │
-│      │ (與00830共線)│ 高波科技題材 │ (+0.5%)  │  (折價)  │          │          │          │          │           │              │
-│      │ (R² = 0.64)  │ [半年配]     │          │          │          │          │          │          │           │              │
-└──────┴──────────────┴──────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴───────────┴──────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  合規標的天梯榜與正交雷達 (Qualified Asset Leaderboard & Orthogonal Engine)                                           │
+│  組別：[ 核心大盤 (Core Top 10) ]  [ 動能衛星 (Satellite Top 50) (選中) ]  [ 防禦債券 (Defensive Top 5) ]            │
+│  正交模式：[ 模式 A：預設全局正交 (選中) ]  [ 模式 B：自訂種子錨定 ▾ (可選 Top 50 標的) ]   [ 📊 查看兩兩正交矩陣 ]  │
+├──────┬──────────────┬──────────────┬──────────┬──────────┬──────────┬──────────┬──────────┬───────────┬──────────────┤
+│ 排名 │   正交狀態   │ 標的代碼/名稱│ 最新市價 │ 1個月 ↕  │ 3個月 ↕  │ 6個月 ↕  │ 1年 ↕    │ 基金規模  │ 綜合評分(分) │
+├──────┼──────────────┼──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼───────────┼──────────────┤
+│  🥇  │  🟢 ACCEPTED │ 00757        │  98.50   │ +5.3% ▲  │ +18.1% ▲ │ +36.4% ▲ │ +78.5% ▲ │   280 億  │     98.2     │
+│  #1  │  (初始種子)  │ 統一FANG+    │ (+2.1%)  │          │          │          │          │           │              │
+│      │              │ [不配息]     │          │          │          │          │          │           │              │
+│  🥈  │  ⚪ REJECTED │ 00662        │  78.20   │ +3.8% ▲  │ +12.9% ▲ │ +26.0% ▲ │ +52.8% ▲ │   350 億  │     95.4     │
+│  #2  │ (與00757共線)│ 富邦NASDAQ   │ (+1.4%)  │          │          │          │          │           │              │
+│      │ (R² = 0.82)  │ [不配息]     │          │          │          │          │          │           │              │
+│  🥉  │  🟢 ACCEPTED │ 00830        │  52.10   │ +4.2% ▲  │ +14.2% ▲ │ +31.1% ▲ │ +69.1% ▲ │   190 億  │     92.1     │
+│  #3  │(自然正交入選)│ 國泰費城半導 │ (+1.8%)  │          │          │          │          │           │              │
+│      │              │ [不配息]     │          │          │          │          │          │           │              │
+│  #4  │  ⚪ REJECTED │ 00xxx        │  22.50   │ +2.1% ▲  │  +8.2% ▲ │ +18.5% ▲ │ +38.0% ▲ │    45 億  │     88.0     │
+│      │ (與00830共線)│ 高波科技題材 │ (+0.5%)  │          │          │          │          │           │              │
+│      │ (R² = 0.64)  │ [半年配]     │          │          │          │          │          │           │              │
+└──────┴──────────────┴──────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴───────────┴──────────────┘
 * 提示：Stage 0 正則阻斷槓反/ETN；Stage 1 門禁嚴審年資(≥365天&220交易日)、規模(≥20億)、成交額(≥2,000萬)；Stage 3 嚴格正交去共線 (R² < 0.50)。
 ```
 
@@ -300,9 +299,7 @@
 * **展示內容**：
   - 名次 (1 ~ 20)、標的代碼/名稱。
   - 配息週期標籤（如 `[季配]`、`[月配]`）。
-  - 定額交易戶數（如 0050 為 128 萬戶）。
-  - **MoM 月增減戶數**（如 `+5.2 萬戶 ▲`）。
-  - **近 6 個月名次走勢 mini sparkline**。
+  - 定額交易戶數（如 0050 為 128 萬戶，直接反映市場真實人氣規模）。
   - **量化合規認證標籤**：若該標的同時也是本系統天梯榜的合規標的，點綴 `[🏆 量化精選標的]` 徽章，代表「群眾人氣」與「量化品質」雙重認證。
 
 ---
@@ -311,10 +308,14 @@
 
 #### 1. 頁首單一數據信任膠囊 (Single Source of Freshness)
 * **取消頁尾重複文字**：頁尾徹底淨化，僅保留版權與系統版本號 (`AlphaHarvester v3.4.0`)，消滅視覺雜訊。
+* **數據來源機制**：
+  - 嚴格讀取資料庫持久化之 `data_feed_sync_watermark` 資料表（GraphQL `listDataFeedWatermarks`），以唯讀方式呈現。
+  - **絕不發動前端即時重算**：守門員驗證僅在後端同步管線執行當下把關，前端純粹讀取已持久化之健康快照，零副作用、零額外算力。
 * **收斂至頁首導讀列**：以醒目膠囊標籤呈現：
-  - 🟢 `● 今日 08:00 TST 驗證更新 (Gatekeeper: PASS)`
-  - 一般使用者點擊顯示輕量 Tooltip：「TWSE、TPEx、FRED 數據檢核齊備」。
-  - 若具備 Admin 身分，點擊該膠囊直接快速開啟維運抽屜。
+  - 🟢 `● 數據管線運作正常 (ALL SYSTEMS GO)`：所有資料源同步狀態皆為 `SUCCESS`。
+  - 🔴 `● 數據管線熔斷暫停 (PIPELINE HALTED)`：若任一資料源狀態為 `FAILED`，亮紅燈提示。
+  - 點擊該膠囊展開**「數據水位線檢驗抽屜 (Watermarks Drawer)」**，展示 4 大資料源（ETF清單、日行情、宏觀殖利率、定期定額）之最後成功同步時間戳、數據源最新日期與同步筆數。
+  - 若具備 Admin 身分，點擊該膠囊可直接進入維運儀表板。
 
 #### 2. Admin 專屬維運後台 (`/admin/system-health`)
 * **存取權限**：僅限具備 Google Cloud IAP `roles/alpha-harvester.admin` 授權之維運人員。
@@ -350,21 +351,20 @@
 
 ## 5. 前後端介面契約綁定 (GraphQL Mapping)
 
-本 UI 規格 100% 透過 GraphQL Gateway (`/graphql`) 取得純淨客觀數據，對應之 PlantUML 契約介面如下：
+本 UI 規格 100% 透過 GraphQL Gateway (`/graphql`) 取得純淨客觀數據，對應之契約介面如下：
 
 | UI 視圖與組件 | 對應 GraphQL Resolver 契約 | 核心抓取欄位 |
 | :--- | :--- | :--- |
+| **頁首數據新鮮度膠囊 ＆ 水位抽屜** | `DataFeedSyncWatermarkGraphQLResolver.listDataFeedWatermarks` (讀取 DB 水位線，非即時重算) | `feedName`, `status`, `lastSuccessfulSyncAt`, `latestRecordDate`, `recordsSyncedCount`, `errorMessage` |
 | **頂部導讀 ＆ 宏觀利率儀表** | `MacroYieldSnapshotGraphQLResolver.getLatestMacroYieldSnapshot` | `recordDate`, `usCorporateBondEffectiveYield`, `us10YearTreasuryYield`, `yieldSpread10yMinus2y` |
-| **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice` (前端/GraphQL 即時計算 20/60/120/240MA 與 BB 20, 2σ，並由 corporateAction 做分割平滑) |
-| **合規標的天梯榜** | `GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `classRank`, `compositeScore`, `fundSizeTwd`, `orthogonalStatus`, `collisionDetail` |
-| **Stage 3 正交去共線求解** | `GlobalAssetScoreGraphQLResolver.getOrthogonalCandidates` | `assetClass`, `seedTicker` (選填), `orthogonalStatus` (`ACCEPTED` / `REJECTED_COLLINEAR`), `collisionDetail`, `ticker`, `classRank`, `compositeScore` |
+| **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice` (前端即時計算 20/60/120/240MA 與 BB 20, 2σ，並由 corporateAction 做分割平滑) |
+| **合規標的天梯榜 (一站式齊全)** | `GlobalAssetScoreGraphQLResolver.getOrthogonalCandidates`<br>`GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `name`, `distributionFrequency`, `classRank`, `compositeScore`, `fundSizeTwd`, `closePrice`, `changePct`, `return1m`, `return3m`, `return6m`, `return1y`, `orthogonalStatus`, `collisionDetail` |
 | **兩兩正交矩陣視圖** | `GlobalAssetScoreGraphQLResolver.getPairwiseMatrix` | `assetClass`, `baseTicker`, `targetTicker`, `rSquared`, `correlationCoefficient` |
 | **手動評估/覆蓋重算 (Admin Trigger)** | REST API `POST /api/v1/globalAssetScores:evaluate` (GraphQL 嚴守純 Read Gateway，不提供 Mutation) | `yearMonth` (選填，格式 YYYY-MM，如 "2026-08"), `force` (布林值，預設 false) |
-| **天梯榜多天期績效與收盤折溢價** | `MarketDailyQuoteGraphQLResolver.getPerformanceSummary` (衍生計算) | `discountPremiumPercentage`, `return1m`, `return3m`, `return6m`, `return1y`, `return2y` (採收盤價價差 + 期間配息現金加總零誤差計算) |
 | **超跌加碼勝率指數卡片** | `MarketDailyQuoteGraphQLResolver.getDipBuyOpportunity` (純函數求解) | `score` ($S_{\text{dip}}$), `grade`, `winRateRange`, `bollingerScore`, `fibonacciScore`, `maSupportScore`, `panicScore`, `recommendation` |
 | **ETF 除息月曆** | `DividendAnnouncementGraphQLResolver.listDividendsByDateRange` | `ticker`, `exDate`, `paymentDate`, `dividendPerShare`, `taxTag` |
-| **股票分割事件** | `CorporateActionGraphQLResolver.listActionsByDateRange` | `ticker`, `effectiveDate`, `splitFromShares`, `splitToShares` |
-| **證交所定期定額 Top 20** | `DcaPopularityRankGraphQLResolver.getLatestRankings` | `rankingYear`, `rankingMonth`, `rankPosition`, `ticker`, `regularInvestorCount` |
+| **股票分割事件** | `CorporateActionGraphQLResolver.listCorporateActions` (全量抓取後由前端記憶體過濾) | `ticker`, `effectiveDate`, `splitFromShares`, `splitToShares` |
+| **證交所定期定額 Top 20** | `DcaPopularityRankGraphQLResolver.getTop20DcaRanks` | `rankingYear`, `rankingMonth`, `rankPosition`, `ticker`, `regularInvestorCount` |
 
 ---
 
@@ -381,4 +381,15 @@
 6. **月曆視圖驗收**：除息與分割事件月曆能精準標記除息日（綠）、發放日（藍）與股票分割（紫），點擊卡片能正確顯示 `76W` 稅務標籤，並支援依配息週期快速篩選。
 7. **黃金分割回撤驗收**：回撤圖能準確標記 -23.6%、-38.2%、-61.8% 警戒線，並能平滑切換整數閥值與單一市場基準。
 8. **權限隔離驗收**：一般用戶無權瀏覽管線日誌與手動觸發按鈕，僅 Admin 使用者可存取 `/admin/system-health`。
+
+---
+
+## 7. 前端技術架構與部署規範 (Architecture & Deployment)
+
+* **技術棧**：React 18 + TypeScript + Vite + TailwindCSS + Lucide React + Shadcn UI。
+* **同源靜態資源部署 (Zero-CORS Architecture)**：
+  - 前端編譯產物打包置於 Spring Boot 後端的 `src/main/resources/static/`。
+  - 完全由 Spring Boot 統一伺服（Same-Origin），消滅跨網域請求與 CORS 配置複雜度。
+* **狀態管理與網路請求**：
+  - 採輕量原生或 TanStack Query 發起 GraphQL 查詢，請求路徑為相對路徑 `/graphql`。
 
