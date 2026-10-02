@@ -39,6 +39,7 @@ public class GlobalAssetQueryService {
     private final CorporateActionRepository corporateActionRepository;
     private final GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
     private final DataFeedSyncWatermarkRepository watermarkRepository;
+    private final MonthlyQuoteCacheService quoteCacheService;
 
     @Autowired
     public GlobalAssetQueryService(GlobalAssetMetadataRepository metadataRepository,
@@ -50,7 +51,8 @@ public class GlobalAssetQueryService {
                                    DividendAnnouncementRepository dividendRepository,
                                    CorporateActionRepository corporateActionRepository,
                                    @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository,
-                                   @Autowired(required = false) DataFeedSyncWatermarkRepository watermarkRepository) {
+                                   @Autowired(required = false) DataFeedSyncWatermarkRepository watermarkRepository,
+                                   MonthlyQuoteCacheService quoteCacheService) {
         this.metadataRepository = metadataRepository;
         this.benchmarkRepository = benchmarkRepository;
         this.quoteRepository = quoteRepository;
@@ -61,6 +63,7 @@ public class GlobalAssetQueryService {
         this.corporateActionRepository = corporateActionRepository;
         this.pairwiseMatrixRepository = pairwiseMatrixRepository;
         this.watermarkRepository = watermarkRepository;
+        this.quoteCacheService = quoteCacheService;
     }
 
     public Flux<GlobalAssetMetadata> listGlobalAssets(GlobalAssetFilterInput filter) {
@@ -102,9 +105,7 @@ public class GlobalAssetQueryService {
             return quoteRepository.findAll();
         }
         if (filter.ticker() != null && filter.startDate() != null && filter.endDate() != null) {
-            LocalDateTime start = parseDate(filter.startDate(), false);
-            LocalDateTime end = parseDate(filter.endDate(), true);
-            return quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(filter.ticker(), start, end);
+            return getQuoteTimeSeries(filter.ticker(), filter.startDate(), filter.endDate());
         }
         if (filter.ticker() != null) {
             return quoteRepository.findByTickerOrderByTradeDateDesc(filter.ticker());
@@ -119,7 +120,7 @@ public class GlobalAssetQueryService {
     public Flux<MarketDailyQuote> getQuoteTimeSeries(String ticker, String startDate, String endDate) {
         LocalDateTime start = parseDate(startDate, false);
         LocalDateTime end = parseDate(endDate, true);
-        return quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, start, end);
+        return quoteCacheService.getQuoteTimeSeries(ticker, start, end);
     }
 
     public Flux<MarketDailyQuote> listQuotesByAssetId(UUID assetId) {

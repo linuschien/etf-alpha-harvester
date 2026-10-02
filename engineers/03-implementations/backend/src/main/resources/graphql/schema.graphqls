@@ -81,6 +81,13 @@ type MarketDailyQuote {
     closePrice: Float!
     volumeShares: Int
     tradeValueTwd: Float
+    ma20: Float
+    ma60: Float
+    ma120: Float
+    ma240: Float
+    bbUpper: Float
+    bbMiddle: Float
+    bbLower: Float
 }
 
 type MacroYieldSnapshot {

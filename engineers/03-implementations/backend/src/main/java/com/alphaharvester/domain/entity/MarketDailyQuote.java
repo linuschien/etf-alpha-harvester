@@ -7,9 +7,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -21,7 +23,9 @@ import java.util.UUID;
 @AllArgsConstructor
 @ToString
 @EqualsAndHashCode(of = "id")
-public class MarketDailyQuote {
+public class MarketDailyQuote implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     @Id
     @Column("id")
@@ -56,4 +60,45 @@ public class MarketDailyQuote {
 
     @Column("trade_value_twd")
     private BigDecimal tradeValueTwd;
+
+    @Transient
+    private BigDecimal ma20;
+
+    @Transient
+    private BigDecimal ma60;
+
+    @Transient
+    private BigDecimal ma120;
+
+    @Transient
+    private BigDecimal ma240;
+
+    @Transient
+    private BigDecimal bbUpper;
+
+    @Transient
+    private BigDecimal bbMiddle;
+
+    @Transient
+    private BigDecimal bbLower;
+
+    /**
+     * Backwards-compatible 11-argument constructor for existing callers and tests.
+     */
+    public MarketDailyQuote(UUID id, UUID assetId, UUID benchmarkId, String ticker,
+                            LocalDateTime tradeDate, BigDecimal openPrice, BigDecimal highPrice,
+                            BigDecimal lowPrice, BigDecimal closePrice, Long volumeShares,
+                            BigDecimal tradeValueTwd) {
+        this.id = id;
+        this.assetId = assetId;
+        this.benchmarkId = benchmarkId;
+        this.ticker = ticker;
+        this.tradeDate = tradeDate;
+        this.openPrice = openPrice;
+        this.highPrice = highPrice;
+        this.lowPrice = lowPrice;
+        this.closePrice = closePrice;
+        this.volumeShares = volumeShares;
+        this.tradeValueTwd = tradeValueTwd;
+    }
 }

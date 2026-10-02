@@ -4,6 +4,7 @@ import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.service.GlobalAssetQueryService;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
+import com.alphaharvester.application.service.MonthlyQuoteCacheService;
 import com.alphaharvester.domain.entity.*;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import com.alphaharvester.domain.model.DistributionFrequency;
@@ -49,6 +50,7 @@ class StageScreeningAndRankingIntegrationTest {
     @Mock private BenchmarkIndexRepository benchmarkRepository;
     @Mock private MacroYieldSnapshotRepository macroYieldRepository;
     @Mock private CorporateActionRepository corporateActionRepository;
+    @Mock private MonthlyQuoteCacheService quoteCacheService;
 
     private GlobalAssetScoreEvaluationService evaluationService;
     private GlobalAssetQueryService queryService;
@@ -65,7 +67,7 @@ class StageScreeningAndRankingIntegrationTest {
                 metadataRepository, benchmarkRepository, quoteRepository,
                 macroYieldRepository, scoreRepository, dcaRankRepository,
                 dividendRepository, corporateActionRepository, pairwiseMatrixRepository,
-                watermarkRepository
+                watermarkRepository, quoteCacheService
         );
 
         when(dcaRankRepository.findAll()).thenReturn(Flux.empty());

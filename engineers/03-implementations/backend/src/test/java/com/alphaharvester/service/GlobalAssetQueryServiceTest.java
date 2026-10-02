@@ -3,6 +3,7 @@ package com.alphaharvester.service;
 import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.*;
 import com.alphaharvester.application.service.GlobalAssetQueryService;
+import com.alphaharvester.application.service.MonthlyQuoteCacheService;
 import com.alphaharvester.domain.entity.*;
 import com.alphaharvester.domain.model.CandidateAssetClass;
 import com.alphaharvester.domain.model.CorporateActionType;
@@ -28,7 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -44,6 +45,7 @@ class GlobalAssetQueryServiceTest {
     @Mock private CorporateActionRepository corporateActionRepository;
     @Mock private GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
     @Mock private DataFeedSyncWatermarkRepository watermarkRepository;
+    @Mock private MonthlyQuoteCacheService quoteCacheService;
 
     private GlobalAssetQueryService queryService;
 
@@ -53,7 +55,7 @@ class GlobalAssetQueryServiceTest {
                 metadataRepository, benchmarkRepository, quoteRepository,
                 macroYieldRepository, scoreRepository, dcaRankRepository,
                 dividendRepository, corporateActionRepository, pairwiseMatrixRepository,
-                watermarkRepository
+                watermarkRepository, quoteCacheService
         );
     }
 
@@ -123,12 +125,19 @@ class GlobalAssetQueryServiceTest {
         when(quoteRepository.findByTickerOrderByTradeDateDesc("0050")).thenReturn(Flux.just(quote));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(any(), any(), any())).thenReturn(Flux.just(quote));
 
+        when(quoteCacheService.getQuoteTimeSeries(eq("0050"), any(), any()))
+                .thenReturn(Flux.just(quote));
+
         StepVerifier.create(queryService.listMarketDailyQuotes(null))
                 .assertNext(q -> assertThat(q.getTicker()).isEqualTo("0050"))
                 .verifyComplete();
 
         StepVerifier.create(queryService.getQuoteTimeSeries("0050", "2026-09-01", "2026-09-23"))
                 .assertNext(q -> assertThat(q.getClosePrice()).isEqualTo(new BigDecimal("188.0")))
+                .verifyComplete();
+
+        StepVerifier.create(queryService.listMarketDailyQuotes(new MarketDailyQuoteFilterInput("0050", "2026-09-01", "2026-09-23")))
+                .assertNext(q -> assertThat(q.getTicker()).isEqualTo("0050"))
                 .verifyComplete();
     }
 
