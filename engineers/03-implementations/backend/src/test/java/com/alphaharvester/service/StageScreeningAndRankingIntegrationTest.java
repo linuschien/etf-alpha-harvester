@@ -1,7 +1,6 @@
 package com.alphaharvester.service;
 
 import com.alphaharvester.adapter.out.persistence.*;
-import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.service.GlobalAssetQueryService;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
@@ -50,7 +49,6 @@ class StageScreeningAndRankingIntegrationTest {
     @Mock private BenchmarkIndexRepository benchmarkRepository;
     @Mock private MacroYieldSnapshotRepository macroYieldRepository;
     @Mock private CorporateActionRepository corporateActionRepository;
-    @Mock private ExternalMarketDataPort externalMarketDataPort;
 
     private GlobalAssetScoreEvaluationService evaluationService;
     private GlobalAssetQueryService queryService;
@@ -60,7 +58,7 @@ class StageScreeningAndRankingIntegrationTest {
         evaluationService = new GlobalAssetScoreEvaluationService(
                 metadataRepository, scoreRepository, quoteRepository,
                 dcaRankRepository, dividendRepository, watermarkRepository, pairwiseMatrixRepository,
-                externalMarketDataPort, corporateActionRepository
+                corporateActionRepository
         );
 
         queryService = new GlobalAssetQueryService(
@@ -68,8 +66,6 @@ class StageScreeningAndRankingIntegrationTest {
                 macroYieldRepository, scoreRepository, dcaRankRepository,
                 dividendRepository, corporateActionRepository, pairwiseMatrixRepository
         );
-
-        lenient().when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Collections.emptyMap()));
 
         when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());

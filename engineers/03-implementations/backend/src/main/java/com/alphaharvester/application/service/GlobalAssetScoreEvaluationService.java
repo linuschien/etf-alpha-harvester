@@ -3,7 +3,6 @@ package com.alphaharvester.application.service;
 import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.GlobalAssetScoreEvaluationResponse;
 import com.alphaharvester.application.port.in.GlobalAssetScoreEvaluationUseCase;
-import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.domain.entity.*;
 import com.alphaharvester.domain.math.FinancialMetricsCalculator;
 import com.alphaharvester.domain.model.CandidateAssetClass;
@@ -58,7 +57,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     private final DividendAnnouncementRepository dividendRepository;
     private final DataFeedSyncWatermarkRepository watermarkRepository;
     private final GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
-    private final ExternalMarketDataPort externalMarketDataPort;
     private final CorporateActionRepository corporateActionRepository;
 
     @Autowired
@@ -69,7 +67,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                              @Autowired(required = false) DividendAnnouncementRepository dividendRepository,
                                              @Autowired(required = false) DataFeedSyncWatermarkRepository watermarkRepository,
                                              @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository,
-                                             @Autowired(required = false) ExternalMarketDataPort externalMarketDataPort,
                                              @Autowired(required = false) CorporateActionRepository corporateActionRepository) {
         this.metadataRepository = metadataRepository;
         this.scoreRepository = scoreRepository;
@@ -78,7 +75,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
         this.dividendRepository = dividendRepository;
         this.watermarkRepository = watermarkRepository;
         this.pairwiseMatrixRepository = pairwiseMatrixRepository;
-        this.externalMarketDataPort = externalMarketDataPort;
         this.corporateActionRepository = corporateActionRepository;
     }
 

@@ -77,6 +77,28 @@ class RepositoryIntegrationTest {
     }
 
     @Test
+    @DisplayName("Should verify Flyway V3 seeded ETF metadata including shares outstanding, NAV, and fund size TWD")
+    void shouldVerifyFlywaySeededEtfMetadataWithAum() {
+        StepVerifier.create(metadataRepository.findByTicker("0050"))
+                .assertNext(etf0050 -> {
+                    assertThat(etf0050).isNotNull();
+                    assertThat(etf0050.getName()).contains("元大台灣卓越50");
+                    assertThat(etf0050.getSharesOutstanding()).isNotNull().isGreaterThan(0L);
+                    assertThat(etf0050.getNetAssetValue()).isNotNull().isGreaterThan(BigDecimal.ZERO);
+                    assertThat(etf0050.getFundSizeTwd()).isNotNull().isGreaterThan(new BigDecimal("100000000000")); // > 100B TWD
+                })
+                .verifyComplete();
+
+        StepVerifier.create(metadataRepository.findAll().collectList())
+                .assertNext(all -> {
+                    assertThat(all).hasSizeGreaterThanOrEqualTo(300);
+                    long withAum = all.stream().filter(a -> a.getFundSizeTwd() != null).count();
+                    assertThat(withAum).isGreaterThanOrEqualTo(250);
+                })
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("Should insert and query MarketDailyQuote correctly")
     void shouldInsertAndQueryMarketDailyQuote() {
         LocalDateTime now = LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);

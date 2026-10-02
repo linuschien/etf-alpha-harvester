@@ -12,7 +12,6 @@ import com.alphaharvester.application.service.GlobalAssetQueryService;
 import com.alphaharvester.domain.entity.GlobalAssetPairwiseMatrix;
 import com.alphaharvester.domain.entity.GlobalAssetScore;
 import com.alphaharvester.domain.model.CandidateAssetClass;
-import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -22,8 +21,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -40,7 +37,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
 @Tag("integration")
 @SpringBootTest
@@ -51,9 +47,6 @@ public class MonthlyTopListDumpIntegrationTest {
     private static final DateTimeFormatter TS_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public record ScoredSat(String ticker, double score, double mom, double ker, double sharpe, double r2Twii, BigDecimal aum) {}
-
-    @Autowired
-    private ExternalMarketDataPort externalMarketDataPort;
 
     @Autowired
     private GlobalAssetScoreEvaluationUseCase scoreEvaluationUseCase;
@@ -363,8 +356,6 @@ public class MonthlyTopListDumpIntegrationTest {
         LocalDateTime cutoff = LocalDateTime.of(2026, 8, 31, 23, 59, 59);
         LocalDateTime start365d = LocalDateTime.of(2025, 9, 1, 0, 0);
 
-        var aumMap = externalMarketDataPort.fetchCurrentAumMap().block();
-
         // Q1: Check 00646 (S&P500), 00662 (Nasdaq), 00657 (Nikkei), 00645 (Topix)
         List<String> overseasCore = List.of("00646", "00662", "00657", "00645", "00661");
         log.info("--- Q1: Overseas Benchmark ETFs ---");
@@ -372,7 +363,7 @@ public class MonthlyTopListDumpIntegrationTest {
             var meta = metadataRepository.findByTicker(t).block();
             var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(t, start365d, cutoff)
                     .collectList().block();
-            var aum = aumMap != null ? aumMap.get(t) : null;
+            var aum = meta != null ? meta.getFundSizeTwd() : null;
             log.info("ETF {}: meta={}, quotesCount={}, aum={}",
                     t, meta != null ? meta.getName() : "NULL", quotes != null ? quotes.size() : 0, aum);
 
@@ -404,7 +395,7 @@ public class MonthlyTopListDumpIntegrationTest {
             var meta = metadataRepository.findByTicker(b).block();
             var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(b, start365d, cutoff)
                     .collectList().block();
-            var aum = aumMap != null ? aumMap.get(b) : null;
+            var aum = meta != null ? meta.getFundSizeTwd() : null;
             var divs = dividendRepository.findByTickerOrderByExDateDesc(b).collectList().block();
             double totalDiv = 0.0;
             if (divs != null) {
@@ -450,8 +441,6 @@ public class MonthlyTopListDumpIntegrationTest {
         List<List<String>> groups = List.of(coreTw, coreUs, satUsTech, satTwTech, satTwDiv, satJp, satGlobal);
         List<String> groupNames = List.of("Core TW", "Core US", "Sat US Tech", "Sat TW Tech", "Sat TW Div", "Sat Japan", "Sat Global");
 
-        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
-
         log.info("========== USER PORTFOLIO VALIDATION ==========");
         for (int g = 0; g < groups.size(); g++) {
             String gName = groupNames.get(g);
@@ -463,7 +452,7 @@ public class MonthlyTopListDumpIntegrationTest {
                 var meta = metadataRepository.findByTicker(t).block();
                 var quotes = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(t, start365d, cutoff)
                         .collectList().block();
-                var aum = aumMap != null ? aumMap.get(t) : null;
+                var aum = meta != null ? meta.getFundSizeTwd() : null;
                 long listingDays = (meta != null && meta.getListingDate() != null) ? java.time.temporal.ChronoUnit.DAYS.between(meta.getListingDate().toLocalDate(), cutoff.toLocalDate()) : 0;
                 boolean passAge = listingDays >= 365;
                 log.info("Ticker {}: Name='{}', Listing='{}' (age={}d, passAge={}), QuotesCount={}, AUM={}",
@@ -679,7 +668,6 @@ public class MonthlyTopListDumpIntegrationTest {
         var retN225 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateDailyReturns(bmN225);
 
         var allAssets = metadataRepository.findAll().collectList().block();
-        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
 
         log.info("========== ALL USER TICKERS DIAGNOSIS (2026-09 TOP LIST) ==========");
         for (String t : userTickers) {
@@ -712,7 +700,7 @@ public class MonthlyTopListDumpIntegrationTest {
                 continue;
             }
 
-            BigDecimal aum = (aumMap != null) ? aumMap.get(t) : null;
+            BigDecimal aum = meta.getFundSizeTwd();
             if (aum != null && aum.compareTo(new BigDecimal("2000000000")) < 0) {
                 log.info("[EXCLUDED] {}: Stage 1 Gate 2 FAILED - AUM {} < 20 億 TWD", t, aum);
                 continue;
@@ -774,7 +762,6 @@ public class MonthlyTopListDumpIntegrationTest {
         LocalDate window30dStart = cutoff.toLocalDate().minusDays(30);
 
         var allAssets = metadataRepository.findAll().collectList().block();
-        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
 
         var bmTwii = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", start365d, cutoff).collectList().block();
         var bmGspc = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^GSPC", start365d, cutoff).collectList().block();
@@ -818,7 +805,7 @@ public class MonthlyTopListDumpIntegrationTest {
                 continue;
             }
 
-            BigDecimal aum = (aumMap != null) ? aumMap.get(asset.getTicker()) : null;
+            BigDecimal aum = asset.getFundSizeTwd();
             if (aum != null && aum.compareTo(new BigDecimal("2000000000")) < 0) {
                 failedAum++;
                 continue;
@@ -900,7 +887,6 @@ public class MonthlyTopListDumpIntegrationTest {
         LocalDate window30dStart = cutoff.toLocalDate().minusDays(30);
 
         var allAssets = metadataRepository.findAll().collectList().block();
-        var aumMap = externalMarketDataPort != null ? externalMarketDataPort.fetchCurrentAumMap().block() : Collections.<String, BigDecimal>emptyMap();
 
         var bmTwii = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^TWII", start365d, cutoff).collectList().block();
         var bmGspc = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc("^GSPC", start365d, cutoff).collectList().block();
@@ -942,7 +928,7 @@ public class MonthlyTopListDumpIntegrationTest {
             }
             double lastPrice = (quotes.get(0).getClosePrice() != null) ? quotes.get(0).getClosePrice().doubleValue() : 1.0;
             double ytm = lastPrice > 0 ? totalDiv / lastPrice : 0.0;
-            BigDecimal aum = aumMap != null ? aumMap.get(asset.getTicker()) : BigDecimal.ZERO;
+            BigDecimal aum = asset.getFundSizeTwd() != null ? asset.getFundSizeTwd() : BigDecimal.ZERO;
             bondCands.add(new BondCand(asset.getTicker(), name, ytm, aum));
         }
 
@@ -970,46 +956,6 @@ public class MonthlyTopListDumpIntegrationTest {
         List<SatCandSim> newSatCands = new ArrayList<>();
         Map<String, Map<LocalDate, Double>> satDailyReturns = new HashMap<>();
 
-        // Known AUM map fallback from V8 seed data
-        Map<String, BigDecimal> fallbackAum = Map.ofEntries(
-                Map.entry("0050", new BigDecimal("2484642985000")),
-                Map.entry("006208", new BigDecimal("475963342800")),
-                Map.entry("0056", new BigDecimal("802926731200")),
-                Map.entry("00878", new BigDecimal("653651313300")),
-                Map.entry("00919", new BigDecimal("607173698550")),
-                Map.entry("00929", new BigDecimal("156158783820")),
-                Map.entry("00918", new BigDecimal("158305790280")),
-                Map.entry("00881", new BigDecimal("154680143090")),
-                Map.entry("0052", new BigDecimal("165662140000")),
-                Map.entry("00922", new BigDecimal("94294498680")),
-                Map.entry("00830", new BigDecimal("77979727800")),
-                Map.entry("00692", new BigDecimal("59071992000")),
-                Map.entry("00935", new BigDecimal("52938962560")),
-                Map.entry("00850", new BigDecimal("39862807200")),
-                Map.entry("00939", new BigDecimal("28002285880")),
-                Map.entry("00915", new BigDecimal("16665287300")),
-                Map.entry("00961", new BigDecimal("15331945200")),
-                Map.entry("00892", new BigDecimal("13708056000")),
-                Map.entry("00735", new BigDecimal("12363784020")),
-                Map.entry("00947", new BigDecimal("11421623800")),
-                Map.entry("00905", new BigDecimal("9927626930")),
-                Map.entry("00701", new BigDecimal("6995465220")),
-                Map.entry("00887", new BigDecimal("6913735200")),
-                Map.entry("00690", new BigDecimal("6880766400")),
-                Map.entry("00946", new BigDecimal("6740990620")),
-                Map.entry("00910", new BigDecimal("6367379294")),
-                Map.entry("00877", new BigDecimal("5895128640")),
-                Map.entry("00951", new BigDecimal("4420933980")),
-                Map.entry("00938", new BigDecimal("2787628800")),
-                Map.entry("00728", new BigDecimal("2757638850")),
-                Map.entry("00757", new BigDecimal("38000000000")),
-                Map.entry("00662", new BigDecimal("42000000000")),
-                Map.entry("00955", new BigDecimal("8500000000")),
-                Map.entry("009805", new BigDecimal("3200000000")),
-                Map.entry("00965", new BigDecimal("5600000000")),
-                Map.entry("00909", new BigDecimal("4900000000"))
-        );
-
         for (var asset : allAssets) {
             if (asset.getTicker().endsWith("B")) continue;
             if (asset.getListingDate() == null || asset.getListingDate().isAfter(cutoff.minusYears(1))) continue;
@@ -1027,9 +973,9 @@ public class MonthlyTopListDumpIntegrationTest {
             double r2N225 = calcR2(ret, retN225, 0);
             double maxR2 = Math.max(r2Twii, Math.max(r2Gspc, Math.max(r2Ndx, r2N225)));
 
-            BigDecimal aum = (aumMap != null && aumMap.containsKey(asset.getTicker()))
-                    ? aumMap.get(asset.getTicker())
-                    : fallbackAum.getOrDefault(asset.getTicker(), new BigDecimal("3000000000"));
+            BigDecimal aum = asset.getFundSizeTwd() != null
+                    ? asset.getFundSizeTwd()
+                    : new BigDecimal("3000000000");
 
             if (maxR2 >= 0.90) { // NEW THRESHOLD 0.90!
                 newCoreCands.add(new CoreCand(asset.getTicker(), maxR2, 0.0, aum));

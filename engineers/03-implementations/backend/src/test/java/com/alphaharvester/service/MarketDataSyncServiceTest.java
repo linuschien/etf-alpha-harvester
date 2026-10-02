@@ -374,6 +374,39 @@ class MarketDataSyncServiceTest {
     }
 
     @Test
+    @DisplayName("Should sync and persist metadata with shares outstanding, NAV, and fund size TWD")
+    void shouldSyncMetadataWithSharesNavAndFundSize() {
+        LocalDateTime now = LocalDateTime.now();
+        UUID id = UUID.randomUUID();
+        GlobalAssetMetadata incoming = new GlobalAssetMetadata(
+                null, "0050", "元大台灣50", now, "臺灣50指數",
+                12500000000L, new BigDecimal("198.50"), new BigDecimal("2481250000000.00"),
+                null, null, null, null
+        );
+        GlobalAssetMetadata existing = new GlobalAssetMetadata(
+                id, "0050", "元大台灣50", now, "臺灣50指數", 1, now, now, null
+        );
+
+        when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(incoming));
+        when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(existing));
+        when(metadataRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.METADATA, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().etfAssetsCount()).isEqualTo(1);
+                    verify(metadataRepository).save(argThat(saved ->
+                            saved.getSharesOutstanding().equals(12500000000L) &&
+                            saved.getNetAssetValue().compareTo(new BigDecimal("198.50")) == 0 &&
+                            saved.getFundSizeTwd().compareTo(new BigDecimal("2481250000000.00")) == 0
+                    ));
+                })
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("Should skip DCA rankings synchronization when already synced in current month with records (Scope ALL)")
     void shouldSkipDcaRanksWhenAlreadySyncedInCurrentMonth() {
         LocalDateTime now = LocalDateTime.now();

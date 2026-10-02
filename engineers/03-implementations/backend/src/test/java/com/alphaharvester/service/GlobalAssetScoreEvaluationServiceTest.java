@@ -7,7 +7,6 @@ import com.alphaharvester.adapter.out.persistence.DividendAnnouncementRepository
 import com.alphaharvester.adapter.out.persistence.GlobalAssetMetadataRepository;
 import com.alphaharvester.adapter.out.persistence.GlobalAssetScoreRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
-import com.alphaharvester.application.port.out.ExternalMarketDataPort;
 import com.alphaharvester.application.service.GlobalAssetScoreEvaluationService;
 import com.alphaharvester.domain.entity.CorporateAction;
 import com.alphaharvester.domain.entity.DataFeedSyncWatermark;
@@ -70,14 +69,10 @@ class GlobalAssetScoreEvaluationServiceTest {
     @Mock
     private DataFeedSyncWatermarkRepository watermarkRepository;
 
-    @Mock
-    private ExternalMarketDataPort externalMarketDataPort;
-
     private GlobalAssetScoreEvaluationService service;
 
     @BeforeEach
     void setUp() {
-        lenient().when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Collections.emptyMap()));
         lenient().when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         lenient().when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
         lenient().when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any())).thenReturn(Flux.empty());
@@ -85,7 +80,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         lenient().when(scoreRepository.deleteByEvaluationDate(any())).thenReturn(Mono.empty());
         lenient().when(watermarkRepository.findByFeedName(any())).thenReturn(Mono.empty());
         lenient().when(watermarkRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, null, externalMarketDataPort, corporateActionRepository);
+        service = new GlobalAssetScoreEvaluationService(metadataRepository, scoreRepository, quoteRepository, dcaRankRepository, dividendRepository, watermarkRepository, null, corporateActionRepository);
     }
 
     private List<MarketDailyQuote> generateQuotesForWindow(String ticker, double startPrice, double growthRate, double noiseFactor, int pattern) {
