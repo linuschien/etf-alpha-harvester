@@ -43,11 +43,36 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
 
     @Override
     public Flux<GlobalAssetMetadata> fetchEtfMasterUniverse() {
-        log.info("Fetching real ETF master universe from TWSE OpenAPI and TPEx OpenData...");
-        return Flux.concat(
-                twseClient.fetchEtfMasterUniverse(),
-                tpexClient.fetchTpexEtfMasterUniverse()
-        );
+        log.info("Fetching real ETF master universe from TWSE OpenAPI, TPEx OpenData, and enriching with TWSE MIS NAV...");
+        Mono<java.util.Map<String, TwseMarketDataClient.NavSnapshot>> navMono = Mono.empty();
+        if (twseClient != null) {
+            try {
+                var res = twseClient.fetchMisNavData();
+                if (res != null) {
+                    navMono = res.onErrorReturn(java.util.Collections.emptyMap());
+                }
+            } catch (Exception ignored) {}
+        }
+        return navMono.defaultIfEmpty(java.util.Collections.emptyMap())
+                .flatMapMany(navMap -> {
+                    Flux<GlobalAssetMetadata> twse = twseClient != null ? twseClient.fetchEtfMasterUniverse() : Flux.empty();
+                    Flux<GlobalAssetMetadata> tpex = tpexClient != null ? tpexClient.fetchTpexEtfMasterUniverse() : Flux.empty();
+                    return Flux.concat(twse, tpex).map(asset -> {
+                        if (navMap != null && asset.getTicker() != null) {
+                            var snap = navMap.get(asset.getTicker());
+                            if (snap != null) {
+                                asset.setSharesOutstanding(snap.sharesOutstanding());
+                                asset.setNetAssetValue(snap.nav());
+                                if (snap.nav() != null && snap.sharesOutstanding() > 0) {
+                                    asset.setFundSizeTwd(snap.nav()
+                                            .multiply(java.math.BigDecimal.valueOf(snap.sharesOutstanding()))
+                                            .setScale(2, java.math.RoundingMode.HALF_UP));
+                                }
+                            }
+                        }
+                        return asset;
+                    });
+                });
     }
 
     @Override

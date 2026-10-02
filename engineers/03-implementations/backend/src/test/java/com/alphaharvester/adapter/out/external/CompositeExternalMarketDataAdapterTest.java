@@ -69,6 +69,29 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
+    @DisplayName("Should enrich ETF master universe with NAV, shares outstanding, and fund size from MIS")
+    void shouldEnrichEtfMasterUniverseWithNavData() {
+        GlobalAssetMetadata twseAsset = new GlobalAssetMetadata(
+                UUID.randomUUID(), "0050", "元大台灣50", LocalDateTime.now(),
+                "臺灣50指數",
+                1, LocalDateTime.now(), LocalDateTime.now(), null
+        );
+        TwseMarketDataClient.NavSnapshot snap50 = new TwseMarketDataClient.NavSnapshot("元大台灣50", new BigDecimal("185.00"), BigDecimal.ZERO, 2000000000L);
+        when(twseClient.fetchMisNavData()).thenReturn(Mono.just(Map.of("0050", snap50)));
+        when(twseClient.fetchEtfMasterUniverse()).thenReturn(Flux.just(twseAsset));
+        when(tpexClient.fetchTpexEtfMasterUniverse()).thenReturn(Flux.empty());
+
+        StepVerifier.create(adapter.fetchEtfMasterUniverse())
+                .assertNext(res -> {
+                    assertThat(res.getTicker()).isEqualTo("0050");
+                    assertThat(res.getSharesOutstanding()).isEqualTo(2000000000L);
+                    assertThat(res.getNetAssetValue()).isEqualByComparingTo(new BigDecimal("185.00"));
+                    assertThat(res.getFundSizeTwd()).isEqualByComparingTo(new BigDecimal("370000000000.00"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("Should fetch current AUM map derived from MIS NAV and shares outstanding")
     void shouldFetchCurrentAumMap() {
         TwseMarketDataClient.NavSnapshot snap50 = new TwseMarketDataClient.NavSnapshot("元大台灣50", new BigDecimal("185.00"), BigDecimal.ZERO, 2000000000L);

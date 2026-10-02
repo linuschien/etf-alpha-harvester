@@ -242,6 +242,10 @@ class GlobalAssetScoreEvaluationServiceTest {
                 UUID.randomUUID(), "00679B", "元大海美債20年", longAgo, "彭博20年期以上美國公債指數",
                 1, now, now, null
         );
+        asset1.setFundSizeTwd(new BigDecimal("420000000000"));
+        asset2.setFundSizeTwd(new BigDecimal("185000000000"));
+        asset3.setFundSizeTwd(new BigDecimal("35000000000"));
+        asset4.setFundSizeTwd(new BigDecimal("250000000000"));
 
         List<MarketDailyQuote> twiiQuotes = generateQuotesForWindow("^TWII", 20000.0, 0.0005, 0.008, 0);
         List<MarketDailyQuote> highCorrQuotes1 = generateQuotesForWindow("0050", 180.0, 0.0005, 0.008, 0);
@@ -249,12 +253,6 @@ class GlobalAssetScoreEvaluationServiceTest {
         List<MarketDailyQuote> lowCorrQuotes = generateQuotesForWindow("00757", 80.0, 0.001, 0.02, 1);
         List<MarketDailyQuote> bondQuotes = generateQuotesForWindow("00679B", 30.0, 0.0001, 0.0, 3);
 
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
-                "0050", new BigDecimal("420000000000"),
-                "006208", new BigDecimal("185000000000"),
-                "00757", new BigDecimal("35000000000"),
-                "00679B", new BigDecimal("250000000000")
-        )));
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset1, asset2, asset3, asset4));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(highCorrQuotes1));
@@ -297,10 +295,9 @@ class GlobalAssetScoreEvaluationServiceTest {
         List<MarketDailyQuote> coreQuotes = generateQuotesForWindow("0050", 180.0, 0.0005, 0.01, 0); // R^2 ~ 1.0
         List<MarketDailyQuote> satQuotes = generateQuotesForWindow("0052", 150.0, 0.001, 0.02, 1);
 
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
-                "0050", new BigDecimal("350000000000"),
-                "0052", new BigDecimal("50000000000")
-        )));
+        coreAsset.setFundSizeTwd(new BigDecimal("350000000000"));
+        satAsset.setFundSizeTwd(new BigDecimal("50000000000"));
+
         when(metadataRepository.findAll()).thenReturn(Flux.just(coreAsset, satAsset));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(coreQuotes));
@@ -357,10 +354,9 @@ class GlobalAssetScoreEvaluationServiceTest {
         List<MarketDailyQuote> igQuotes = generateQuotesForWindow("00679B", 30.0, 0.0001, 0.0, 1);
         List<MarketDailyQuote> hyQuotes = generateQuotesForWindow("00953B", 10.0, 0.0001, 0.0, 2);
 
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
-                "00679B", new BigDecimal("250000000000"),
-                "00953B", new BigDecimal("40000000000")
-        )));
+        igBond.setFundSizeTwd(new BigDecimal("250000000000"));
+        hyBond1.setFundSizeTwd(new BigDecimal("40000000000"));
+
         when(metadataRepository.findAll()).thenReturn(Flux.just(igBond, hyBond1));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00679B"), any(), any())).thenReturn(Flux.fromIterable(igQuotes));
@@ -409,12 +405,11 @@ class GlobalAssetScoreEvaluationServiceTest {
         List<MarketDailyQuote> twiiQuotes = generateQuotesForWindow("^TWII", 20000.0, 0.0005, 0.01, 0);
         List<MarketDailyQuote> corrQuotes1 = generateQuotesForWindow("0050", 180.0, 0.0005, 0.01, 0);
 
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
-                "0050", new BigDecimal("420000000000"),
-                "00999", new BigDecimal("1000000000"),
-                "00991", new BigDecimal("1000000000"),
-                "00680L", new BigDecimal("10000000000")
-        )));
+        qualifiedCore.setFundSizeTwd(new BigDecimal("420000000000"));
+        smallCore.setFundSizeTwd(new BigDecimal("1000000000"));
+        smallSatellite.setFundSizeTwd(new BigDecimal("1000000000"));
+        leveragedBond.setFundSizeTwd(new BigDecimal("10000000000"));
+
         when(metadataRepository.findAll()).thenReturn(Flux.just(qualifiedCore, smallCore, smallSatellite, leveragedBond));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(corrQuotes1));
@@ -556,12 +551,12 @@ class GlobalAssetScoreEvaluationServiceTest {
                 splitDate.atStartOfDay(), 4, 1
         );
 
+        asset.setFundSizeTwd(new BigDecimal("400000000000"));
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(rawQuotesWithSplit));
         when(corporateActionRepository.findByEffectiveDateBetweenOrderByEffectiveDateAsc(any(), any()))
                 .thenReturn(Flux.just(splitAction));
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of("0050", new BigDecimal("400000000000"))));
         when(scoreRepository.saveAll(anyList())).thenAnswer(inv -> Flux.fromIterable(inv.getArgument(0)));
 
         StepVerifier.create(service.evaluateGlobalAssetScores(ym.toString(), true))
@@ -576,22 +571,23 @@ class GlobalAssetScoreEvaluationServiceTest {
     }
 
     @Test
-    @DisplayName("Should mark watermark FAILED, protect DB from deletion when AUM fetch fails")
-    void shouldMarkWatermarkFailedAndProtectDbWhenAumFetchFails() {
+    @DisplayName("Should mark watermark FAILED, protect DB from deletion when pipeline execution fails")
+    void shouldMarkWatermarkFailedAndProtectDbWhenPipelineFails() {
         LocalDateTime now = LocalDateTime.now();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(
                 UUID.randomUUID(), "0050", "元大台灣50", now.minusYears(5), "臺灣50",
                 1, now, now, null
         );
+        asset.setFundSizeTwd(new BigDecimal("400000000000"));
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
-        when(externalMarketDataPort.fetchCurrentAumMap())
-                .thenReturn(Mono.error(new RuntimeException("Connection timeout to TWSE MIS")));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(any(), any(), any()))
+                .thenReturn(Flux.error(new RuntimeException("Database connection failure")));
 
         StepVerifier.create(service.evaluateGlobalAssetScores("2026-09", true))
                 .assertNext(res -> {
                     assertThat(res.status()).isEqualTo("FAILED");
-                    assertThat(res.message()).contains("Connection timeout to TWSE MIS");
+                    assertThat(res.message()).contains("Database connection failure");
                     assertThat(res.evaluatedCandidatesCount()).isEqualTo(0);
                 })
                 .verifyComplete();
@@ -604,7 +600,7 @@ class GlobalAssetScoreEvaluationServiceTest {
         verify(watermarkRepository).save(wmCaptor.capture());
         DataFeedSyncWatermark savedWm = wmCaptor.getValue();
         assertThat(savedWm.getStatus()).isEqualTo("FAILED");
-        assertThat(savedWm.getErrorMessage()).contains("Connection timeout to TWSE MIS");
+        assertThat(savedWm.getErrorMessage()).contains("Database connection failure");
     }
 
     @Test
@@ -615,10 +611,9 @@ class GlobalAssetScoreEvaluationServiceTest {
                 UUID.randomUUID(), "00999", "微型ETF", now.minusYears(5), "某指數",
                 1, now, now, null
         );
+        smallAsset.setFundSizeTwd(new BigDecimal("1000000000")); // < 2B AUM
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(smallAsset));
-        when(externalMarketDataPort.fetchCurrentAumMap())
-                .thenReturn(Mono.just(Map.of("00999", new BigDecimal("1000000000")))); // < 2B AUM
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("00999"), any(), any()))
                 .thenReturn(Flux.fromIterable(generateQuotesForWindow("00999", 50.0, 0.0005, 0.01, 0)));
 

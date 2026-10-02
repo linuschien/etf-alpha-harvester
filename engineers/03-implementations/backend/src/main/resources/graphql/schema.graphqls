@@ -50,6 +50,9 @@ type GlobalAssetMetadata {
     name: String!
     listingDate: String!
     underlyingIndex: String
+    sharesOutstanding: Float
+    netAssetValue: Float
+    fundSizeTwd: Float
     version: Int!
     createdAt: String!
     updatedAt: String!

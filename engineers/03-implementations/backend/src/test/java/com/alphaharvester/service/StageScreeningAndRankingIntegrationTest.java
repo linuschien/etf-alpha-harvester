@@ -69,7 +69,7 @@ class StageScreeningAndRankingIntegrationTest {
                 dividendRepository, corporateActionRepository, pairwiseMatrixRepository
         );
 
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Collections.emptyMap()));
+        lenient().when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Collections.emptyMap()));
 
         when(dcaRankRepository.findAll()).thenReturn(Flux.empty());
         when(dividendRepository.findByExDateBetweenOrderByExDateAsc(any(), any())).thenReturn(Flux.empty());
@@ -177,13 +177,12 @@ class StageScreeningAndRankingIntegrationTest {
                 "某指數", 1, evalDateTime, evalDateTime, null
         );
 
+        youngAsset.setFundSizeTwd(new BigDecimal("50000000000"));
+        lowAumAsset.setFundSizeTwd(new BigDecimal("1500000000"));
+        lowTradingDaysAsset.setFundSizeTwd(new BigDecimal("10000000000"));
+        lowTurnoverAsset.setFundSizeTwd(new BigDecimal("10000000000"));
+
         when(metadataRepository.findAll()).thenReturn(Flux.just(youngAsset, lowAumAsset, lowTradingDaysAsset, lowTurnoverAsset));
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
-                "00940", new BigDecimal("50000000000"),
-                "00998", new BigDecimal("1500000000"),
-                "00997", new BigDecimal("10000000000"),
-                "00996", new BigDecimal("10000000000")
-        )));
 
         // 20 quotes only (< 220) for lowTradingDaysAsset
         List<MarketDailyQuote> shortQuotes = generateCalendarQuotes("00997", targetYm, 50.0, 0.0005, 0.01, 0).subList(0, 50);
@@ -248,12 +247,11 @@ class StageScreeningAndRankingIntegrationTest {
         List<MarketDailyQuote> sat1Quotes = generateCalendarQuotes("00757", targetYm, 80.0, 0.001, 0.02, 1);
         List<MarketDailyQuote> bond1Quotes = generateCalendarQuotes("00679B", targetYm, 30.0, 0.0001, 0.0, 3);
 
-        when(externalMarketDataPort.fetchCurrentAumMap()).thenReturn(Mono.just(Map.of(
-                "0050", new BigDecimal("420000000000"),
-                "006208", new BigDecimal("185000000000"),
-                "00757", new BigDecimal("35000000000"),
-                "00679B", new BigDecimal("250000000000")
-        )));
+        core1.setFundSizeTwd(new BigDecimal("420000000000"));
+        core2.setFundSizeTwd(new BigDecimal("185000000000"));
+        sat1.setFundSizeTwd(new BigDecimal("35000000000"));
+        bond1.setFundSizeTwd(new BigDecimal("250000000000"));
+
         when(metadataRepository.findAll()).thenReturn(Flux.just(core1, core2, sat1, bond1));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("^TWII"), any(), any())).thenReturn(Flux.fromIterable(twiiQuotes));
         when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateDesc(eq("0050"), any(), any())).thenReturn(Flux.fromIterable(core1Quotes));

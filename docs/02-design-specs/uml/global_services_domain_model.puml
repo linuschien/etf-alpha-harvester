@@ -9,6 +9,9 @@ package "Global Domain Entities (Persisted Data)" {
         +String name
         +DateTime listing_date
         +String underlying_index
+        +Long shares_outstanding
+        +Decimal net_asset_value
+        +Decimal fund_size_twd
         +syncGlobalAssets(): OperationStatus
     }
 

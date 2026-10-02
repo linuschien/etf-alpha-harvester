@@ -205,6 +205,15 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             if (asset.getListingDate() != null) {
                                 existing.setListingDate(asset.getListingDate());
                             }
+                            if (asset.getSharesOutstanding() != null) {
+                                existing.setSharesOutstanding(asset.getSharesOutstanding());
+                            }
+                            if (asset.getNetAssetValue() != null) {
+                                existing.setNetAssetValue(asset.getNetAssetValue());
+                            }
+                            if (asset.getFundSizeTwd() != null) {
+                                existing.setFundSizeTwd(asset.getFundSizeTwd());
+                            }
                             existing.setUpdatedAt(now);
                             return metadataRepository.save(existing);
                         })

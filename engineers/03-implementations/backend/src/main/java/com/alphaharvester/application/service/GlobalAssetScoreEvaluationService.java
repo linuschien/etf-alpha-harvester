@@ -158,17 +158,15 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                             prefetchBenchmarks(queryStartDateTime, cutoffDateTime),
                             prefetchDcaRanks(),
                             prefetchDividends(window365dStart.atStartOfDay(), cutoffDateTime),
-                            prefetchAumMap(),
                             prefetchCorporateActions(window365dStart.atStartOfDay(), cutoffDateTime)
                     ).flatMap(tuple -> {
                         Map<String, Map<LocalDate, Double>> benchmarkReturnsMap = tuple.getT1();
                         Map<String, Integer> dcaRankMap = tuple.getT2();
                         Map<String, List<DividendAnnouncement>> dividendMap = tuple.getT3();
-                        Map<String, BigDecimal> aumMap = tuple.getT4();
-                        Map<String, List<CorporateAction>> corporateActionMap = tuple.getT5();
+                        Map<String, List<CorporateAction>> corporateActionMap = tuple.getT4();
 
                         return runScoringAndOrthogonalization(
-                                assets, benchmarkReturnsMap, dcaRankMap, dividendMap, corporateActionMap, aumMap,
+                                assets, benchmarkReturnsMap, dcaRankMap, dividendMap, corporateActionMap,
                                 evaluationDateTime, cutoffDateTime, queryStartDateTime,
                                 window365dStart, window90dStart, window30dStart
                         );
@@ -178,25 +176,12 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                     log.error("Monthly Top List evaluation failed: {}", e.getMessage(), e);
                     return updateMonthlyWatermarkFailed(evaluationDateTime, e.getMessage())
                             .thenReturn(new GlobalAssetScoreEvaluationResponse(
-                                    "FAILED",
-                                    "Evaluation pipeline failed: " + e.getMessage(),
-                                    evaluationDateTime.toString(),
-                                    0, 0, 0, 0
+                                     "FAILED",
+                                     "Evaluation pipeline failed: " + e.getMessage(),
+                                     evaluationDateTime.toString(),
+                                     0, 0, 0, 0
                             ));
                 });
-    }
-
-    private Mono<Map<String, BigDecimal>> prefetchAumMap() {
-        if (externalMarketDataPort != null) {
-            return externalMarketDataPort.fetchCurrentAumMap()
-                    .flatMap(map -> {
-                        if (map == null || map.isEmpty()) {
-                            return Mono.error(new IllegalStateException("AUM dataset is empty; cannot evaluate monthly Top List without fund sizes."));
-                        }
-                        return Mono.just(map);
-                    });
-        }
-        return Mono.error(new IllegalStateException("ExternalMarketDataPort is not configured."));
     }
 
     private Mono<Map<String, Map<LocalDate, Double>>> prefetchBenchmarks(LocalDateTime from, LocalDateTime to) {
@@ -284,7 +269,6 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             Map<String, Integer> dcaRankMap,
             Map<String, List<DividendAnnouncement>> dividendMap,
             Map<String, List<CorporateAction>> corporateActionMap,
-            Map<String, BigDecimal> aumMap,
             LocalDateTime evaluationDateTime, LocalDateTime cutoffDateTime, LocalDateTime queryStartDateTime,
             LocalDate window365dStart, LocalDate window90dStart, LocalDate window30dStart) {
 
@@ -316,8 +300,8 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
 
-                                // Universal Gatekeeper 2: Latest AUM >= 20 億 TWD
-                                BigDecimal currentAum = aumMap.get(asset.getTicker());
+                                // Universal Gatekeeper 2: Latest AUM >= 20 億 TWD (persisted in metadata)
+                                BigDecimal currentAum = asset.getFundSizeTwd();
                                 if (currentAum == null || currentAum.compareTo(UNIVERSAL_MIN_AUM) < 0) {
                                     return Optional.<EvaluatedCandidate>empty();
                                 }
