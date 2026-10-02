@@ -1,0 +1,1012 @@
+{
+  "ui_id": "global-market-intelligence",
+  "domain_module": "GlobalMarketIntelligence",
+  "root_element": {
+    "id": "global-market-intelligence-page",
+    "abstract_type": "Container",
+    "semantic_variant": "page",
+    "label": "全球市場情報 (Global Market Intelligence)",
+    "behavior_ref": "nielsen:aesthetic",
+    "ux_hints": {
+      "principles": [
+        "visual-hierarchy:size",
+        "f-pattern",
+        "gestalt:proximity"
+      ]
+    },
+    "children": [
+      {
+        "id": "page-header-section",
+        "abstract_type": "Section",
+        "semantic_variant": "summary-section",
+        "label": "頁首導航與系統狀態",
+        "behavior_ref": "nielsen:visibility",
+        "ux_hints": {
+          "principles": [
+            "nielsen:visibility",
+            "f-pattern"
+          ],
+          "primary_action_placement": "top-right"
+        },
+        "children": [
+          {
+            "id": "header-title-stack",
+            "abstract_type": "Stack",
+            "semantic_variant": "action-bar",
+            "label": "標題與數據膠囊工具列",
+            "behavior_ref": "nielsen:visibility",
+            "children": [
+              {
+                "id": "page-title-heading",
+                "abstract_type": "Heading",
+                "label": "全球市場情報 (Global Market Intelligence)",
+                "behavior_ref": "visual-hierarchy:weight"
+              },
+              {
+                "id": "page-subtitle-text",
+                "abstract_type": "Text",
+                "label": "跨週期主動收割引擎 (Adaptive Cross-Cycle Harvest Engine)",
+                "behavior_ref": "visual-hierarchy:color"
+              },
+              {
+                "id": "data-freshness-trigger",
+                "abstract_type": "Trigger",
+                "semantic_variant": "secondary",
+                "label": "數據新鮮度監控",
+                "data_ref": "listDataFeedWatermarks",
+                "behavior_ref": "nielsen:visibility",
+                "ux_hints": {
+                  "principles": [
+                    "nielsen:visibility",
+                    "fitts-law"
+                  ]
+                },
+                "interactions": [
+                  {
+                    "on_event": "on_click",
+                    "target_id": "watermark-detail-modal",
+                    "behavior_ref": "nielsen:visibility"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "main-tabs-container",
+        "abstract_type": "Container",
+        "semantic_variant": "panel",
+        "label": "三大核心情報頁籤",
+        "behavior_ref": "nielsen:flexibility",
+        "ux_hints": {
+          "principles": [
+            "nielsen:flexibility",
+            "gestalt:similarity"
+          ]
+        },
+        "children": [
+          {
+            "id": "tabs-nav-stack",
+            "abstract_type": "Stack",
+            "semantic_variant": "action-bar",
+            "label": "情報頁籤導航列",
+            "behavior_ref": "nielsen:control",
+            "ux_hints": {
+              "max_visible_options": 3
+            },
+            "children": [
+              {
+                "id": "tab-macro-trigger",
+                "abstract_type": "Trigger",
+                "semantic_variant": "secondary",
+                "label": "Tab 1：全球宏觀與情緒雷達",
+                "behavior_ref": "nielsen:control",
+                "interactions": [
+                  {
+                    "on_event": "on_click",
+                    "target_id": "macro-sentiment-section",
+                    "behavior_ref": "nielsen:feedback"
+                  }
+                ]
+              },
+              {
+                "id": "tab-leaderboard-trigger",
+                "abstract_type": "Trigger",
+                "semantic_variant": "secondary",
+                "label": "Tab 2：合規標的天梯榜與正交雷達",
+                "behavior_ref": "nielsen:control",
+                "interactions": [
+                  {
+                    "on_event": "on_click",
+                    "target_id": "qualified-leaderboard-section",
+                    "behavior_ref": "nielsen:feedback"
+                  }
+                ]
+              },
+              {
+                "id": "tab-dca-trigger",
+                "abstract_type": "Trigger",
+                "semantic_variant": "secondary",
+                "label": "Tab 3：定期定額散戶人氣榜與除息月曆",
+                "behavior_ref": "nielsen:control",
+                "interactions": [
+                  {
+                    "on_event": "on_click",
+                    "target_id": "dca-calendar-section",
+                    "behavior_ref": "nielsen:feedback"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "macro-sentiment-section",
+            "abstract_type": "Section",
+            "semantic_variant": "summary-section",
+            "label": "全球宏觀與情緒雷達視圖",
+            "behavior_ref": "nielsen:recognition",
+            "ux_hints": {
+              "principles": [
+                "gestalt:proximity",
+                "visual-hierarchy:size"
+              ]
+            },
+            "children": [
+              {
+                "id": "sentiment-indices-heading",
+                "abstract_type": "Heading",
+                "label": "5 大核心基準指數與恐慌情緒卡片",
+                "behavior_ref": "visual-hierarchy:weight"
+              },
+              {
+                "id": "sentiment-kpi-grid",
+                "abstract_type": "Grid",
+                "semantic_variant": "kpi-grid",
+                "label": "行情指數卡片網格",
+                "data_ref": "listMarketDailyQuotes",
+                "behavior_ref": "visual-hierarchy:size",
+                "ux_hints": {
+                  "group_size_hint": 7
+                },
+                "children": [
+                  {
+                    "id": "metric-twii",
+                    "abstract_type": "Metric",
+                    "label": "^TWII 台股加權指數",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-gspc",
+                    "abstract_type": "Metric",
+                    "label": "^GSPC 標普500指數",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-ndx",
+                    "abstract_type": "Metric",
+                    "label": "^NDX 那斯達克100指數",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-sox",
+                    "abstract_type": "Metric",
+                    "label": "^SOX 費城半導體指數",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-n225",
+                    "abstract_type": "Metric",
+                    "label": "^N225 日經225指數",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-vix",
+                    "abstract_type": "Metric",
+                    "label": "^VIX 波動率指數",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-fear-greed",
+                    "abstract_type": "Metric",
+                    "label": "FEAR_GREED 恐慌與貪婪指數",
+                    "data_ref": "listMarketDailyQuotes",
+                    "behavior_ref": "nielsen:visibility"
+                  }
+                ]
+              },
+              {
+                "id": "macro-yield-heading",
+                "abstract_type": "Heading",
+                "label": "宏觀利率與殖利率曲線儀表盤",
+                "behavior_ref": "visual-hierarchy:weight"
+              },
+              {
+                "id": "macro-yield-grid",
+                "abstract_type": "Grid",
+                "semantic_variant": "kpi-grid",
+                "label": "宏觀利率指標網格",
+                "data_ref": "getLatestMacroYieldSnapshot",
+                "behavior_ref": "visual-hierarchy:size",
+                "ux_hints": {
+                  "group_size_hint": 5
+                },
+                "children": [
+                  {
+                    "id": "metric-dgs10",
+                    "abstract_type": "Metric",
+                    "label": "10Y 美國公債殖利率 (DGS10)",
+                    "data_ref": "getLatestMacroYieldSnapshot",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-dgs20",
+                    "abstract_type": "Metric",
+                    "label": "20Y 美國公債殖利率 (DGS20)",
+                    "data_ref": "getLatestMacroYieldSnapshot",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-t10y2y",
+                    "abstract_type": "Metric",
+                    "label": "10Y-2Y 殖利率利差 (T10Y2Y)",
+                    "data_ref": "getLatestMacroYieldSnapshot",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-corp-yield",
+                    "abstract_type": "Metric",
+                    "label": "ICE BofA 企業債殖利率 (BAMLC0A0CMEY)",
+                    "data_ref": "getLatestMacroYieldSnapshot",
+                    "behavior_ref": "nielsen:visibility"
+                  },
+                  {
+                    "id": "metric-macro-regime",
+                    "abstract_type": "Metric",
+                    "label": "宏觀景氣燈號 (Macro Regime)",
+                    "data_ref": "getMacroRegime",
+                    "behavior_ref": "nielsen:recognition"
+                  }
+                ]
+              },
+              {
+                "id": "drawdown-radar-container",
+                "abstract_type": "Container",
+                "semantic_variant": "card",
+                "label": "52 週高點回撤率監控 (Drawdown Radar)",
+                "behavior_ref": "visual-hierarchy:size",
+                "children": [
+                  {
+                    "id": "drawdown-heading",
+                    "abstract_type": "Heading",
+                    "label": "52 週高點回撤雷達與生命線均線系統",
+                    "behavior_ref": "visual-hierarchy:weight"
+                  },
+                  {
+                    "id": "drawdown-toolbar-stack",
+                    "abstract_type": "Stack",
+                    "semantic_variant": "filter-bar",
+                    "label": "回撤圖表控制工具列",
+                    "behavior_ref": "nielsen:control",
+                    "children": [
+                      {
+                        "id": "drawdown-benchmark-selector",
+                        "abstract_type": "Selection",
+                        "semantic_variant": "dropdown",
+                        "label": "基準指數切換",
+                        "behavior_ref": "nielsen:control",
+                        "ux_hints": {
+                          "max_visible_options": 5
+                        },
+                        "interactions": [
+                          {
+                            "on_event": "on_change",
+                            "target_id": "drawdown-radar-chart",
+                            "behavior_ref": "nielsen:feedback"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "toggle-ma-switch",
+                        "abstract_type": "Switch",
+                        "label": "均線開關 (20/60/120/240MA)",
+                        "behavior_ref": "nielsen:flexibility",
+                        "interactions": [
+                          {
+                            "on_event": "on_change",
+                            "target_id": "drawdown-radar-chart",
+                            "behavior_ref": "nielsen:feedback"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "toggle-bb-switch",
+                        "abstract_type": "Switch",
+                        "label": "布林通道開關 (20MA ± 2σ)",
+                        "behavior_ref": "nielsen:flexibility",
+                        "interactions": [
+                          {
+                            "on_event": "on_change",
+                            "target_id": "drawdown-radar-chart",
+                            "behavior_ref": "nielsen:feedback"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "toggle-fib-switch",
+                        "abstract_type": "Switch",
+                        "label": "黃金分割警戒線 (-23.6%, -38.2%, -61.8%)",
+                        "behavior_ref": "nielsen:flexibility",
+                        "interactions": [
+                          {
+                            "on_event": "on_change",
+                            "target_id": "drawdown-radar-chart",
+                            "behavior_ref": "nielsen:feedback"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "drawdown-radar-chart",
+                    "abstract_type": "Chart",
+                    "label": "52 週回撤雷達走勢圖 (含前值平滑遞延 LOCF)",
+                    "data_ref": "getQuoteTimeSeries",
+                    "behavior_ref": "visual-hierarchy:size"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "qualified-leaderboard-section",
+            "abstract_type": "Section",
+            "semantic_variant": "list-section",
+            "label": "合規標的天梯榜與正交雷達視圖",
+            "behavior_ref": "f-pattern",
+            "ux_hints": {
+              "principles": [
+                "f-pattern",
+                "gestalt:proximity"
+              ]
+            },
+            "children": [
+              {
+                "id": "leaderboard-heading",
+                "abstract_type": "Heading",
+                "label": "合規標的天梯榜與正交去共線雷達",
+                "behavior_ref": "visual-hierarchy:weight"
+              },
+              {
+                "id": "orthogonal-control-bar",
+                "abstract_type": "Stack",
+                "semantic_variant": "filter-bar",
+                "label": "正交引擎控制列",
+                "behavior_ref": "nielsen:control",
+                "children": [
+                  {
+                    "id": "asset-class-selector",
+                    "abstract_type": "Selection",
+                    "semantic_variant": "dropdown",
+                    "label": "候選資產池 (核心大盤 / 動能衛星 / 防禦債券)",
+                    "behavior_ref": "nielsen:control",
+                    "ux_hints": {
+                      "max_visible_options": 3
+                    },
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "qualified-leaderboard-table",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "orthogonal-mode-selector",
+                    "abstract_type": "Selection",
+                    "semantic_variant": "dropdown",
+                    "label": "正交模式 (模式 A: 全局 Rank 1 種子 / 模式 B: 自訂錨定種子)",
+                    "behavior_ref": "nielsen:control",
+                    "ux_hints": {
+                      "max_visible_options": 2
+                    },
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "qualified-leaderboard-table",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "seed-ticker-selector",
+                    "abstract_type": "Selection",
+                    "semantic_variant": "dropdown",
+                    "label": "自訂錨定種子 S (限選所屬池 Top 標的)",
+                    "behavior_ref": "nielsen:control",
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "qualified-leaderboard-table",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "open-pairwise-matrix-btn",
+                    "abstract_type": "Trigger",
+                    "semantic_variant": "secondary",
+                    "label": "查看兩兩正交矩陣 (Pairwise Matrix)",
+                    "behavior_ref": "nielsen:recognition",
+                    "ux_hints": {
+                      "principles": [
+                        "nielsen:recognition",
+                        "fitts-law"
+                      ]
+                    },
+                    "interactions": [
+                      {
+                        "on_event": "on_click",
+                        "target_id": "pairwise-matrix-modal",
+                        "behavior_ref": "nielsen:visibility"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "qualified-leaderboard-table",
+                "abstract_type": "Table",
+                "semantic_variant": "data-table",
+                "label": "合規標的天梯榜數據表",
+                "data_ref": "getOrthogonalCandidates",
+                "behavior_ref": "fitts-law",
+                "columns": [
+                  {
+                    "field": "classRank",
+                    "label": "組內排名",
+                    "sortable": true,
+                    "default_sort": "asc"
+                  },
+                  {
+                    "field": "orthogonalStatus",
+                    "label": "正交狀態",
+                    "sortable": true
+                  },
+                  {
+                    "field": "ticker",
+                    "label": "標的代碼",
+                    "sortable": false
+                  },
+                  {
+                    "field": "name",
+                    "label": "標的名稱",
+                    "sortable": false
+                  },
+                  {
+                    "field": "distributionFrequency",
+                    "label": "配息週期",
+                    "sortable": false
+                  },
+                  {
+                    "field": "closePrice",
+                    "label": "最新市價",
+                    "sortable": true
+                  },
+                  {
+                    "field": "changePct",
+                    "label": "單日漲跌(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return1m",
+                    "label": "1 個月報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return3m",
+                    "label": "3 個月報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return6m",
+                    "label": "6 個月報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return1y",
+                    "label": "1 年報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "fundSizeTwd",
+                    "label": "基金規模(AUM)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "compositeScore",
+                    "label": "綜合評分",
+                    "sortable": true
+                  }
+                ],
+                "interactions": [
+                  {
+                    "on_event": "on_click",
+                    "target_id": "asset-detail-drawer",
+                    "behavior_ref": "nielsen:recognition"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dca-calendar-section",
+            "abstract_type": "Section",
+            "semantic_variant": "list-section",
+            "label": "定期定額散戶人氣榜與除息月曆視圖",
+            "behavior_ref": "gestalt:proximity",
+            "ux_hints": {
+              "principles": [
+                "gestalt:proximity",
+                "visual-hierarchy:size"
+              ]
+            },
+            "children": [
+              {
+                "id": "dca-top20-container",
+                "abstract_type": "Container",
+                "semantic_variant": "card",
+                "label": "定期定額散戶人氣榜 Top 20",
+                "behavior_ref": "visual-hierarchy:size",
+                "children": [
+                  {
+                    "id": "dca-heading",
+                    "abstract_type": "Heading",
+                    "label": "證交所定期定額散戶人氣榜 Top 20",
+                    "behavior_ref": "visual-hierarchy:weight"
+                  },
+                  {
+                    "id": "dca-top20-table",
+                    "abstract_type": "Table",
+                    "semantic_variant": "data-table",
+                    "label": "定期定額人氣表格",
+                    "data_ref": "getTop20DcaRanks",
+                    "behavior_ref": "fitts-law",
+                    "columns": [
+                      {
+                        "field": "rankPosition",
+                        "label": "排名",
+                        "sortable": true,
+                        "default_sort": "asc"
+                      },
+                      {
+                        "field": "ticker",
+                        "label": "標的代碼",
+                        "sortable": false
+                      },
+                      {
+                        "field": "name",
+                        "label": "標的名稱",
+                        "sortable": false
+                      },
+                      {
+                        "field": "distributionFrequency",
+                        "label": "配息週期",
+                        "sortable": false
+                      },
+                      {
+                        "field": "investorCount",
+                        "label": "定額交易戶數",
+                        "sortable": true
+                      },
+                      {
+                        "field": "rankingYear",
+                        "label": "統計年份",
+                        "sortable": true
+                      },
+                      {
+                        "field": "rankingMonth",
+                        "label": "統計月份",
+                        "sortable": true
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "calendar-events-container",
+                "abstract_type": "Container",
+                "semantic_variant": "card",
+                "label": "除息與股票分割事件月曆",
+                "behavior_ref": "visual-hierarchy:size",
+                "children": [
+                  {
+                    "id": "calendar-heading",
+                    "abstract_type": "Heading",
+                    "label": "ETF 除息月曆與股票分割事件視圖",
+                    "behavior_ref": "visual-hierarchy:weight"
+                  },
+                  {
+                    "id": "calendar-filter-bar",
+                    "abstract_type": "Stack",
+                    "semantic_variant": "filter-bar",
+                    "label": "事件月曆篩選工具列",
+                    "behavior_ref": "nielsen:control",
+                    "children": [
+                      {
+                        "id": "freq-filter-selector",
+                        "abstract_type": "Selection",
+                        "semantic_variant": "dropdown",
+                        "label": "配息週期快篩 (月配 / 季配 / 半年配 / 年配 / 全部)",
+                        "behavior_ref": "nielsen:control",
+                        "ux_hints": {
+                          "max_visible_options": 6
+                        },
+                        "interactions": [
+                          {
+                            "on_event": "on_change",
+                            "target_id": "dividend-announcements-table",
+                            "behavior_ref": "nielsen:feedback"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "dividend-announcements-table",
+                    "abstract_type": "Table",
+                    "semantic_variant": "data-table",
+                    "label": "除息公告清單 (綠色標記除息日 / 藍色標記發放日)",
+                    "data_ref": "listDividendAnnouncements",
+                    "behavior_ref": "fitts-law",
+                    "columns": [
+                      {
+                        "field": "exDate",
+                        "label": "除息日",
+                        "sortable": true,
+                        "default_sort": "asc"
+                      },
+                      {
+                        "field": "ticker",
+                        "label": "標的代碼",
+                        "sortable": false
+                      },
+                      {
+                        "field": "dividendPerShare",
+                        "label": "每股配息金額 (TWD)",
+                        "sortable": true
+                      },
+                      {
+                        "field": "paymentDate",
+                        "label": "發放日",
+                        "sortable": true
+                      },
+                      {
+                        "field": "taxTag",
+                        "label": "稅務標籤 (76W免二代健保 / 54C)",
+                        "sortable": true
+                      }
+                    ]
+                  },
+                  {
+                    "id": "corporate-actions-table",
+                    "abstract_type": "Table",
+                    "semantic_variant": "data-table",
+                    "label": "股票分割事件清單 (紫色標記生效日)",
+                    "data_ref": "listCorporateActions",
+                    "behavior_ref": "fitts-law",
+                    "columns": [
+                      {
+                        "field": "effectiveDate",
+                        "label": "分割生效日",
+                        "sortable": true,
+                        "default_sort": "asc"
+                      },
+                      {
+                        "field": "ticker",
+                        "label": "標的代碼",
+                        "sortable": false
+                      },
+                      {
+                        "field": "actionType",
+                        "label": "事件類型 (STOCK_SPLIT)",
+                        "sortable": false
+                      },
+                      {
+                        "field": "splitRatioNumerator",
+                        "label": "分割分子",
+                        "sortable": false
+                      },
+                      {
+                        "field": "splitRatioDenominator",
+                        "label": "分割分母",
+                        "sortable": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "watermark-detail-modal",
+        "abstract_type": "Overlay",
+        "semantic_variant": "modal",
+        "label": "數據饋送水位監控詳情 (Watermark Detail)",
+        "behavior_ref": "nielsen:visibility",
+        "ux_hints": {
+          "principles": [
+            "nielsen:visibility",
+            "nielsen:control"
+          ]
+        },
+        "children": [
+          {
+            "id": "watermark-modal-heading",
+            "abstract_type": "Heading",
+            "label": "數據饋送管線同步水位狀態",
+            "behavior_ref": "visual-hierarchy:weight"
+          },
+          {
+            "id": "watermark-table",
+            "abstract_type": "Table",
+            "semantic_variant": "summary-table",
+            "label": "各 Feed 同步水位表",
+            "data_ref": "listDataFeedWatermarks",
+            "behavior_ref": "nielsen:visibility",
+            "columns": [
+              {
+                "field": "feedName",
+                "label": "資料來源 (Feed Name)",
+                "sortable": false
+              },
+              {
+                "field": "status",
+                "label": "同步狀態",
+                "sortable": true
+              },
+              {
+                "field": "latestRecordDate",
+                "label": "最新數據日期",
+                "sortable": true
+              },
+              {
+                "field": "recordsSyncedCount",
+                "label": "已同步筆數",
+                "sortable": true
+              },
+              {
+                "field": "lastSuccessfulSyncAt",
+                "label": "最後成功同步時間",
+                "sortable": true,
+                "default_sort": "desc"
+              },
+              {
+                "field": "updatedAt",
+                "label": "系統更新時間",
+                "sortable": false
+              }
+            ]
+          },
+          {
+            "id": "close-watermark-modal-btn",
+            "abstract_type": "Trigger",
+            "semantic_variant": "secondary",
+            "label": "關閉",
+            "behavior_ref": "nielsen:control",
+            "interactions": [
+              {
+                "on_event": "on_click",
+                "target_id": "watermark-detail-modal",
+                "behavior_ref": "nielsen:control"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "pairwise-matrix-modal",
+        "abstract_type": "Overlay",
+        "semantic_variant": "modal",
+        "label": "兩兩正交矩陣熱圖 (Pairwise Correlation & R² Matrix)",
+        "behavior_ref": "nielsen:recognition",
+        "ux_hints": {
+          "principles": [
+            "visual-hierarchy:size",
+            "nielsen:control"
+          ]
+        },
+        "children": [
+          {
+            "id": "pairwise-modal-heading",
+            "abstract_type": "Heading",
+            "label": "兩兩資產共線性檢驗矩陣",
+            "behavior_ref": "visual-hierarchy:weight"
+          },
+          {
+            "id": "pairwise-matrix-chart",
+            "abstract_type": "Chart",
+            "label": "兩兩相關係數與 R² 熱圖 (R² ≥ 0.50 標記共線排除)",
+            "data_ref": "listPairwiseMatrix",
+            "behavior_ref": "visual-hierarchy:size"
+          },
+          {
+            "id": "close-pairwise-modal-btn",
+            "abstract_type": "Trigger",
+            "semantic_variant": "secondary",
+            "label": "關閉",
+            "behavior_ref": "nielsen:control",
+            "interactions": [
+              {
+                "on_event": "on_click",
+                "target_id": "pairwise-matrix-modal",
+                "behavior_ref": "nielsen:control"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "asset-detail-drawer",
+        "abstract_type": "Overlay",
+        "semantic_variant": "drawer",
+        "label": "標的詳細資訊抽屜 (Asset Detail Drawer)",
+        "behavior_ref": "nielsen:recognition",
+        "ux_hints": {
+          "principles": [
+            "visual-hierarchy:size",
+            "gestalt:proximity"
+          ]
+        },
+        "children": [
+          {
+            "id": "drawer-header-stack",
+            "abstract_type": "Stack",
+            "semantic_variant": "action-bar",
+            "label": "抽屜頂部標題與關閉按鈕",
+            "behavior_ref": "nielsen:control",
+            "children": [
+              {
+                "id": "drawer-heading",
+                "abstract_type": "Heading",
+                "label": "標的深度檔案與超跌加碼分析",
+                "behavior_ref": "visual-hierarchy:weight"
+              },
+              {
+                "id": "close-drawer-btn",
+                "abstract_type": "Trigger",
+                "semantic_variant": "secondary",
+                "label": "關閉抽屜",
+                "behavior_ref": "nielsen:control",
+                "interactions": [
+                  {
+                    "on_event": "on_click",
+                    "target_id": "asset-detail-drawer",
+                    "behavior_ref": "nielsen:control"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "drawer-meta-container",
+            "abstract_type": "Container",
+            "semantic_variant": "card",
+            "label": "基本檔案與配息政策",
+            "data_ref": "getGlobalAssetByTicker",
+            "behavior_ref": "visual-hierarchy:size",
+            "children": [
+              {
+                "id": "drawer-asset-metric-ticker",
+                "abstract_type": "Metric",
+                "label": "標的代碼",
+                "data_ref": "getGlobalAssetByTicker",
+                "behavior_ref": "nielsen:visibility"
+              },
+              {
+                "id": "drawer-asset-metric-name",
+                "abstract_type": "Metric",
+                "label": "標的名稱",
+                "data_ref": "getGlobalAssetByTicker",
+                "behavior_ref": "nielsen:visibility"
+              },
+              {
+                "id": "drawer-asset-metric-aum",
+                "abstract_type": "Metric",
+                "label": "基金規模 (AUM)",
+                "data_ref": "getGlobalAssetByTicker",
+                "behavior_ref": "nielsen:visibility"
+              },
+              {
+                "id": "drawer-asset-metric-freq",
+                "abstract_type": "Metric",
+                "label": "法定配息週期",
+                "data_ref": "getGlobalAssetByTicker",
+                "behavior_ref": "nielsen:visibility"
+              }
+            ]
+          },
+          {
+            "id": "drawer-spider-radar-container",
+            "abstract_type": "Container",
+            "semantic_variant": "card",
+            "label": "多因子得分拆解雷達圖",
+            "behavior_ref": "visual-hierarchy:size",
+            "children": [
+              {
+                "id": "spider-radar-chart",
+                "abstract_type": "Chart",
+                "label": "因子百分位數雷達 (R² / DCA / AUM / MOM / KER / Sharpe / YTM)",
+                "data_ref": "getScoreByTicker",
+                "behavior_ref": "visual-hierarchy:size"
+              }
+            ]
+          },
+          {
+            "id": "drawer-kline-container",
+            "abstract_type": "Container",
+            "semantic_variant": "card",
+            "label": "歷史 Raw Close 日 K 線與均線系統",
+            "behavior_ref": "visual-hierarchy:size",
+            "children": [
+              {
+                "id": "kline-chart",
+                "abstract_type": "Chart",
+                "label": "原始收盤日 K 線 (20/60/120/240MA & 月線布林通道)",
+                "data_ref": "getQuoteTimeSeries",
+                "behavior_ref": "visual-hierarchy:size"
+              }
+            ]
+          },
+          {
+            "id": "drawer-dip-buy-container",
+            "abstract_type": "Container",
+            "semantic_variant": "card",
+            "label": "🎯 超跌加碼勝率評分卡片 (Dip-Buying Score)",
+            "data_ref": "getDipBuyOpportunity",
+            "behavior_ref": "visual-hierarchy:size",
+            "children": [
+              {
+                "id": "dip-buy-score-metric",
+                "abstract_type": "Metric",
+                "label": "超跌加碼綜合評分 (S_dip, 0 ~ 100 分)",
+                "data_ref": "getDipBuyOpportunity",
+                "behavior_ref": "visual-hierarchy:weight"
+              },
+              {
+                "id": "dip-buy-star-metric",
+                "abstract_type": "Metric",
+                "label": "訊號燈與評級 (五星黃金坑 / 四星超跌區 / 三星平穩區 / 低星觀望區)",
+                "data_ref": "getDipBuyOpportunity",
+                "behavior_ref": "visual-hierarchy:color"
+              },
+              {
+                "id": "dip-buy-winrate-metric",
+                "abstract_type": "Metric",
+                "label": "歷史 1 年持有正報酬勝率",
+                "data_ref": "getDipBuyOpportunity",
+                "behavior_ref": "nielsen:recognition"
+              },
+              {
+                "id": "dip-buy-action-text",
+                "abstract_type": "Text",
+                "label": "系統建議動作 (果斷撈底產生單筆超跌工單 / 分批加碼 / 定額靜默扣款 / 嚴禁追高)",
+                "data_ref": "getDipBuyOpportunity",
+                "behavior_ref": "nielsen:recognition"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
