@@ -60,8 +60,8 @@ public class GlobalAssetScore {
     @Column("r_squared")
     private BigDecimal rSquared;
 
-    @Column("momentum_12_1")
-    private BigDecimal momentum121;
+    @Column("momentum_12m")
+    private BigDecimal momentum12m;
 
     @Column("kaufman_er")
     private BigDecimal kaufmanEr;

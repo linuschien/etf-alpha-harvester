@@ -142,7 +142,7 @@ public class MonthlyTopListDumpIntegrationTest {
         sql.append("-- Total Pairwise Matrices: ").append(allMatrices.size()).append(" (6 Core pairs, 190 Satellite pairs)\n\n");
 
         // 6. Generate GlobalAssetScore INSERT
-        sql.append("INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12_1, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)\nVALUES\n");
+        sql.append("INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12m, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)\nVALUES\n");
         for (int i = 0; i < allScores.size(); i++) {
             GlobalAssetScore s = allScores.get(i);
             String isLast = (i == allScores.size() - 1) ? ";" : ",";
@@ -156,7 +156,7 @@ public class MonthlyTopListDumpIntegrationTest {
                     formatDecimal(s.getCompositeScore()),
                     formatDecimal(s.getFundSizeTwd()),
                     formatDecimal(s.getRSquared()),
-                    formatDecimal(s.getMomentum121()),
+                    formatDecimal(s.getMomentum12m()),
                     formatDecimal(s.getKaufmanEr()),
                     formatDecimal(s.getSharpeRatio()),
                     formatDecimal(s.getVolatility90d()),
@@ -278,7 +278,7 @@ public class MonthlyTopListDumpIntegrationTest {
         sql.append("-- Total Pairwise Matrices: ").append(allMatrices.size()).append("\n\n");
 
         // 6. Generate GlobalAssetScore INSERT
-        sql.append("INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12_1, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)\nVALUES\n");
+        sql.append("INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12m, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)\nVALUES\n");
         for (int i = 0; i < allScores.size(); i++) {
             GlobalAssetScore s = allScores.get(i);
             String isLast = (i == allScores.size() - 1) ? ";" : ",";
@@ -292,7 +292,7 @@ public class MonthlyTopListDumpIntegrationTest {
                     formatDecimal(s.getCompositeScore()),
                     formatDecimal(s.getFundSizeTwd()),
                     formatDecimal(s.getRSquared()),
-                    formatDecimal(s.getMomentum121()),
+                    formatDecimal(s.getMomentum12m()),
                     formatDecimal(s.getKaufmanEr()),
                     formatDecimal(s.getSharpeRatio()),
                     formatDecimal(s.getVolatility90d()),
@@ -553,8 +553,8 @@ public class MonthlyTopListDumpIntegrationTest {
 
             BigDecimal pLatest = (quotes365d.isEmpty()) ? BigDecimal.ONE : quotes365d.get(quotes365d.size() - 1).getClosePrice();
             BigDecimal p365d = findPriceNearDate(quotes365d, start365d.toLocalDate());
-            double mom121 = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365d);
-            boolean passMom = mom121 > 0.0;
+            double mom12m = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateMomentum12M(pLatest, p365d);
+            boolean passMom = mom12m > 0.0;
 
             List<BigDecimal> prices365d = quotes365d.stream().map(com.alphaharvester.domain.entity.MarketDailyQuote::getClosePrice).toList();
             double ker = com.alphaharvester.domain.math.FinancialMetricsCalculator.calculateKaufmanEfficiencyRatio(prices365d);
@@ -566,8 +566,8 @@ public class MonthlyTopListDumpIntegrationTest {
             log.info("DIAG {} R^2: TWII={}, GSPC={}, NDX={}, N225={}, maxR2={}, passCoreR2={}",
                     t, String.format("%.4f", r2Twii), String.format("%.4f", r2Gspc), String.format("%.4f", r2Ndx),
                     String.format("%.4f", r2N225), String.format("%.4f", maxR2), passCoreR2);
-            log.info("DIAG {} Satellite: vol90d={} (passVol={}), mom121={} (passMom={}), ker={}, sharpe={}, r2Twii={}",
-                    t, String.format("%.4f", vol90d), passVol, String.format("%.4f", mom121), passMom,
+            log.info("DIAG {} Satellite: vol90d={} (passVol={}), mom12m={} (passMom={}), ker={}, sharpe={}, r2Twii={}",
+                    t, String.format("%.4f", vol90d), passVol, String.format("%.4f", mom12m), passMom,
                     String.format("%.4f", ker), String.format("%.4f", sharpe), String.format("%.4f", r2Twii));
         }
 

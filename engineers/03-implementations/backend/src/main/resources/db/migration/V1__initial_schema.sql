@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS global_asset_score (
     composite_score DECIMAL(6,2) NOT NULL,
     fund_size_twd DECIMAL(18,2),
     r_squared DECIMAL(6,4),
-    momentum_12_1 DECIMAL(10,4),
+    momentum_12m DECIMAL(10,4),
     kaufman_er DECIMAL(6,4),
     sharpe_ratio DECIMAL(10,4),
     volatility_90d DECIMAL(10,4),

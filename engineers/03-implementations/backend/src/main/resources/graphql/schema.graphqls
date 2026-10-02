@@ -101,7 +101,7 @@ type GlobalAssetScore {
     orthogonalStatus: OrthogonalStatus
     collisionDetail: String
     rSquared: Float
-    momentum121: Float
+    momentum12m: Float
     kaufmanEr: Float
     sharpeRatio: Float
     volatility90d: Float

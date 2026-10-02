@@ -152,7 +152,7 @@ public class GlobalAssetQueryService {
 
         ExampleMatcher matcher = ExampleMatcher.matchingAll()
                 .withIgnoreNullValues()
-                .withIgnorePaths("compositeScore", "fundSizeTwd", "classRank", "orthogonalStatus", "rSquared", "momentum121", "kaufmanEr", "sharpeRatio", "volatility90d", "ytm", "dcaRank");
+                .withIgnorePaths("compositeScore", "fundSizeTwd", "classRank", "orthogonalStatus", "rSquared", "momentum12m", "kaufmanEr", "sharpeRatio", "volatility90d", "ytm", "dcaRank");
 
         return scoreRepository.findAll(Example.of(probe, matcher));
     }

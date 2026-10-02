@@ -4,7 +4,7 @@
 -- Total Scores: 51 (4 Core, 20 Satellite, 5 Defensive)
 -- Total Pairwise Matrices: 867 (6 Core pairs, 190 Satellite pairs)
 
-INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12_1, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)
+INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12m, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)
 VALUES
     ('67fd9273-5a3c-41f7-9033-aa04306edcc2', '9864935b-266e-3264-a3af-450a1b66747c', '0050', TIMESTAMP '2026-09-01 00:00:00', 'CORE', 1, 66.67, 2501932855000.00, 0.9298, NULL, NULL, NULL, NULL, NULL, 1),
     ('cc361dfa-698d-4989-ac62-98f5d1f0e71c', 'b66fd0e4-b9bc-3b1a-92ff-a78957ecedcf', '006208', TIMESTAMP '2026-09-01 00:00:00', 'CORE', 2, 66.67, 481098433200.00, 0.9371, NULL, NULL, NULL, NULL, NULL, 4),

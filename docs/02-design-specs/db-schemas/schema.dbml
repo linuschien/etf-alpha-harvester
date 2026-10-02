@@ -103,6 +103,13 @@ Table global_asset_score {
   class_rank integer [not null, note: 'Independent rank within candidate asset class (Rank 1, 2, 3...)']
   composite_score decimal(6,2) [not null, note: 'Normalized total score [0, 100]']
   fund_size_twd decimal(18,2)
+  r_squared decimal(6,4)
+  momentum_12m decimal(10,4)
+  kaufman_er decimal(6,4)
+  sharpe_ratio decimal(10,4)
+  volatility_90d decimal(10,4)
+  ytm decimal(6,4)
+  dca_rank integer
 
   indexes {
     (asset_class, evaluation_date, class_rank)

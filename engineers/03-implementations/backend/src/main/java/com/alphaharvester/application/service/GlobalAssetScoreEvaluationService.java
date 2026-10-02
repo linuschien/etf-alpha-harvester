@@ -269,7 +269,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             Map<LocalDate, Double> dailyReturns365d,
             double maxR2,
             double r2Taiex,
-            double mom121,
+            double mom12m,
             double ker,
             double sharpe,
             double vol90d,
@@ -557,7 +557,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
     private List<GlobalAssetScore> scoreSatelliteCandidates(List<EvaluatedCandidate> candidates, LocalDateTime evaluationDateTime) {
         if (candidates.isEmpty()) return Collections.emptyList();
 
-        Map<EvaluatedCandidate, Double> momRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, EvaluatedCandidate::mom121, true);
+        Map<EvaluatedCandidate, Double> momRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, EvaluatedCandidate::mom12m, true);
         Map<EvaluatedCandidate, Double> kerRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, EvaluatedCandidate::ker, true);
         Map<EvaluatedCandidate, Double> sharpeRanks = FinancialMetricsCalculator.calculatePercentileRanks(candidates, EvaluatedCandidate::sharpe, true);
 
@@ -578,7 +578,7 @@ public class GlobalAssetScoreEvaluationService implements GlobalAssetScoreEvalua
             score.setCompositeScore(BigDecimal.valueOf(composite).setScale(2, RoundingMode.HALF_UP));
             score.setFundSizeTwd(c.currentAum());
             score.setRSquared(BigDecimal.valueOf(c.r2Taiex()).setScale(4, RoundingMode.HALF_UP));
-            score.setMomentum121(BigDecimal.valueOf(c.mom121()).setScale(4, RoundingMode.HALF_UP));
+            score.setMomentum12m(BigDecimal.valueOf(c.mom12m()).setScale(4, RoundingMode.HALF_UP));
             score.setKaufmanEr(BigDecimal.valueOf(c.ker()).setScale(4, RoundingMode.HALF_UP));
             score.setSharpeRatio(BigDecimal.valueOf(c.sharpe()).setScale(4, RoundingMode.HALF_UP));
             score.setVolatility90d(BigDecimal.valueOf(c.vol90d()).setScale(4, RoundingMode.HALF_UP));

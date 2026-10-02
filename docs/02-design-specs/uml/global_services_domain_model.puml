@@ -51,6 +51,13 @@ package "Global Domain Entities (Persisted Data)" {
         +Integer class_rank
         +Decimal composite_score
         +Decimal fund_size_twd
+        +Decimal r_squared
+        +Decimal momentum_12m
+        +Decimal kaufman_er
+        +Decimal sharpe_ratio
+        +Decimal volatility_90d
+        +Decimal ytm
+        +Integer dca_rank
     }
 
     class DcaPopularityRank <<Entity>> {

@@ -64,7 +64,7 @@
   - 取前 10 名進入「核心 Top 10」，供 Stage 3 正交去共線。
 - **AC3 (動能衛星池評分公式計算 - 產出 Satellite Top 50)**：
   $$S_{\text{sat}} = \left( \frac{1}{3}\text{Rank}(\text{MOM}) + \frac{1}{3}\text{Rank}(\text{KER}) + \frac{1}{3}\text{Rank}(\text{Sharpe}) \right) \times (1 - R^2_{\text{TAIEX}})$$
-  - $\text{Rank}(\text{MOM})$：12 個月經典動能 $\text{MOM}(12\text{M}) = [P(T) / P(T - 365\text{d})] - 1$ 百分位排名。
+  - $\text{Rank}(\text{MOM})$：12 個月經典動能 $\text{MOM}(12\text{M}) = [P(T) / P(T - 365\text{d})] - 1$ 百分位排名（持久化欄位：`momentum_12m`）。
   - $\text{Rank}(\text{KER})$：365 日曆天考夫曼效率比 $\text{KER} = \frac{|P(t) - P(t-365\text{d})|}{\sum_{i} |P(i) - P(i-1)|}$ 百分位排名。
   - $\text{Rank}(\text{Sharpe})$：近 365 日曆天純年化夏普值 $\text{Sharpe} = \frac{\text{Mean}(r)}{\text{Std}(r)} \times \sqrt{252}$（不扣除無風險利率，$r_f = 0$）百分位排名。
   - $(1 - R^2_{\text{TAIEX}})$：台股大盤影子股折價係數（近 365 日曆天原始日報酬判定係數）。
