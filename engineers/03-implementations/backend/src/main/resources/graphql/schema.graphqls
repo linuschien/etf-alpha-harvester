@@ -92,15 +92,34 @@ type MacroYieldSnapshot {
     yieldSpread10yMinus2y: Float!
 }
 
+type DataFeedWatermark {
+    id: ID!
+    feedName: String!
+    status: String!
+    lastSuccessfulSyncAt: String
+    latestRecordDate: String
+    recordsSyncedCount: Int
+    errorMessage: String
+    updatedAt: String!
+}
+
 type GlobalAssetScore {
     id: ID!
     assetId: ID!
     ticker: String!
+    name: String
+    distributionFrequency: DistributionFrequency
     evaluationDate: String!
     assetClass: CandidateAssetClass!
     classRank: Int!
     compositeScore: Float!
     fundSizeTwd: Float
+    closePrice: Float
+    changePct: Float
+    return1m: Float
+    return3m: Float
+    return6m: Float
+    return1y: Float
     orthogonalStatus: OrthogonalStatus
     collisionDetail: String
     rSquared: Float
@@ -127,6 +146,8 @@ type DcaPopularityRank {
     id: ID!
     assetId: ID!
     ticker: String!
+    name: String
+    distributionFrequency: DistributionFrequency
     rankingYear: Int!
     rankingMonth: Int!
     rankPosition: Int!
@@ -250,8 +271,11 @@ type Query {
     # DcaPopularityRank Queries
     listDcaPopularityRanks(filter: DcaPopularityFilterInput): [DcaPopularityRank!]!
     getDcaPopularityRankById(id: ID!): DcaPopularityRank
-    getTop20DcaRanks(year: Int!, month: Int!): [DcaPopularityRank!]!
+    getTop20DcaRanks(year: Int, month: Int): [DcaPopularityRank!]!
     listDcaRanksByAssetId(assetId: ID!): [DcaPopularityRank!]!
+
+    # DataFeedWatermark Queries
+    listDataFeedWatermarks: [DataFeedWatermark!]!
 
     # DividendAnnouncement Queries
     listDividendAnnouncements(filter: DividendAnnouncementFilterInput): [DividendAnnouncement!]!

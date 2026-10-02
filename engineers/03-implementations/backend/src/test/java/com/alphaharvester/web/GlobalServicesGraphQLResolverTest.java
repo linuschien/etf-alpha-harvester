@@ -95,6 +95,9 @@ class GlobalServicesGraphQLResolverTest {
         when(queryService.getEffectiveSplits(any(), any())).thenReturn(Flux.just(ca));
         when(queryService.listCorporateActionsByAssetId(id)).thenReturn(Flux.just(ca));
 
+        DataFeedSyncWatermark wm = new DataFeedSyncWatermark(id, "TWSE_DAILY_QUOTES", now, now, 100, "SUCCESS", null, now);
+        when(queryService.listDataFeedWatermarks()).thenReturn(Flux.just(wm));
+
         when(dipBuyService.calculateDipBuyOpportunity("0050")).thenReturn(Mono.just(
                 new DipBuyOpportunityScore("0050", 85.0, "🟢 【五星黃金坑】", "≥ 90%", "加碼", 30, 20, 20, 15)
         ));
@@ -140,6 +143,8 @@ class GlobalServicesGraphQLResolverTest {
         StepVerifier.create(resolver.getCorporateActionById(id)).expectNextCount(1).verifyComplete();
         StepVerifier.create(resolver.getEffectiveSplits("0050", "2026-09-23")).expectNextCount(1).verifyComplete();
         StepVerifier.create(resolver.listCorporateActionsByAssetId(id)).expectNextCount(1).verifyComplete();
+
+        StepVerifier.create(resolver.listDataFeedWatermarks()).expectNextCount(1).verifyComplete();
 
         StepVerifier.create(resolver.getDipBuyOpportunity("0050")).expectNextCount(1).verifyComplete();
         StepVerifier.create(resolver.getMacroRegime()).expectNextCount(1).verifyComplete();
@@ -197,6 +202,12 @@ class GlobalServicesGraphQLResolverTest {
         assertThat(resolver.corporateActionId(ca)).isEqualTo(id.toString());
         assertThat(resolver.corporateActionAssetId(ca)).isEqualTo(id.toString());
         assertThat(resolver.corporateActionEffectiveDate(ca)).isEqualTo(now.toString());
+
+        DataFeedSyncWatermark wm = new DataFeedSyncWatermark(id, "TWSE_DAILY_QUOTES", now, now, 100, "SUCCESS", null, now);
+        assertThat(resolver.dataFeedWatermarkId(wm)).isEqualTo(id.toString());
+        assertThat(resolver.dataFeedWatermarkLastSuccessfulSyncAt(wm)).isEqualTo(now.toString());
+        assertThat(resolver.dataFeedWatermarkLatestRecordDate(wm)).isEqualTo(now.toString());
+        assertThat(resolver.dataFeedWatermarkUpdatedAt(wm)).isEqualTo(now.toString());
     }
 }
 

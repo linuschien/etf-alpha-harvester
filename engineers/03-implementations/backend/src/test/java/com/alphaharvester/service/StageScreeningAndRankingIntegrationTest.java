@@ -64,7 +64,8 @@ class StageScreeningAndRankingIntegrationTest {
         queryService = new GlobalAssetQueryService(
                 metadataRepository, benchmarkRepository, quoteRepository,
                 macroYieldRepository, scoreRepository, dcaRankRepository,
-                dividendRepository, corporateActionRepository, pairwiseMatrixRepository
+                dividendRepository, corporateActionRepository, pairwiseMatrixRepository,
+                watermarkRepository
         );
 
         when(dcaRankRepository.findAll()).thenReturn(Flux.empty());

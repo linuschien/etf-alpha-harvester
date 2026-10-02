@@ -434,5 +434,35 @@ public class GlobalServicesGraphQLResolver {
     public String globalAssetPairwiseMatrixCreatedAt(GlobalAssetPairwiseMatrix matrix) {
         return matrix.getCreatedAt() != null ? matrix.getCreatedAt().toString() : null;
     }
+
+    // ----------------------------------------------------
+    // DataFeedWatermark Queries
+    // ----------------------------------------------------
+
+    @QueryMapping
+    public Flux<DataFeedSyncWatermark> listDataFeedWatermarks() {
+        log.debug("GraphQL Query: listDataFeedWatermarks");
+        return queryService.listDataFeedWatermarks();
+    }
+
+    @SchemaMapping(typeName = "DataFeedWatermark", field = "id")
+    public String dataFeedWatermarkId(DataFeedSyncWatermark wm) {
+        return wm.getId() != null ? wm.getId().toString() : null;
+    }
+
+    @SchemaMapping(typeName = "DataFeedWatermark", field = "lastSuccessfulSyncAt")
+    public String dataFeedWatermarkLastSuccessfulSyncAt(DataFeedSyncWatermark wm) {
+        return wm.getLastSuccessfulSyncAt() != null ? wm.getLastSuccessfulSyncAt().toString() : null;
+    }
+
+    @SchemaMapping(typeName = "DataFeedWatermark", field = "latestRecordDate")
+    public String dataFeedWatermarkLatestRecordDate(DataFeedSyncWatermark wm) {
+        return wm.getLatestRecordDate() != null ? wm.getLatestRecordDate().toString() : null;
+    }
+
+    @SchemaMapping(typeName = "DataFeedWatermark", field = "updatedAt")
+    public String dataFeedWatermarkUpdatedAt(DataFeedSyncWatermark wm) {
+        return wm.getUpdatedAt() != null ? wm.getUpdatedAt().toString() : null;
+    }
 }
 

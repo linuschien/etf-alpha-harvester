@@ -1,6 +1,7 @@
 package com.alphaharvester.domain.entity;
 
 import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.domain.model.DistributionFrequency;
 import com.alphaharvester.domain.model.OrthogonalStatus;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -56,6 +57,30 @@ public class GlobalAssetScore {
 
     @Transient
     private String collisionDetail;
+
+    @Transient
+    private String name;
+
+    @Transient
+    private DistributionFrequency distributionFrequency;
+
+    @Transient
+    private BigDecimal closePrice;
+
+    @Transient
+    private BigDecimal changePct;
+
+    @Transient
+    private BigDecimal return1m;
+
+    @Transient
+    private BigDecimal return3m;
+
+    @Transient
+    private BigDecimal return6m;
+
+    @Transient
+    private BigDecimal return1y;
 
     @Column("r_squared")
     private BigDecimal rSquared;

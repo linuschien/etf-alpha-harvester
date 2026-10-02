@@ -4,6 +4,7 @@ import com.alphaharvester.adapter.out.persistence.*;
 import com.alphaharvester.application.dto.*;
 import com.alphaharvester.domain.entity.*;
 import com.alphaharvester.domain.model.CandidateAssetClass;
+import com.alphaharvester.domain.model.DistributionFrequency;
 import com.alphaharvester.domain.model.OrthogonalStatus;
 import com.alphaharvester.domain.math.FinancialMetricsCalculator;
 import org.slf4j.Logger;
@@ -15,8 +16,11 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -34,6 +38,7 @@ public class GlobalAssetQueryService {
     private final DividendAnnouncementRepository dividendRepository;
     private final CorporateActionRepository corporateActionRepository;
     private final GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository;
+    private final DataFeedSyncWatermarkRepository watermarkRepository;
 
     @Autowired
     public GlobalAssetQueryService(GlobalAssetMetadataRepository metadataRepository,
@@ -44,7 +49,8 @@ public class GlobalAssetQueryService {
                                    DcaPopularityRankRepository dcaRankRepository,
                                    DividendAnnouncementRepository dividendRepository,
                                    CorporateActionRepository corporateActionRepository,
-                                   @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository) {
+                                   @Autowired(required = false) GlobalAssetPairwiseMatrixRepository pairwiseMatrixRepository,
+                                   @Autowired(required = false) DataFeedSyncWatermarkRepository watermarkRepository) {
         this.metadataRepository = metadataRepository;
         this.benchmarkRepository = benchmarkRepository;
         this.quoteRepository = quoteRepository;
@@ -54,6 +60,7 @@ public class GlobalAssetQueryService {
         this.dividendRepository = dividendRepository;
         this.corporateActionRepository = corporateActionRepository;
         this.pairwiseMatrixRepository = pairwiseMatrixRepository;
+        this.watermarkRepository = watermarkRepository;
     }
 
     public Flux<GlobalAssetMetadata> listGlobalAssets(GlobalAssetFilterInput filter) {
@@ -163,12 +170,14 @@ public class GlobalAssetQueryService {
 
     public Flux<GlobalAssetScore> getScoresByAssetClass(CandidateAssetClass assetClass, String evaluationDate) {
         LocalDateTime evalDate = parseDate(evaluationDate, false);
-        return scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(assetClass, evalDate);
+        return scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(assetClass, evalDate)
+                .flatMapSequential(this::enrichScore);
     }
 
     public Mono<GlobalAssetScore> getScoreByTicker(String ticker, String evaluationDate) {
         LocalDateTime evalDate = parseDate(evaluationDate, false);
-        return scoreRepository.findByTickerAndEvaluationDate(ticker, evalDate);
+        return scoreRepository.findByTickerAndEvaluationDate(ticker, evalDate)
+                .flatMap(this::enrichScore);
     }
 
     public Flux<GlobalAssetPairwiseMatrix> listPairwiseMatrix(CandidateAssetClass assetClass, String evaluationDateStr) {
@@ -188,7 +197,7 @@ public class GlobalAssetQueryService {
                 .collectList()
                 .flatMapMany(scores -> {
                     if (scores.isEmpty()) return Flux.empty();
-                    if (pairwiseMatrixRepository == null) return Flux.fromIterable(scores);
+                    if (pairwiseMatrixRepository == null) return Flux.fromIterable(scores).flatMapSequential(this::enrichScore);
 
                     return pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(evalDate, assetClass)
                             .collectList()
@@ -222,7 +231,7 @@ public class GlobalAssetQueryService {
                                 }
 
                                 applyGreedyOrthogonal(candidates, r2Map, isModeB);
-                                return Flux.fromIterable(candidates);
+                                return Flux.fromIterable(candidates).flatMapSequential(this::enrichScore);
                             });
                 });
     }
@@ -275,8 +284,183 @@ public class GlobalAssetQueryService {
         return dcaRankRepository.findById(id);
     }
 
-    public Flux<DcaPopularityRank> getTop20DcaRanks(int year, int month) {
-        return dcaRankRepository.findByRankingYearAndRankingMonthOrderByRankPositionAsc(year, month);
+    public Flux<DcaPopularityRank> getTop20DcaRanks(Integer year, Integer month) {
+        Flux<DcaPopularityRank> rankFlux;
+        if (year != null && month != null) {
+            rankFlux = dcaRankRepository.findByRankingYearAndRankingMonthOrderByRankPositionAsc(year, month);
+        } else {
+            rankFlux = dcaRankRepository.findAll()
+                    .collectList()
+                    .flatMapMany(list -> {
+                        if (list.isEmpty()) return Flux.empty();
+                        Optional<DcaPopularityRank> maxOpt = list.stream()
+                                .max(Comparator.comparingInt(DcaPopularityRank::getRankingYear)
+                                        .thenComparingInt(DcaPopularityRank::getRankingMonth));
+                        if (maxOpt.isEmpty()) return Flux.empty();
+                        int latestY = maxOpt.get().getRankingYear();
+                        int latestM = maxOpt.get().getRankingMonth();
+                        return Flux.fromIterable(list.stream()
+                                .filter(r -> r.getRankingYear() == latestY && r.getRankingMonth() == latestM)
+                                .sorted(Comparator.comparingInt(DcaPopularityRank::getRankPosition))
+                                .limit(20)
+                                .toList());
+                    });
+        }
+
+        return rankFlux.flatMapSequential(rank -> {
+            if (rank == null || rank.getTicker() == null) {
+                return Mono.justOrEmpty(rank);
+            }
+            Mono<GlobalAssetMetadata> metaMono = Mono.empty();
+            if (metadataRepository != null) {
+                try {
+                    var res = metadataRepository.findByTicker(rank.getTicker());
+                    if (res != null) metaMono = res;
+                } catch (Exception ignored) {}
+            }
+            metaMono = metaMono.defaultIfEmpty(new GlobalAssetMetadata());
+
+            Mono<List<DividendAnnouncement>> divsMono = Mono.just(Collections.emptyList());
+            if (dividendRepository != null) {
+                try {
+                    var res = dividendRepository.findByTickerOrderByExDateDesc(rank.getTicker());
+                    if (res != null) divsMono = res.collectList();
+                } catch (Exception ignored) {}
+            }
+
+            return Mono.zip(metaMono, divsMono)
+                    .map(tuple -> {
+                        GlobalAssetMetadata meta = tuple.getT1();
+                        List<DividendAnnouncement> divs = tuple.getT2();
+                        if (meta != null && meta.getName() != null) {
+                            rank.setName(meta.getName());
+                        }
+                        LocalDateTime listingDate = (meta != null) ? meta.getListingDate() : null;
+                        DistributionFrequency freq = GlobalAssetScoreEvaluationService.deriveDistributionFrequency(
+                                divs, listingDate, LocalDateTime.now());
+                        rank.setDistributionFrequency(freq);
+                        return rank;
+                    });
+        });
+    }
+
+    public Flux<DataFeedSyncWatermark> listDataFeedWatermarks() {
+        return watermarkRepository != null ? watermarkRepository.findAll() : Flux.empty();
+    }
+
+    private Mono<GlobalAssetScore> enrichScore(GlobalAssetScore score) {
+        if (score == null || score.getTicker() == null) {
+            return Mono.justOrEmpty(score);
+        }
+        String ticker = score.getTicker();
+
+        Mono<GlobalAssetMetadata> metaMono = Mono.empty();
+        if (metadataRepository != null) {
+            try {
+                var res = metadataRepository.findByTicker(ticker);
+                if (res != null) metaMono = res;
+            } catch (Exception ignored) {}
+        }
+        metaMono = metaMono.defaultIfEmpty(new GlobalAssetMetadata());
+
+        Mono<List<MarketDailyQuote>> quotesMono = Mono.just(Collections.emptyList());
+        if (quoteRepository != null) {
+            try {
+                LocalDateTime anchor = (score.getEvaluationDate() != null) ? score.getEvaluationDate() : LocalDateTime.now();
+                LocalDateTime startDate = anchor.minusMonths(13);
+                var res = quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(ticker, startDate);
+                if (res != null) quotesMono = res.collectList();
+            } catch (Exception ignored) {}
+        }
+
+        Mono<List<DividendAnnouncement>> divsMono = Mono.just(Collections.emptyList());
+        if (dividendRepository != null) {
+            try {
+                var res = dividendRepository.findByTickerOrderByExDateDesc(ticker);
+                if (res != null) divsMono = res.collectList();
+            } catch (Exception ignored) {}
+        }
+
+        return Mono.zip(metaMono, quotesMono, divsMono)
+                .map(tuple -> {
+                    GlobalAssetMetadata meta = tuple.getT1();
+                    List<MarketDailyQuote> quotes = tuple.getT2();
+                    List<DividendAnnouncement> divs = tuple.getT3();
+
+                    if (meta != null && meta.getName() != null) {
+                        score.setName(meta.getName());
+                    }
+
+                    LocalDateTime listingDate = (meta != null) ? meta.getListingDate() : null;
+                    LocalDateTime now = LocalDateTime.now();
+                    DistributionFrequency freq = GlobalAssetScoreEvaluationService.deriveDistributionFrequency(
+                            divs, listingDate, now);
+                    score.setDistributionFrequency(freq);
+
+                    if (quotes != null && !quotes.isEmpty()) {
+                        MarketDailyQuote latest = quotes.get(0);
+                        score.setClosePrice(latest.getClosePrice());
+
+                        if (quotes.size() >= 2) {
+                            MarketDailyQuote prev = quotes.get(1);
+                            if (prev.getClosePrice() != null && prev.getClosePrice().compareTo(BigDecimal.ZERO) > 0
+                                    && latest.getClosePrice() != null) {
+                                BigDecimal diff = latest.getClosePrice().subtract(prev.getClosePrice());
+                                BigDecimal pct = diff.divide(prev.getClosePrice(), 4, RoundingMode.HALF_UP)
+                                        .multiply(BigDecimal.valueOf(100))
+                                        .setScale(2, RoundingMode.HALF_UP);
+                                score.setChangePct(pct);
+                            }
+                        }
+
+                        score.setReturn1m(calculatePeriodReturn(quotes, divs, latest, Period.ofMonths(1)));
+                        score.setReturn3m(calculatePeriodReturn(quotes, divs, latest, Period.ofMonths(3)));
+                        score.setReturn6m(calculatePeriodReturn(quotes, divs, latest, Period.ofMonths(6)));
+                        score.setReturn1y(calculatePeriodReturn(quotes, divs, latest, Period.ofYears(1)));
+                    }
+
+                    return score;
+                });
+    }
+
+    private BigDecimal calculatePeriodReturn(List<MarketDailyQuote> quotes, List<DividendAnnouncement> divs, MarketDailyQuote latest, Period period) {
+        if (quotes == null || quotes.isEmpty() || latest == null || latest.getClosePrice() == null || latest.getTradeDate() == null) {
+            return null;
+        }
+        LocalDateTime targetDate = latest.getTradeDate().minus(period);
+
+        MarketDailyQuote past = null;
+        for (MarketDailyQuote q : quotes) {
+            if (q != null && q.getTradeDate() != null && !q.getTradeDate().isAfter(targetDate)) {
+                past = q;
+                break;
+            }
+        }
+        if (past == null || past.getClosePrice() == null || past.getClosePrice().compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+
+        BigDecimal pLatest = latest.getClosePrice();
+        BigDecimal pPast = past.getClosePrice();
+
+        LocalDateTime startDate = past.getTradeDate();
+        LocalDateTime endDate = latest.getTradeDate();
+
+        BigDecimal divSum = BigDecimal.ZERO;
+        if (divs != null) {
+            for (DividendAnnouncement d : divs) {
+                if (d != null && d.getExDate() != null && !d.getExDate().isBefore(startDate) && !d.getExDate().isAfter(endDate)) {
+                    if (d.getDividendPerShare() != null) {
+                        divSum = divSum.add(d.getDividendPerShare());
+                    }
+                }
+            }
+        }
+
+        BigDecimal totalGain = pLatest.subtract(pPast).add(divSum);
+        return totalGain.divide(pPast, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     public Flux<DcaPopularityRank> listDcaRanksByAssetId(UUID assetId) {
