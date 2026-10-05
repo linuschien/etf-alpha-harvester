@@ -320,7 +320,7 @@ describe('GlobalMarketIntelligencePage', () => {
     // Verify index point text in radar chart
     expect(await screen.findByText(/最新指數點數/i)).toBeInTheDocument();
     expect(screen.getByText(/52 週最高點數/i)).toBeInTheDocument();
-    expect(screen.getByText(/指數點數 \(回撤%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/^指數點數$/i)).toBeInTheDocument();
   });
 
   it('renders exact 2026-09-30 Flyway benchmark quotes and panic indicators on cards', async () => {

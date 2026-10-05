@@ -11,6 +11,7 @@ import AlertDialog from './components/AlertDialog';
 import MetricCard from './components/MetricCard';
 import ChartComponent from './components/ChartComponent';
 import EventCalendar from './components/EventCalendar';
+import SegmentedRadio from './components/SegmentedRadio';
 
 // ── Adapter: ComponentRenderProps → BaseComponentProps ──────────────────────
 export function adapt(Comp: ComponentType<any>): ComponentType<any> {
@@ -147,6 +148,8 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
   AlertDialog: AlertDialog, // confirm dialog overlay
   MetricCard: MetricCard, // KPI metric card
   EventCalendar: EventCalendar, // ETF Dividend & Split Calendar
+  Radio: SegmentedRadio, // Inline horizontal segmented radio button group
+  SegmentedRadio: SegmentedRadio,
 
   // ── 4. Chart wrappers (Real interactive SVG charts) ──────────────────────
   'Chart:bar': ChartComponent,

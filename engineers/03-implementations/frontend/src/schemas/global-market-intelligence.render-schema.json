@@ -720,7 +720,7 @@
     "drawdown-window-selector": {
       "type": "Radio",
       "props": {
-        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
+        "label": "時間視窗",
         "name": "drawdown-window-selector",
         "options": [
           "1M",

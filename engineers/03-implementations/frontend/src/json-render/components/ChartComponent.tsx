@@ -709,34 +709,30 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             textAnchor="end"
             className="text-[10px] font-bold font-mono fill-muted-foreground"
           >
-            指數點數 (回撤%)
+            指數點數
           </text>
 
           {/* Left Y Axis Ticks (Real Points) */}
-          {yTicks.map((tickVal) => {
-            const ddFromPeak = Number((((tickVal - peak52W) / peak52W) * 100).toFixed(1));
-            const sign = ddFromPeak > 0 ? '+' : '';
-            return (
-              <g key={tickVal}>
-                <line
-                  x1={paddingLeft}
-                  y1={scaleY(tickVal)}
-                  x2={width - paddingRight}
-                  y2={scaleY(tickVal)}
-                  stroke="currentColor"
-                  strokeOpacity="0.08"
-                />
-                <text
-                  x={paddingLeft - 8}
-                  y={scaleY(tickVal) + 4}
-                  textAnchor="end"
-                  className="text-[10px] font-mono fill-muted-foreground"
-                >
-                  {formatPoints(tickVal)} ({sign}{ddFromPeak}%)
-                </text>
-              </g>
-            );
-          })}
+          {yTicks.map((tickVal) => (
+            <g key={tickVal}>
+              <line
+                x1={paddingLeft}
+                y1={scaleY(tickVal)}
+                x2={width - paddingRight}
+                y2={scaleY(tickVal)}
+                stroke="currentColor"
+                strokeOpacity="0.08"
+              />
+              <text
+                x={paddingLeft - 8}
+                y={scaleY(tickVal) + 4}
+                textAnchor="end"
+                className="text-[10px] font-mono fill-muted-foreground"
+              >
+                {formatPoints(tickVal)}
+              </text>
+            </g>
+          ))}
 
           {/* Fibonacci Retracement Lines (7 Levels within Time Window) */}
           {showFib &&
@@ -793,27 +789,15 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           {/* Primary Close Price Curve */}
           <path d={pricePath} fill="none" stroke="#ef4444" strokeWidth="2.5" />
 
-          {/* Latest Point Marker (Clean non-blocking indicator) */}
-          <g>
-            <circle
-              cx={scaleX(pointsCount - 1)}
-              cy={scaleY(latestPrice)}
-              r="4.5"
-              fill="#ef4444"
-              stroke="#ffffff"
-              strokeWidth="2"
-            />
-            <circle
-              cx={scaleX(pointsCount - 1)}
-              cy={scaleY(latestPrice)}
-              r="7.5"
-              fill="none"
-              stroke="#ef4444"
-              strokeWidth="1.5"
-              opacity="0.6"
-              className="animate-ping"
-            />
-          </g>
+          {/* Latest Point Marker (Clean static indicator) */}
+          <circle
+            cx={scaleX(pointsCount - 1)}
+            cy={scaleY(latestPrice)}
+            r="4.5"
+            fill="#ef4444"
+            stroke="#ffffff"
+            strokeWidth="2"
+          />
 
           {/* Interactive Hover Crosshair with Date & Exact Price Tooltip */}
           {hoverIndex !== null && hoverQuote && hoverPrice !== null && (
