@@ -284,4 +284,172 @@ class GlobalAssetQueryServiceTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should group candidates into clusters using Greedy Leader-Follower Star Topology")
+    void shouldClusterCandidatesUsingStarTopology() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        UUID id3 = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+
+        GlobalAssetScore s1 = new GlobalAssetScore(id1, id1, "00935", now, CandidateAssetClass.SATELLITE, 1,
+                new BigDecimal("92.0"), new BigDecimal("10000000000"));
+        GlobalAssetScore s2 = new GlobalAssetScore(id2, id2, "00927", now, CandidateAssetClass.SATELLITE, 2,
+                new BigDecimal("88.0"), new BigDecimal("8000000000"));
+        GlobalAssetScore s3 = new GlobalAssetScore(id3, id3, "00934", now, CandidateAssetClass.SATELLITE, 3,
+                new BigDecimal("85.0"), new BigDecimal("7000000000"));
+
+        when(scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(eq(CandidateAssetClass.SATELLITE), any()))
+                .thenReturn(Flux.just(s1, s2, s3));
+
+        GlobalAssetMetadata m1 = new GlobalAssetMetadata();
+        m1.setName("野村臺灣新科技50");
+        m1.setUnderlyingIndex("特選臺灣新科技50指數");
+        when(metadataRepository.findByTicker("00935")).thenReturn(Mono.just(m1));
+
+        GlobalAssetMetadata m2 = new GlobalAssetMetadata();
+        m2.setName("群益半導體收益");
+        m2.setUnderlyingIndex("半導體收益指數");
+        when(metadataRepository.findByTicker("00927")).thenReturn(Mono.just(m2));
+
+        GlobalAssetMetadata m3 = new GlobalAssetMetadata();
+        m3.setName("中信成長高股息");
+        m3.setUnderlyingIndex("特選臺灣成長高股息指數");
+        when(metadataRepository.findByTicker("00934")).thenReturn(Mono.just(m3));
+
+        // Pairwise matrix: 00927 <-> 00935 is 0.88 (>= 0.80), 00934 <-> 00935 is 0.45 (< 0.80), 00927 <-> 00934 is 0.82
+        GlobalAssetPairwiseMatrix m21 = new GlobalAssetPairwiseMatrix(UUID.randomUUID(), now, CandidateAssetClass.SATELLITE, "00927", "00935", new BigDecimal("0.88"), new BigDecimal("0.94"), now);
+        GlobalAssetPairwiseMatrix m31 = new GlobalAssetPairwiseMatrix(UUID.randomUUID(), now, CandidateAssetClass.SATELLITE, "00934", "00935", new BigDecimal("0.45"), new BigDecimal("0.67"), now);
+        GlobalAssetPairwiseMatrix m23 = new GlobalAssetPairwiseMatrix(UUID.randomUUID(), now, CandidateAssetClass.SATELLITE, "00927", "00934", new BigDecimal("0.82"), new BigDecimal("0.91"), now);
+
+        when(pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(any(), eq(CandidateAssetClass.SATELLITE)))
+                .thenReturn(Flux.just(m21, m31, m23));
+
+        StepVerifier.create(queryService.getClusteredCandidates(CandidateAssetClass.SATELLITE, null, now.toString()))
+                .assertNext(c1 -> {
+                    assertThat(c1.clusterId()).isEqualTo(1);
+                    assertThat(c1.leader().getTicker()).isEqualTo("00935");
+                    assertThat(c1.leader().getUnderlyingIndex()).isEqualTo("特選臺灣新科技50指數");
+                    assertThat(c1.isSingleton()).isFalse();
+                    assertThat(c1.alternatives()).hasSize(1);
+                    assertThat(c1.alternatives().get(0).score().getTicker()).isEqualTo("00927");
+                    assertThat(c1.alternatives().get(0).score().getUnderlyingIndex()).isEqualTo("半導體收益指數");
+                    assertThat(c1.alternatives().get(0).rSquared()).isEqualTo(0.88);
+                })
+                .assertNext(c2 -> {
+                    assertThat(c2.clusterId()).isEqualTo(2);
+                    assertThat(c2.leader().getTicker()).isEqualTo("00934");
+                    assertThat(c2.leader().getUnderlyingIndex()).isEqualTo("特選臺灣成長高股息指數");
+                    assertThat(c2.isSingleton()).isTrue();
+                    assertThat(c2.alternatives()).isEmpty();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should respect custom threshold when clustering candidates")
+    void shouldRespectCustomThresholdWhenClustering() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+
+        GlobalAssetScore s1 = new GlobalAssetScore(id1, id1, "00935", now, CandidateAssetClass.SATELLITE, 1,
+                new BigDecimal("92.0"), new BigDecimal("10000000000"));
+        GlobalAssetScore s2 = new GlobalAssetScore(id2, id2, "00927", now, CandidateAssetClass.SATELLITE, 2,
+                new BigDecimal("88.0"), new BigDecimal("8000000000"));
+
+        when(scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(eq(CandidateAssetClass.SATELLITE), any()))
+                .thenReturn(Flux.just(s1, s2));
+
+        GlobalAssetPairwiseMatrix m21 = new GlobalAssetPairwiseMatrix(UUID.randomUUID(), now, CandidateAssetClass.SATELLITE, "00927", "00935", new BigDecimal("0.88"), new BigDecimal("0.94"), now);
+        when(pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(any(), eq(CandidateAssetClass.SATELLITE)))
+                .thenReturn(Flux.just(m21));
+
+        // Threshold = 0.90 -> 0.88 < 0.90 -> s2 is not absorbed by s1, so both are singletons
+        StepVerifier.create(queryService.getClusteredCandidates(CandidateAssetClass.SATELLITE, 0.90, now.toString()))
+                .assertNext(c1 -> {
+                    assertThat(c1.clusterId()).isEqualTo(1);
+                    assertThat(c1.leader().getTicker()).isEqualTo("00935");
+                    assertThat(c1.isSingleton()).isTrue();
+                    assertThat(c1.alternatives()).isEmpty();
+                })
+                .assertNext(c2 -> {
+                    assertThat(c2.clusterId()).isEqualTo(2);
+                    assertThat(c2.leader().getTicker()).isEqualTo("00927");
+                    assertThat(c2.isSingleton()).isTrue();
+                    assertThat(c2.alternatives()).isEmpty();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should return empty Flux when no scores found for clustering")
+    void shouldReturnEmptyFluxWhenNoScoresForClustering() {
+        LocalDateTime now = LocalDateTime.now();
+        when(scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(eq(CandidateAssetClass.SATELLITE), any()))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(queryService.getClusteredCandidates(CandidateAssetClass.SATELLITE, 0.80, now.toString()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should fallback to singletons when pairwise matrix repository is null")
+    void shouldFallbackToSingletonsWhenPairwiseRepositoryIsNull() {
+        UUID id = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+        GlobalAssetScore s = new GlobalAssetScore(id, id, "0050", now, CandidateAssetClass.CORE, 1,
+                new BigDecimal("95.0"), new BigDecimal("400000000000"));
+
+        when(scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(eq(CandidateAssetClass.CORE), any()))
+                .thenReturn(Flux.just(s));
+
+        GlobalAssetQueryService svcWithoutMatrix = new GlobalAssetQueryService(
+                metadataRepository, benchmarkRepository, quoteRepository,
+                macroYieldRepository, scoreRepository, dcaRankRepository,
+                dividendRepository, corporateActionRepository, null,
+                watermarkRepository, quoteCacheService
+        );
+
+        StepVerifier.create(svcWithoutMatrix.getClusteredCandidates(CandidateAssetClass.CORE, 0.80, now.toString()))
+                .assertNext(c -> {
+                    assertThat(c.clusterId()).isEqualTo(1);
+                    assertThat(c.leader().getTicker()).isEqualTo("0050");
+                    assertThat(c.isSingleton()).isTrue();
+                    assertThat(c.alternatives()).isEmpty();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should test getOrthogonalCandidates for Shannon Mode")
+    void shouldTestGetOrthogonalCandidates() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+
+        GlobalAssetScore s1 = new GlobalAssetScore(id1, id1, "0050", now, CandidateAssetClass.CORE, 1,
+                new BigDecimal("95.0"), new BigDecimal("400000000000"));
+        GlobalAssetScore s2 = new GlobalAssetScore(id2, id2, "006208", now, CandidateAssetClass.CORE, 2,
+                new BigDecimal("92.0"), new BigDecimal("100000000000"));
+
+        when(scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(eq(CandidateAssetClass.CORE), any()))
+                .thenReturn(Flux.just(s1, s2));
+
+        GlobalAssetPairwiseMatrix m = new GlobalAssetPairwiseMatrix(UUID.randomUUID(), now, CandidateAssetClass.CORE, "0050", "006208", new BigDecimal("0.98"), new BigDecimal("0.99"), now);
+        when(pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(any(), eq(CandidateAssetClass.CORE)))
+                .thenReturn(Flux.just(m));
+
+        StepVerifier.create(queryService.getOrthogonalCandidates(CandidateAssetClass.CORE, null, now.toString()))
+                .assertNext(res1 -> {
+                    assertThat(res1.getTicker()).isEqualTo("0050");
+                    assertThat(res1.getOrthogonalStatus().name()).isEqualTo("ACCEPTED");
+                })
+                .assertNext(res2 -> {
+                    assertThat(res2.getTicker()).isEqualTo("006208");
+                    assertThat(res2.getOrthogonalStatus().name()).isEqualTo("REJECTED_COLLINEAR");
+                })
+                .verifyComplete();
+    }
 }

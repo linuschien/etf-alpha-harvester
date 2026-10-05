@@ -420,6 +420,14 @@ public class GlobalServicesGraphQLResolver {
         return queryService.getOrthogonalCandidates(assetClass, seedTicker, evaluationDate);
     }
 
+    @QueryMapping
+    public Flux<GlobalAssetCluster> getClusteredCandidates(@Argument CandidateAssetClass assetClass,
+                                                           @Argument Double threshold,
+                                                           @Argument String evaluationDate) {
+        log.debug("GraphQL Query: getClusteredCandidates({}, {}, {})", assetClass, threshold, evaluationDate);
+        return queryService.getClusteredCandidates(assetClass, threshold, evaluationDate);
+    }
+
     @SchemaMapping(typeName = "GlobalAssetPairwiseMatrix", field = "id")
     public String globalAssetPairwiseMatrixId(GlobalAssetPairwiseMatrix matrix) {
         return matrix.getId() != null ? matrix.getId().toString() : null;

@@ -115,6 +115,7 @@ type GlobalAssetScore {
     assetId: ID!
     ticker: String!
     name: String
+    underlyingIndex: String
     distributionFrequency: DistributionFrequency
     evaluationDate: String!
     assetClass: CandidateAssetClass!
@@ -136,6 +137,18 @@ type GlobalAssetScore {
     volatility90d: Float
     ytm: Float
     dcaRank: Int
+}
+
+type ClusterAlternative {
+    score: GlobalAssetScore!
+    rSquared: Float!
+}
+
+type GlobalAssetCluster {
+    clusterId: Int!
+    leader: GlobalAssetScore!
+    alternatives: [ClusterAlternative!]!
+    isSingleton: Boolean!
 }
 
 type GlobalAssetPairwiseMatrix {
@@ -303,5 +316,6 @@ type Query {
     # Pairwise Matrix & Orthogonal Engine Queries
     listPairwiseMatrix(assetClass: CandidateAssetClass!, evaluationDate: String): [GlobalAssetPairwiseMatrix!]!
     getOrthogonalCandidates(assetClass: CandidateAssetClass!, seedTicker: String, evaluationDate: String): [GlobalAssetScore!]!
+    getClusteredCandidates(assetClass: CandidateAssetClass!, threshold: Float, evaluationDate: String): [GlobalAssetCluster!]!
 }
 

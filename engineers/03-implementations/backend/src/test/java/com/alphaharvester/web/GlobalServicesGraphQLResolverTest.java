@@ -98,6 +98,12 @@ class GlobalServicesGraphQLResolverTest {
         DataFeedSyncWatermark wm = new DataFeedSyncWatermark(id, "TWSE_DAILY_QUOTES", now, now, 100, "SUCCESS", null, now);
         when(queryService.listDataFeedWatermarks()).thenReturn(Flux.just(wm));
 
+        GlobalAssetPairwiseMatrix matrix = new GlobalAssetPairwiseMatrix(id, now, CandidateAssetClass.SATELLITE, "0050", "0056", new BigDecimal("0.85"), new BigDecimal("0.92"), now);
+        GlobalAssetCluster cluster = new GlobalAssetCluster(1, score, java.util.Collections.emptyList(), true);
+        when(queryService.listPairwiseMatrix(any(), any())).thenReturn(Flux.just(matrix));
+        when(queryService.getOrthogonalCandidates(any(), any(), any())).thenReturn(Flux.just(score));
+        when(queryService.getClusteredCandidates(any(), any(), any())).thenReturn(Flux.just(cluster));
+
         when(dipBuyService.calculateDipBuyOpportunity("0050")).thenReturn(Mono.just(
                 new DipBuyOpportunityScore("0050", 85.0, "🟢 【五星黃金坑】", "≥ 90%", "加碼", 30, 20, 20, 15)
         ));
@@ -145,6 +151,10 @@ class GlobalServicesGraphQLResolverTest {
         StepVerifier.create(resolver.listCorporateActionsByAssetId(id)).expectNextCount(1).verifyComplete();
 
         StepVerifier.create(resolver.listDataFeedWatermarks()).expectNextCount(1).verifyComplete();
+
+        StepVerifier.create(resolver.listPairwiseMatrix(CandidateAssetClass.SATELLITE, "2026-09-23")).expectNextCount(1).verifyComplete();
+        StepVerifier.create(resolver.getOrthogonalCandidates(CandidateAssetClass.SATELLITE, "0050", "2026-09-23")).expectNextCount(1).verifyComplete();
+        StepVerifier.create(resolver.getClusteredCandidates(CandidateAssetClass.SATELLITE, 0.80, "2026-09-23")).expectNextCount(1).verifyComplete();
 
         StepVerifier.create(resolver.getDipBuyOpportunity("0050")).expectNextCount(1).verifyComplete();
         StepVerifier.create(resolver.getMacroRegime()).expectNextCount(1).verifyComplete();
@@ -208,6 +218,11 @@ class GlobalServicesGraphQLResolverTest {
         assertThat(resolver.dataFeedWatermarkLastSuccessfulSyncAt(wm)).isEqualTo(now.toString());
         assertThat(resolver.dataFeedWatermarkLatestRecordDate(wm)).isEqualTo(now.toString());
         assertThat(resolver.dataFeedWatermarkUpdatedAt(wm)).isEqualTo(now.toString());
+
+        GlobalAssetPairwiseMatrix matrix = new GlobalAssetPairwiseMatrix(id, now, CandidateAssetClass.SATELLITE, "0050", "0056", new BigDecimal("0.85"), new BigDecimal("0.92"), now);
+        assertThat(resolver.globalAssetPairwiseMatrixId(matrix)).isEqualTo(id.toString());
+        assertThat(resolver.globalAssetPairwiseMatrixEvaluationDate(matrix)).isEqualTo(now.toString());
+        assertThat(resolver.globalAssetPairwiseMatrixCreatedAt(matrix)).isEqualTo(now.toString());
     }
 }
 

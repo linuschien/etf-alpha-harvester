@@ -62,6 +62,9 @@ public class GlobalAssetScore {
     private String name;
 
     @Transient
+    private String underlyingIndex;
+
+    @Transient
     private DistributionFrequency distributionFrequency;
 
     @Transient

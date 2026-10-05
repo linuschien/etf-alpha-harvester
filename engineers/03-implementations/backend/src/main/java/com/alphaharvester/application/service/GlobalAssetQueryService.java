@@ -274,6 +274,72 @@ public class GlobalAssetQueryService {
         }
     }
 
+    public Flux<GlobalAssetCluster> getClusteredCandidates(CandidateAssetClass assetClass, Double threshold, String evaluationDateStr) {
+        LocalDateTime evalDate = (evaluationDateStr != null && !evaluationDateStr.isBlank())
+                ? parseDate(evaluationDateStr, false)
+                : LocalDate.now().withDayOfMonth(1).atStartOfDay();
+
+        double effectiveThreshold = (threshold != null && threshold > 0.0) ? threshold : 0.80;
+
+        return scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(assetClass, evalDate)
+                .collectList()
+                .flatMapMany(scores -> {
+                    if (scores.isEmpty()) return Flux.empty();
+                    if (pairwiseMatrixRepository == null) {
+                        return Flux.fromIterable(scores)
+                                .flatMapSequential(this::enrichScore)
+                                .index()
+                                .map(tuple -> new GlobalAssetCluster((int) (tuple.getT1() + 1), tuple.getT2(), Collections.emptyList(), true));
+                    }
+
+                    return pairwiseMatrixRepository.findByEvaluationDateAndAssetClass(evalDate, assetClass)
+                            .collectList()
+                            .flatMapMany(matrix -> {
+                                Map<String, Double> r2Map = new HashMap<>();
+                                for (GlobalAssetPairwiseMatrix m : matrix) {
+                                    String base = (m.getBaseTicker().compareTo(m.getTargetTicker()) < 0) ? m.getBaseTicker() : m.getTargetTicker();
+                                    String target = (m.getBaseTicker().compareTo(m.getTargetTicker()) < 0) ? m.getTargetTicker() : m.getBaseTicker();
+                                    r2Map.put(base + ":" + target, m.getRSquared().doubleValue());
+                                }
+
+                                return Flux.fromIterable(scores)
+                                        .flatMapSequential(this::enrichScore)
+                                        .collectList()
+                                        .flatMapMany(enrichedScores -> {
+                                            List<GlobalAssetCluster> clusters = buildClusters(enrichedScores, r2Map, effectiveThreshold);
+                                            return Flux.fromIterable(clusters);
+                                        });
+                            });
+                });
+    }
+
+    private List<GlobalAssetCluster> buildClusters(List<GlobalAssetScore> scores, Map<String, Double> r2Map, double threshold) {
+        List<GlobalAssetScore> unassigned = new ArrayList<>(scores);
+        List<GlobalAssetCluster> clusters = new ArrayList<>();
+        int clusterId = 1;
+
+        while (!unassigned.isEmpty()) {
+            GlobalAssetScore leader = unassigned.remove(0);
+            List<ClusterAlternative> alternatives = new ArrayList<>();
+            List<GlobalAssetScore> remaining = new ArrayList<>();
+
+            for (GlobalAssetScore candidate : unassigned) {
+                double r2 = FinancialMetricsCalculator.getPairwiseRSquared(r2Map, leader.getTicker(), candidate.getTicker());
+                if (r2 >= threshold) {
+                    alternatives.add(new ClusterAlternative(candidate, r2));
+                } else {
+                    remaining.add(candidate);
+                }
+            }
+
+            unassigned = remaining;
+            boolean isSingleton = alternatives.isEmpty();
+            clusters.add(new GlobalAssetCluster(clusterId++, leader, alternatives, isSingleton));
+        }
+
+        return clusters;
+    }
+
     public Flux<DcaPopularityRank> listDcaPopularityRanks(DcaPopularityFilterInput filter) {
         if (filter != null && filter.rankingYear() != null && filter.rankingMonth() != null) {
             return dcaRankRepository.findByRankingYearAndRankingMonthOrderByRankPositionAsc(filter.rankingYear(), filter.rankingMonth());
@@ -390,6 +456,9 @@ public class GlobalAssetQueryService {
 
                     if (meta != null && meta.getName() != null) {
                         score.setName(meta.getName());
+                    }
+                    if (meta != null && meta.getUnderlyingIndex() != null) {
+                        score.setUnderlyingIndex(meta.getUnderlyingIndex());
                     }
 
                     LocalDateTime listingDate = (meta != null) ? meta.getListingDate() : null;
