@@ -116,7 +116,7 @@
 
 > **As a** 投資組合去冗餘決策引擎，  
 > **I want to** 依據持久化兩兩判定係數矩陣，以星狀領頭羊拓樸將高度同質（$R^2 \ge 0.80$）之候選標的歸納為同一族群，  
-> **So that** 系統能為各賽道自動推舉動能綜合得分最高之「群組首選 (Cluster Leader)」並收納「同質替代標的 (Alternatives)」，消除投資組合重複押注同質標的的冗餘，並提供明確的換檔汰弱留強依據。
+> **So that** 系統能為各賽道自動推舉動能綜合得分最高之「群組首選 (Cluster Leader)」並收納「同質替代標的 (Alternatives)」，客觀揭露族群同質結構，供投資人自主決斷去冗餘。
 
 ### 驗收條件 (Acceptance Criteria)
 - **AC1 (同質判定標準 - Homogeneity Threshold)**：
@@ -139,8 +139,8 @@
   - `leader`：群組首選標的（包含代碼、名稱、追蹤指數、最新市價、`class_rank`、綜合評分）。
   - `alternatives`：替代標的清單（每筆包含標的代碼、名稱、追蹤指數、`class_rank`、綜合評分、與 Leader 之 $R^2$）。
   - `is_singleton`：布林值，標記是否為獨立賽道標的（即 `alternatives` 為空）。
-- **AC5 (投資決策與換檔賦能 - Portfolio Decision & Rotation Guidance)**：
-  1. **買入去冗餘**：在分群視角下，各群組僅需配置 Leader 即可代表該賽道動能，消除投資人在同質標的間的重複買入摩擦。
-  2. **換檔指引**：若投資人現有庫存中持有群內的 Alternatives 標的，系統直觀標記同賽道目前動能最高之 Leader 與相關度，提供清楚的換檔汰弱留強依據。
+- **AC5 (去冗餘客觀數據揭露 - Objective De-redundancy Data Disclosure)**：
+  1. **客觀事實呈現**：分群模式僅客觀揭露各群組首選（Leader）與同質替代標的（Alternatives）之量化統計事實（包含排名、評分差距與 $R^2$ 決定係數）。
+  2. **使用者自主決斷**：系統嚴禁提供任何主觀買賣或強制換檔之操作指導條，完全交由使用者依客觀量化資訊自行決斷投資組合去冗餘。
 
 

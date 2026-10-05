@@ -59,22 +59,26 @@
 
 ---
 
-## 3. Tab 2：合規標的天梯榜與正交雷達 (Qualified Leaderboard & Orthogonal Engine)
+## 3. Tab 2：合規標的天梯榜與配置決策雷達 (Qualified Leaderboard & Allocation Radar)
 
-### 3.1 正交引擎控制列 (Orthogonal Control Bar)
+### 3.1 視角與決策控制列 (Perspective & Decision Control Bar)
 | 元件名稱 | UI 元件型態 | 預設狀態 | 操作行為 (Trigger) | 觸發動作與狀態變更 (Action & State Transition) | 視覺反饋 (UI Feedback) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **資產池切換標籤** | **分段按鈕 (`Segmented Tabs`)** | 預設選中 `核心大盤 Top 10` | 點擊切換分組 | `selectedClass = 'SATELLITE'` 等，重新拉取天梯榜資料。 | 表格欄位與內容即時切換為該資產池候選清單；種子預設重設為該池 Rank 1。 |
-| **當前錨定種子狀態** | 狀態標籤 (`Status Badge / Text`) | 顯示「當前錨定種子: 預設 Rank 1」 | 靜態展示 | 點擊表格任一列時動態更新 | 高亮綠色標籤，展示當前被選為去共線基準之 ETF 代碼與名稱。 |
-| **重設為 Rank 1 種子按鈕** | **操作按鈕 (`Secondary Button`)** | 正常可點擊 | 使用者點擊按鈕 | `seedTicker = classRank1Ticker`，復原為第一名種子。 | 天梯榜立即重新以 Rank 1 進行正交過濾；當前種子狀態恢復為 Rank 1。 |
+| **視角模式切換器** | **分段按鈕 (`Perspective Toggle`)** | 預設選中 `⚡ 夏農模式` | 點擊切換視角 | `perspectiveMode = 'SHANNON' \| 'CLUSTERING'` | **夏農模式**：呈現種子錨定控制列與正交狀態欄（`ACCEPTED/REJECTED`）。<br>**分群模式**：呈現階層式去冗餘表格，顯示主列 Leader 與折疊式 Alternatives 子列。 |
+| **當前錨定種子狀態<br>(僅夏農模式)** | 狀態標籤 (`Status Badge / Text`) | 顯示「當前錨定種子: 預設 Rank 1」 | 靜態展示 | 點擊表格任一列時動態更新 | 高亮綠色標籤，展示當前被選為去共線基準之 ETF 代碼與名稱。 |
+| **重設為 Rank 1 種子按鈕<br>(僅夏農模式)** | **操作按鈕 (`Secondary Button`)** | 正常可點擊 | 使用者點擊按鈕 | `seedTicker = classRank1Ticker`，復原為第一名種子。 | 天梯榜立即重新以 Rank 1 進行正交過濾；當前種子狀態恢復為 Rank 1。 |
 | **查看兩兩正交矩陣按鈕** | **操作按鈕 (`Secondary Button`)** | 正常可點擊 | 使用者點擊按鈕 | 開啟 `Pairwise Matrix Modal`。 | 彈出全屏/大尺寸對話框，繪製兩兩相關係數熱圖矩陣；$R^2 \ge 0.50$ 的單元格標記紅橙色共線警示。 |
+| **去冗餘收斂概況標籤<br>(僅分群模式)** | 資訊膠囊 (`Info Chip`) | 展示收斂數量 | 靜態展示 | 隨資料加載展示 | 藍色高亮標籤，顯示「全池 40 檔收斂為 30 個獨立賽道（4 擁擠群吸納 14 檔，26 個獨立賽道）」。 |
 
 ### 3.2 合規標的天梯榜表格 (Leaderboard Table)
 | 元件名稱 | UI 元件型態 | 預設狀態 | 操作行為 (Trigger) | 觸發動作與狀態變更 (Action & State Transition) | 視覺反饋 (UI Feedback) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **表格表頭欄位** | **可排序表頭 (`Sortable Column Header`)** | 預設 `組內排名` ASC 排序 | 點擊任一表頭（如 `1年報酬`、`基金規模`） | 切換排序欄位與方向：`ASC` $\rightarrow$ `DESC` $\rightarrow$ `預設`。 | 表頭顯示上下排序箭頭（▲ / ▼）；表格資料行即時依選定欄位重排。 |
-| **正交狀態膠囊** | 狀態標籤 (`Status Badge`) | 綠色 `ACCEPTED`、灰色 `REJECTED` 或 ⭐ `錨定種子` | 使用者滑鼠 Hover 懸停 | 無狀態變更（純提示） | 浮現 Tooltip 提示衝突標的與數值，例如：`與 00757 共線 (R² = 0.82)`。 |
-| **表格資料行 (Table Row)** | **整列可點擊項目 (`Clickable Row`)** | 靜態斑馬紋顯示；Rank 1 預設標記為種子 | **滑鼠點擊該資料行任意處 (Click to Anchor)** | **1. 切換錨點**：`seedTicker = row.ticker`，立即以該標的為種子重新計算全表正交狀態！<br>**2. 開啟抽屜**：`selectedTicker = row.ticker`，同時打開右側詳細資訊抽屜。 | • 被點擊之行立即高亮轉為 ⭐ **`[錨定種子]`** 綠色徽章。<br>• 全表其餘標的即時重算 $R^2$ 共線狀態。<br>• 右側平滑滑出「標的詳細資訊抽屜」，無換頁延遲。 |
+| **表格表頭欄位** | **可排序表頭 (`Sortable Column Header`)** | 預設 `組內排名` ASC 排序 | 點擊任一表頭（如 `1年報酬`、`基金規模`） | 切換排序欄位與方向：`ASC` $\rightarrow$ `DESC` $\rightarrow$ `預設`。 | 表頭顯示上下排序箭頭（▲ / ▼）；表格主列即時依選定欄位重排（分群模式下子列隨母體 Leader 同步移動）。 |
+| **正交狀態膠囊<br>(夏農模式)** | 狀態標籤 (`Status Badge`) | 綠色 `ACCEPTED`、灰色 `REJECTED` 或 ⭐ `錨定種子` | 使用者滑鼠 Hover 懸停 | 無狀態變更（純提示） | 浮現 Tooltip 提示衝突標的與數值，例如：`與 00757 共線 (R² = 0.82)`。 |
+| **階層式折疊展開鈕<br>(分群模式 Leader 行)** | **圖示按鈕 (`Expand/Collapse Toggle`)** | 預設收合 `▶`（或展開） | 使用者點擊 `▶` 或 `▼` | 切換該賽道群組子列展開狀態：`expandedClusters[id] = !expanded` | • 箭頭旋轉為 `▼`，就地平滑展開淺灰色縮排之 Alternatives 子列表。<br>• 再次點擊旋轉回 `▶`，收合子列表。 |
+| **同質替代子列<br>(分群模式 Sub-rows)** | **縮排資料列 (`Indented Sub-row`)** | 淺灰色背景、縮排展示 | 1. 滑鼠 Hover $R^2$ 標籤<br>2. 點擊該子列資料行 | **1. Hover**：浮現客觀量化統計 Tooltip。<br>**2. Click**：`selectedTicker = subRow.ticker`，打開右側詳細資訊抽屜。 | • Tooltip 提示客觀統計事實：如「與首選標的 {Leader} 之判定係數 R² = {r2}，綜合評分差距 {diff} 分」。無主觀買賣或換檔指令。<br>• 右側平滑滑出該替代標的之詳細資訊抽屜。 |
+| **表格主列 (Master Row)** | **整列可點擊項目 (`Clickable Row`)** | 靜態斑馬紋顯示；Rank 1 預設標記為種子/首選 | **滑鼠點擊主列任意處** | **夏農模式**：切換種子 (`seedTicker = row.ticker`) 並開啟抽屜。<br>**分群模式**：開啟抽屜 (`selectedTicker = row.ticker`)。 | • 夏農模式下該行轉為 ⭐ **`[錨定種子]`** 綠色徽章並重算全表共線狀態。<br>• 右側平滑滑出「標的詳細資訊抽屜」，無換頁延遲。 |
 
 ### 3.3 標的詳細資訊抽屜 (Asset Detail Drawer)
 | 抽屜內子模組 | UI 元件型態 | 操作行為 (Trigger) | 觸發動作與視覺反饋 |
