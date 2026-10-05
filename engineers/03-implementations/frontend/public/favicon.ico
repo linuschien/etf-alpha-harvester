@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="alpha" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="50%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Container -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg)" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Candlestick bar (Alpha indicator) -->
+  <line x1="20" y1="14" x2="20" y2="50" stroke="#10b981" stroke-width="1.5" stroke-opacity="0.3"/>
+  <rect x="17" y="24" width="6" height="16" rx="2" fill="#10b981" fill-opacity="0.25" stroke="#10b981" stroke-width="1.5"/>
+
+  <!-- Alpha Greek symbol α -->
+  <path d="M46 44 C42 44 38 41 34 35 C28 26 21 21 16 26 C12 30 13 38 18 42 C24 46 34 38 44 20 L48 14"
+        stroke="url(#alpha)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Harvest Sparkle (Top-right Alpha Star) -->
+  <path d="M48 10 L49.5 14 L53.5 15.5 L49.5 17 L48 21 L46.5 17 L42.5 15.5 L46.5 14 Z" fill="url(#gold)"/>
+</svg>
