@@ -22,12 +22,15 @@ export const listDividendAnnouncementsKeys = {
     ['listDividendAnnouncements', filter] as const,
 };
 
-// ── Hook ───────────────────────────────────────────────────────────────────
-export function useListDividendAnnouncements(filter?: Record<string, unknown>) {
+export function useListDividendAnnouncements(
+  filter?: Record<string, unknown>,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: filter
       ? listDividendAnnouncementsKeys.filtered(filter)
       : listDividendAnnouncementsKeys.all,
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<{ listDividendAnnouncements: DividendAnnouncement[] }>(

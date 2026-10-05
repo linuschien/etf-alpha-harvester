@@ -20,9 +20,14 @@ export const benchmarkQuotesKeys = {
     ['benchmarkQuotes', startDate, endDate] as const,
 };
 
-export function useBenchmarkQuotes(startDate = '2025-10-01', endDate = '2026-09-30') {
+export function useBenchmarkQuotes(
+  startDate = '2025-10-01',
+  endDate = '2026-09-30',
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: benchmarkQuotesKeys.window(startDate, endDate),
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<BenchmarkQuotesData>(

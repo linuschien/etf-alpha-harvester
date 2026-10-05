@@ -25,10 +25,10 @@ export const getMacroRegimeKeys = {
   all: ['getMacroRegime'] as const,
 };
 
-// ── Hook ───────────────────────────────────────────────────────────────────
-export function useGetMacroRegime() {
+export function useGetMacroRegime(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: getMacroRegimeKeys.all,
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<{ getMacroRegime: any }>(

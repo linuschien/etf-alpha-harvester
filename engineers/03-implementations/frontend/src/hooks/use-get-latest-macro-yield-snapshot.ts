@@ -26,10 +26,10 @@ export const getLatestMacroYieldSnapshotKeys = {
   all: ['getLatestMacroYieldSnapshot'] as const,
 };
 
-// ── Hook ───────────────────────────────────────────────────────────────────
-export function useGetLatestMacroYieldSnapshot() {
+export function useGetLatestMacroYieldSnapshot(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: getLatestMacroYieldSnapshotKeys.all,
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<{ getLatestMacroYieldSnapshot: any }>(

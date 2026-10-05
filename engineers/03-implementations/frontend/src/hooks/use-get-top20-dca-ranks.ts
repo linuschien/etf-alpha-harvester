@@ -24,10 +24,14 @@ export const getTop20DcaRanksKeys = {
     ['getTop20DcaRanks', year, month] as const,
 };
 
-// ── Hook ───────────────────────────────────────────────────────────────────
-export function useGetTop20DcaRanks(year: number = 2026, month: number = 8) {
+export function useGetTop20DcaRanks(
+  year: number = 2026,
+  month: number = 8,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: getTop20DcaRanksKeys.filtered(year, month),
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<{ getTop20DcaRanks: DcaPopularityRank[] }>(

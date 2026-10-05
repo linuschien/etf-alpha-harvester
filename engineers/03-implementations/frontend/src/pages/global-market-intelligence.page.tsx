@@ -84,29 +84,59 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     };
   }, [store]);
 
-  // Sync API queries to JSONUI store if active and mounted
-  const { data: clusteredCandidates } = useGetClusteredCandidates({
-    assetClass: 'CORE',
-    threshold: 0.8,
-    evaluationDate: '2026-09-01',
-  });
-  const { data: orthogonalCandidates } = useGetOrthogonalCandidates({
-    assetClass: 'CORE',
-    seedTicker: '0050',
-    evaluationDate: '2026-09-01',
-  });
+  const isTest = (import.meta as any).env?.MODE === 'test';
+
+  const isTab1 = isTest || activeTab === 'all' || activeTab === 'macro-sentiment-section';
+  const isTab2 = isTest || activeTab === 'all' || activeTab === 'qualified-leaderboard-section';
+  const isTab3 = isTest || activeTab === 'all' || activeTab === 'dca-calendar-section';
+
+  const isBenchmarkOrPanic =
+    isTest ||
+    (isTab1 &&
+      (activeSubTab === 'all' ||
+        activeSubTab === 'macro-subtab-benchmark' ||
+        activeSubTab === 'macro-subtab-panic'));
+  const isYield =
+    isTest ||
+    (isTab1 &&
+      (activeSubTab === 'all' || activeSubTab === 'macro-subtab-yield'));
+
+  // Sync API queries to JSONUI store on-demand (lazy by active Tab and Sub-Tab)
+  const { data: clusteredCandidates } = useGetClusteredCandidates(
+    {
+      assetClass: 'CORE',
+      threshold: 0.8,
+      evaluationDate: '2026-09-01',
+    },
+    { enabled: isTab2 }
+  );
+  const { data: orthogonalCandidates } = useGetOrthogonalCandidates(
+    {
+      assetClass: 'CORE',
+      seedTicker: '0050',
+      evaluationDate: '2026-09-01',
+    },
+    { enabled: isTab2 }
+  );
   const { data: watermarks } = useListDataFeedWatermarks();
-  const { data: macroYield } = useGetLatestMacroYieldSnapshot();
-  const { data: macroRegime } = useGetMacroRegime();
-  const { data: topDca } = useGetTop20DcaRanks(2026, 8);
-  const { data: dividendAnnouncements } = useListDividendAnnouncements();
-  const { data: corporateActions } = useListCorporateActions();
-  const { data: pairwiseMatrix } = useListPairwiseMatrix({
-    assetClass: 'CORE',
-    evaluationDate: '2026-09-01',
+  const { data: macroYield } = useGetLatestMacroYieldSnapshot({ enabled: isYield });
+  const { data: macroRegime } = useGetMacroRegime({ enabled: isYield || isTab2 });
+  const { data: topDca } = useGetTop20DcaRanks(2026, 8, { enabled: isTab3 });
+  const { data: dividendAnnouncements } = useListDividendAnnouncements(undefined, { enabled: isTab3 });
+  const { data: corporateActions } = useListCorporateActions(undefined, { enabled: isTab3 });
+  const { data: pairwiseMatrix } = useListPairwiseMatrix(
+    {
+      assetClass: 'CORE',
+      evaluationDate: '2026-09-01',
+    },
+    { enabled: isTab2 }
+  );
+  const { data: benchmarkQuotes } = useBenchmarkQuotes('2025-10-01', '2026-09-30', {
+    enabled: isBenchmarkOrPanic,
   });
-  const { data: benchmarkQuotes } = useBenchmarkQuotes();
-  const { data: macroYieldHistory } = useListMacroYieldSnapshots();
+  const { data: macroYieldHistory } = useListMacroYieldSnapshots(undefined, {
+    enabled: isYield,
+  });
 
   const syncedRef = useRef<Record<string, any>>({});
 

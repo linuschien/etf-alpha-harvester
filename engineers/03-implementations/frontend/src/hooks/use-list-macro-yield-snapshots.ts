@@ -23,11 +23,13 @@ export const listMacroYieldSnapshotsKeys = {
     ['listMacroYieldSnapshots', filter] as const,
 };
 
-// ── Hook ───────────────────────────────────────────────────────────────────
-export function useListMacroYieldSnapshots(filter?: {
-  startDate?: string;
-  endDate?: string;
-}) {
+export function useListMacroYieldSnapshots(
+  filter?: {
+    startDate?: string;
+    endDate?: string;
+  },
+  options?: { enabled?: boolean }
+) {
   const queryFilter = filter ?? {
     startDate: '2025-10-01',
     endDate: '2026-09-30',
@@ -35,6 +37,7 @@ export function useListMacroYieldSnapshots(filter?: {
 
   return useQuery({
     queryKey: listMacroYieldSnapshotsKeys.filtered(queryFilter),
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<{ listMacroYieldSnapshots: MacroYieldSnapshotItem[] }>(

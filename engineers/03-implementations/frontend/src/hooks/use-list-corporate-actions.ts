@@ -24,12 +24,15 @@ export const listCorporateActionsKeys = {
     ['listCorporateActions', filter] as const,
 };
 
-// ── Hook ───────────────────────────────────────────────────────────────────
-export function useListCorporateActions(filter?: Record<string, unknown>) {
+export function useListCorporateActions(
+  filter?: Record<string, unknown>,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: filter
       ? listCorporateActionsKeys.filtered(filter)
       : listCorporateActionsKeys.all,
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<{ listCorporateActions: CorporateAction[] }>(

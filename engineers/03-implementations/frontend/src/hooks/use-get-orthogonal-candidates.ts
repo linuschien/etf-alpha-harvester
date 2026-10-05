@@ -30,11 +30,14 @@ export const getOrthogonalCandidatesKeys = {
 };
 
 // ── Hook ───────────────────────────────────────────────────────────────────
-export function useGetOrthogonalCandidates(filter?: {
-  assetClass?: string;
-  seedTicker?: string;
-  evaluationDate?: string;
-}) {
+export function useGetOrthogonalCandidates(
+  filter?: {
+    assetClass?: string;
+    seedTicker?: string;
+    evaluationDate?: string;
+  },
+  options?: { enabled?: boolean }
+) {
   const effectiveFilter = {
     assetClass: 'CORE',
     seedTicker: '0050',
@@ -44,6 +47,7 @@ export function useGetOrthogonalCandidates(filter?: {
 
   return useQuery({
     queryKey: getOrthogonalCandidatesKeys.filtered(effectiveFilter),
+    enabled: options?.enabled,
     queryFn: () =>
       api
         .graphql<{ getOrthogonalCandidates: GlobalAssetScore[] }>(
