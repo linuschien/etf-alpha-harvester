@@ -102,6 +102,41 @@ export const handlers = [
       });
     }
 
+    if (query.includes('getQuoteTimeSeries')) {
+      return HttpResponse.json({
+        data: {
+          getQuoteTimeSeries: [
+            { ticker: '0050', tradeDate: '2026-09-23', closePrice: 198.5, volume: 15000000 },
+          ],
+        },
+      });
+    }
+
+    if (query.includes('getScoreByTicker')) {
+      return HttpResponse.json({
+        data: {
+          getScoreByTicker: {
+            ticker: '0050',
+            evaluationDate: '2026-09-23',
+            compositeScore: 92.4,
+            classRank: 1,
+            orthogonalStatus: 'SEED',
+            rSquaredWithLeader: 1.0,
+          },
+        },
+      });
+    }
+
+    if (query.includes('listMarketDailyQuotes')) {
+      return HttpResponse.json({
+        data: {
+          listMarketDailyQuotes: [
+            { ticker: '^TWII', tradeDate: '2026-09-23', closePrice: 22850.5, changePct: 0.8 },
+          ],
+        },
+      });
+    }
+
     // Default empty data response for unhandled queries
     return HttpResponse.json({ data: {} });
   }),
