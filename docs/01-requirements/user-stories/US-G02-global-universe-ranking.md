@@ -78,13 +78,13 @@
 
 ---
 
-## US-G02-03：Stage 3 兩兩正交矩陣持久化與通用貪婪正交去共線演算法 (Greedy Orthogonal Engine)
+## US-G02-03：Stage 3 觀點一：夏農模式之兩兩正交矩陣持久化與貪婪正交去共線 (Shannon Orthogonal Engine)
 
 **身份**：正交決策引擎 (Orthogonal Decision Engine)
 
 > **As a** 正交決策引擎，  
 > **I want to** 計算並持久化保存 Top 候選標的的兩兩判定係數矩陣，並執行全量貪婪正交去共線標示（支援預設全局模式 A 與自訂種子錨定模式 B），  
-> **So that** 系統徹底消除核心與衛星池內的共線重疊風險，全量輸出 `ACCEPTED` 與 `REJECTED_COLLINEAR` 狀態，落實寧缺勿濫。
+> **So that** 系統徹底消除核心與衛星池內的共線重疊風險，全量輸出 `ACCEPTED` 與 `REJECTED_COLLINEAR` 狀態，落實寧缺勿濫以極大化夏農波動收割。
 
 ### 驗收條件 (Acceptance Criteria)
 - **AC1 (兩兩正交矩陣計算與持久化儲存 - Pairwise Matrix Persistence)**：
@@ -107,5 +107,40 @@
   1. 演算法不設固定截斷檔數 $k$，對 Top 10 核心與 Top 50 衛星全量標示每一檔的審查結果。
   2. 若向下遍歷無標的滿足 $R^2 < 0.50$，演算法自然飽和終止，嚴禁為湊足檔數而放寬門檻。
   3. 模式 A 之正交結果與衝突明細同步持久化於 `GlobalAssetScore` 表之 `orthogonal_status` 與 `collision_detail` 欄位。
+
+---
+
+## US-G02-04：Stage 3 觀點二：分群去冗餘模式與星狀領頭羊分群演算法 (Clustering & De-redundancy Engine)
+
+**身份**：分群去冗餘引擎 (Clustering & De-redundancy Engine)
+
+> **As a** 投資組合去冗餘決策引擎，  
+> **I want to** 依據持久化兩兩判定係數矩陣，以星狀領頭羊拓樸將高度同質（$R^2 \ge 0.80$）之候選標的歸納為同一族群，  
+> **So that** 系統能為各賽道自動推舉動能綜合得分最高之「群組首選 (Cluster Leader)」並收納「同質替代標的 (Alternatives)」，消除投資組合重複押注同質標的的冗餘，並提供明確的換檔汰弱留強依據。
+
+### 驗收條件 (Acceptance Criteria)
+- **AC1 (同質判定標準 - Homogeneity Threshold)**：
+  兩兩標的近 365 個日曆天原始日報酬判定係數必須滿足：
+  $$R^2(\text{Candidate}, \text{Leader}) \ge 0.80$$
+  （等價於皮爾森相關係數 $\rho \ge \sqrt{0.80} \approx 0.894$；未達 0.80 者視為不同賽道，保留為獨立賽道或等待其他 Leader 吸納）。
+- **AC2 (星狀領頭羊拓樸與傳遞性阻斷 - Star Topology & No Transitive Contamination)**：
+  1. 嚴禁採用無向圖連通元件（Graph Connected Components），徹底阻斷因傳遞性鏈條（如 $A \sim B$ 且 $B \sim C \implies A \sim C$）導致之不同產業賽道錯誤混淆。
+  2. 所有成員之同質性嚴格直接對準該群組之「群組首選 (Leader)」，族群內部呈單層星狀中心拓樸（Star-shaped Centroid）。
+- **AC3 (貪婪分群排定流程 - Greedy Clustering Pipeline)**：
+  1. 將目標資產池（動能衛星池 Top 50 或核心大盤池 Top 10）之標的，依 Stage 2 綜合評分名次（`class_rank`）降序排列（Rank 1 最高分優先）。
+  2. 初始化未分配標的集合 $\mathcal{U}$。
+  3. 取出 $\mathcal{U}$ 中排名最前（評分最高）者作為新群組之 **群組首選 (Leader)**。
+  4. 依序向下掃描 $\mathcal{U}$ 中其餘候選標的，若其與該 Leader 之 $R^2 \ge 0.80$，則自 $\mathcal{U}$ 移出並加入該群組之 **同質替代標的 (Alternatives)** 列表，記錄其與 Leader 之 $R^2$ 與評分差距。
+  5. 重複步驟 3 ~ 4 直至 $\mathcal{U}$ 清空。
+  6. 若 Leader 掃描後無任何標的滿足 $R^2 \ge 0.80$，則該群組標記為單一成員之 **獨立賽道 (Singleton Cluster)**。
+- **AC4 (去冗餘資料輸出結構 - Output Data Structure)**：
+  分群結果結構化輸出應包含：
+  - `cluster_id`：群組序號（自 1 遞增）。
+  - `leader`：群組首選標的（包含代碼、名稱、追蹤指數、最新市價、`class_rank`、綜合評分）。
+  - `alternatives`：替代標的清單（每筆包含標的代碼、名稱、追蹤指數、`class_rank`、綜合評分、與 Leader 之 $R^2$）。
+  - `is_singleton`：布林值，標記是否為獨立賽道標的（即 `alternatives` 為空）。
+- **AC5 (投資決策與換檔賦能 - Portfolio Decision & Rotation Guidance)**：
+  1. **買入去冗餘**：在分群視角下，各群組僅需配置 Leader 即可代表該賽道動能，消除投資人在同質標的間的重複買入摩擦。
+  2. **換檔指引**：若投資人現有庫存中持有群內的 Alternatives 標的，系統直觀標記同賽道目前動能最高之 Leader 與相關度，提供清楚的換檔汰弱留強依據。
 
 
