@@ -585,9 +585,26 @@
                     ]
                   },
                   {
+                    "id": "perspective-mode-selector",
+                    "abstract_type": "Selection",
+                    "semantic_variant": "radio",
+                    "label": "決策視角模式 (⚡ 夏農幾何收割 / 🧩 分群去冗餘族群)",
+                    "behavior_ref": "nielsen:control",
+                    "ux_hints": {
+                      "max_visible_options": 2
+                    },
+                    "interactions": [
+                      {
+                        "on_event": "on_change",
+                        "target_id": "qualified-leaderboard-section",
+                        "behavior_ref": "nielsen:feedback"
+                      }
+                    ]
+                  },
+                  {
                     "id": "current-seed-badge-text",
                     "abstract_type": "Text",
-                    "label": "當前錨定種子: 預設 Rank 1 (點擊下方任意標的即切換錨點)",
+                    "label": "當前錨定種子: 預設 Rank 1 (夏農模式點擊任意標的切換錨點)",
                     "behavior_ref": "visual-hierarchy:weight"
                   },
                   {
@@ -630,7 +647,7 @@
                 "id": "qualified-leaderboard-table",
                 "abstract_type": "Table",
                 "semantic_variant": "data-table",
-                "label": "合規標的天梯榜數據表",
+                "label": "夏農模式正交去共線天梯表 (Shannon Orthogonal Table)",
                 "data_ref": "getOrthogonalCandidates",
                 "behavior_ref": "fitts-law",
                 "columns": [
@@ -658,6 +675,89 @@
                   {
                     "field": "distributionFrequency",
                     "label": "配息週期",
+                    "sortable": false
+                  },
+                  {
+                    "field": "closePrice",
+                    "label": "最新市價",
+                    "sortable": true
+                  },
+                  {
+                    "field": "changePct",
+                    "label": "單日漲跌(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return1m",
+                    "label": "1 個月報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return3m",
+                    "label": "3 個月報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return6m",
+                    "label": "6 個月報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "return1y",
+                    "label": "1 年報酬(%)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "fundSizeTwd",
+                    "label": "基金規模(AUM)",
+                    "sortable": true
+                  },
+                  {
+                    "field": "compositeScore",
+                    "label": "綜合評分",
+                    "sortable": true
+                  }
+                ],
+                "interactions": [
+                  {
+                    "on_event": "on_click",
+                    "target_id": "asset-detail-drawer",
+                    "behavior_ref": "nielsen:recognition"
+                  }
+                ]
+              },
+              {
+                "id": "clustering-leaderboard-table",
+                "abstract_type": "Table",
+                "semantic_variant": "data-table",
+                "label": "合規標的去冗餘分群階層表 (Hierarchical Expandable Table)",
+                "data_ref": "getClusteredCandidates",
+                "behavior_ref": "fitts-law",
+                "columns": [
+                  {
+                    "field": "clusterId",
+                    "label": "族群編號",
+                    "sortable": true,
+                    "default_sort": "asc"
+                  },
+                  {
+                    "field": "isSingleton",
+                    "label": "賽道角色/折疊指示",
+                    "sortable": true
+                  },
+                  {
+                    "field": "ticker",
+                    "label": "標的代碼",
+                    "sortable": false
+                  },
+                  {
+                    "field": "name",
+                    "label": "標的名稱",
+                    "sortable": false
+                  },
+                  {
+                    "field": "underlyingIndex",
+                    "label": "追蹤指數名稱",
                     "sortable": false
                   },
                   {
