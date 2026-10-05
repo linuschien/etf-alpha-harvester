@@ -148,8 +148,8 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
   AlertDialog: AlertDialog, // confirm dialog overlay
   MetricCard: MetricCard, // KPI metric card
   EventCalendar: EventCalendar, // ETF Dividend & Split Calendar
-  Radio: SegmentedRadio, // Inline horizontal segmented radio button group
-  SegmentedRadio: SegmentedRadio,
+  Radio: adapt(SegmentedRadio), // Inline horizontal segmented radio button group
+  SegmentedRadio: adapt(SegmentedRadio),
 
   // ── 4. Chart wrappers (Real interactive SVG charts) ──────────────────────
   'Chart:bar': ChartComponent,

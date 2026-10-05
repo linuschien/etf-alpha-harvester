@@ -2,30 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useStateStore } from '@json-render/react';
 
 export interface SegmentedRadioProps {
-  props?: {
-    id?: string;
-    label?: string;
-    name?: string;
-    options?: string[];
-    value?: any;
-    className?: string;
-  };
-  element?: {
-    props?: {
-      id?: string;
-      label?: string;
-      name?: string;
-      options?: string[];
-      value?: any;
-      className?: string;
-    };
-  };
+  props?: any;
+  element?: any;
+  bindings?: Record<string, string>;
   emit?: (event: string, ...args: any[]) => void;
 }
 
 export default function SegmentedRadio({
   props: directProps,
   element,
+  bindings,
   emit,
 }: SegmentedRadioProps) {
   const props = element?.props ?? directProps ?? {};
@@ -37,9 +23,15 @@ export default function SegmentedRadio({
   }
 
   const bindPath =
-    typeof props.value === 'object' && props.value?.$bindState
-      ? props.value.$bindState
-      : null;
+    bindings?.value ||
+    (typeof props?.value === 'object' && props?.value?.$bindState
+      ? props?.value?.$bindState
+      : null) ||
+    (typeof element?.props?.value === 'object' && element?.props?.value?.$bindState
+      ? element?.props?.value?.$bindState
+      : null) ||
+    (props?.id ? `/filters/${props.id}` : null) ||
+    (props?.name ? `/filters/${props.name}` : null);
 
   const [currentValue, setCurrentValue] = useState<string>(() => {
     if (bindPath && store) {
@@ -61,6 +53,12 @@ export default function SegmentedRadio({
       if (typeof unsub === 'function') unsub();
     };
   }, [store, bindPath]);
+
+  useEffect(() => {
+    if (typeof props.value === 'string' && props.value && props.value !== currentValue) {
+      setCurrentValue(props.value);
+    }
+  }, [props.value]);
 
   const options: string[] = props.options || [];
 

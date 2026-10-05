@@ -473,10 +473,37 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       });
     }
 
-    // 5% breathing room padding
-    const span = Math.max(1, domainMax - domainMin);
-    const yMax = domainMax + span * 0.05;
-    const yMin = domainMin - span * 0.05;
+    // Calculate "Nice Round Numbers" for Y-Axis (e.g. 30000, 35000, 40000, 45000, 50000)
+    const calculateNiceTicks = (dataMin: number, dataMax: number, targetCount = 5) => {
+      const range = Math.max(1, dataMax - dataMin);
+      const rawStep = range / (targetCount - 1);
+      const power = Math.floor(Math.log10(rawStep));
+      const magnitude = Math.pow(10, power);
+      const normalized = rawStep / magnitude;
+
+      let step = magnitude;
+      if (normalized < 1.5) {
+        step = 1 * magnitude;
+      } else if (normalized < 3) {
+        step = 2 * magnitude;
+      } else if (normalized < 7) {
+        step = 5 * magnitude;
+      } else {
+        step = 10 * magnitude;
+      }
+
+      const niceMin = Math.floor(dataMin / step) * step;
+      const niceMax = Math.ceil(dataMax / step) * step;
+
+      const ticks: number[] = [];
+      for (let v = niceMin; v <= niceMax + step * 0.001; v += step) {
+        ticks.push(Math.round(v));
+      }
+
+      return { ticks, niceMin, niceMax };
+    };
+
+    const { ticks: yTicks, niceMin: yMin, niceMax: yMax } = calculateNiceTicks(domainMin, domainMax, 5);
 
     // Layout coordinates - symmetric padding ensures chart is geometrically centered
     const width = chartWidth || 860;
@@ -516,16 +543,21 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const ma120Path = makeMaPath('ma120');
     const ma240Path = makeMaPath('ma240');
 
-    // Bollinger Band envelope
+    // Bollinger Band envelope & lines (Upper, Middle 20MA, Lower)
     const bbValid = windowQuotes
       .map((q, idx) => ({
         idx,
         upper: q.bbUpper ? Number(q.bbUpper) : null,
+        middle: q.bbMiddle ? Number(q.bbMiddle) : (q.ma20 ? Number(q.ma20) : null),
         lower: q.bbLower ? Number(q.bbLower) : null,
       }))
       .filter((p) => p.upper !== null && p.lower !== null);
 
     let bbAreaPath = '';
+    let bbUpperPath = '';
+    let bbMiddlePath = '';
+    let bbLowerPath = '';
+
     if (bbValid.length > 0) {
       const upperPart = bbValid.reduce(
         (acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${scaleX(p.idx)} ${scaleY(p.upper!)}`,
@@ -539,13 +571,19 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           ''
         );
       bbAreaPath = `${upperPart} ${lowerPart} Z`;
-    }
 
-    // Y Axis Ticks (5 round point ticks)
-    const yTickCount = 5;
-    const yTicks = Array.from({ length: yTickCount }, (_, i) =>
-      yMin + (i / (yTickCount - 1)) * (yMax - yMin)
-    );
+      bbUpperPath = upperPart;
+      bbLowerPath = bbValid.reduce(
+        (acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${scaleX(p.idx)} ${scaleY(p.lower!)}`,
+        ''
+      );
+      bbMiddlePath = bbValid
+        .filter((p) => p.middle !== null)
+        .reduce(
+          (acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${scaleX(p.idx)} ${scaleY(p.middle!)}`,
+          ''
+        );
+    }
 
     // X Axis Date Labels
     const tickIndices = [
@@ -655,7 +693,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             {showBB && (
               <span className="flex items-center gap-1.5 font-medium text-sky-600 dark:text-sky-400">
                 <span className="w-3 h-2 bg-sky-500/20 border border-sky-400 rounded-sm inline-block"></span>
-                布林通道 (20MA ± 2σ)
+                布林通道 (上軌 / 中線20MA / 下軌)
               </span>
             )}
             {showFib && (
@@ -761,16 +799,46 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
               );
             })}
 
-          {/* Bollinger Band Shaded Cloud */}
-          {showBB && bbAreaPath && (
-            <path
-              d={bbAreaPath}
-              fill="#0ea5e9"
-              fillOpacity="0.12"
-              stroke="#0ea5e9"
-              strokeWidth="0.8"
-              strokeDasharray="2 2"
-            />
+          {/* Bollinger Band System (Upper, Middle 20MA, Lower, and Shaded Cloud) */}
+          {showBB && (
+            <g>
+              {bbAreaPath && (
+                <path
+                  d={bbAreaPath}
+                  fill="#0ea5e9"
+                  fillOpacity="0.12"
+                />
+              )}
+              {bbUpperPath && (
+                <path
+                  d={bbUpperPath}
+                  fill="none"
+                  stroke="#0ea5e9"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity="0.85"
+                />
+              )}
+              {bbLowerPath && (
+                <path
+                  d={bbLowerPath}
+                  fill="none"
+                  stroke="#0ea5e9"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity="0.85"
+                />
+              )}
+              {bbMiddlePath && (
+                <path
+                  d={bbMiddlePath}
+                  fill="none"
+                  stroke="#0ea5e9"
+                  strokeWidth="1.8"
+                  strokeDasharray="4 2"
+                />
+              )}
+            </g>
           )}
 
           {/* Close Price Area Gradient */}
