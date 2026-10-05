@@ -691,11 +691,11 @@
     "drawdown-toolbar-stack": {
       "type": "Stack",
       "props": {
-        "direction": "vertical",
-        "gap": "md",
-        "align": "start",
+        "direction": "horizontal",
+        "gap": "lg",
+        "align": "center",
         "justify": null,
-        "className": "w-full"
+        "className": "w-full flex-wrap items-center gap-6"
       },
       "children": [
         "drawdown-window-selector",
@@ -709,7 +709,7 @@
         "gap": "lg",
         "align": "center",
         "justify": null,
-        "className": "flex-wrap gap-4"
+        "className": "flex-wrap items-center gap-6"
       },
       "children": [
         "toggle-ma-switch",
@@ -739,7 +739,7 @@
     "toggle-ma-switch": {
       "type": "Switch",
       "props": {
-        "label": "四條均線開關 (20/60/120/240MA)",
+        "label": "均線",
         "name": "toggle-ma-switch",
         "checked": {
           "$bindState": "/filters/toggle-ma-switch"
@@ -752,7 +752,7 @@
     "toggle-bb-switch": {
       "type": "Switch",
       "props": {
-        "label": "月線布林通道開關 (20MA ± 2σ)",
+        "label": "布林通道",
         "name": "toggle-bb-switch",
         "checked": {
           "$bindState": "/filters/toggle-bb-switch"
@@ -765,7 +765,7 @@
     "toggle-fib-switch": {
       "type": "Switch",
       "props": {
-        "label": "黃金分割警戒線 (-23.6%, -38.2%, -50.0%, -61.8%, -76.4%)",
+        "label": "黃金分割警戒線",
         "name": "toggle-fib-switch",
         "checked": {
           "$bindState": "/filters/toggle-fib-switch"
@@ -1606,7 +1606,7 @@
     "toggle-kline-ma-switch": {
       "type": "Switch",
       "props": {
-        "label": "四條均線開關 (20/60/120/240MA)",
+        "label": "均線",
         "name": "toggle-kline-ma-switch",
         "checked": {
           "$bindState": "/filters/toggle-kline-ma-switch"
@@ -1619,7 +1619,7 @@
     "toggle-kline-bb-switch": {
       "type": "Switch",
       "props": {
-        "label": "月線布林通道開關 (20MA ± 2σ)",
+        "label": "布林通道",
         "name": "toggle-kline-bb-switch",
         "checked": {
           "$bindState": "/filters/toggle-kline-bb-switch"
@@ -1632,7 +1632,7 @@
     "toggle-kline-fib-switch": {
       "type": "Switch",
       "props": {
-        "label": "黃金分割警戒線 (-23.6%, -38.2%, -50.0%, -61.8%, -76.4%)",
+        "label": "黃金分割警戒線",
         "name": "toggle-kline-fib-switch",
         "checked": {
           "$bindState": "/filters/toggle-kline-fib-switch"
