@@ -79,7 +79,7 @@ type MarketDailyQuote {
     highPrice: Float
     lowPrice: Float
     closePrice: Float!
-    volumeShares: Int
+    volumeShares: Float
     tradeValueTwd: Float
     ma20: Float
     ma60: Float
