@@ -8,6 +8,9 @@ export interface BenchmarkQuotesData {
   ndx: MarketDailyQuote[];
   sox: MarketDailyQuote[];
   n225: MarketDailyQuote[];
+}
+
+export interface PanicQuotesData {
   vix: MarketDailyQuote[];
   vxn: MarketDailyQuote[];
   fearGreed: MarketDailyQuote[];
@@ -18,6 +21,12 @@ export const benchmarkQuotesKeys = {
   all: ['benchmarkQuotes'] as const,
   window: (startDate: string, endDate: string) =>
     ['benchmarkQuotes', startDate, endDate] as const,
+};
+
+export const panicQuotesKeys = {
+  all: ['panicQuotes'] as const,
+  window: (startDate: string, endDate: string) =>
+    ['panicQuotes', startDate, endDate] as const,
 };
 
 export function useBenchmarkQuotes(
@@ -47,6 +56,25 @@ export function useBenchmarkQuotes(
             n225: getQuoteTimeSeries(ticker: "^N225", startDate: $startDate, endDate: $endDate) {
               ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 ma120 ma240 bbUpper bbMiddle bbLower
             }
+          }`,
+          { startDate, endDate }
+        )
+        .then((data) => data),
+  });
+}
+
+export function usePanicQuotes(
+  startDate = '2025-10-01',
+  endDate = '2026-09-30',
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: panicQuotesKeys.window(startDate, endDate),
+    enabled: options?.enabled,
+    queryFn: () =>
+      api
+        .graphql<PanicQuotesData>(
+          `query GetPanicQuotes($startDate: String!, $endDate: String!) {
             vix: getQuoteTimeSeries(ticker: "^VIX", startDate: $startDate, endDate: $endDate) {
               ticker tradeDate openPrice highPrice lowPrice closePrice
             }

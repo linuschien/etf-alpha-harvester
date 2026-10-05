@@ -90,6 +90,18 @@ export const handlers = [
       });
     }
 
+    if (query.includes('GetPanicQuotes') || operationName === 'GetPanicQuotes') {
+      const byTicker = (t: string) => mockMarketDailyQuotes.filter((q) => q.ticker === t);
+      return HttpResponse.json({
+        data: {
+          vix: byTicker('^VIX'),
+          vxn: byTicker('^VXN'),
+          fearGreed: byTicker('FEAR_GREED'),
+          move: byTicker('^MOVE'),
+        },
+      });
+    }
+
     if (query.includes('listMacroYieldSnapshots') || operationName === 'ListMacroYieldSnapshots') {
       return HttpResponse.json({
         data: {

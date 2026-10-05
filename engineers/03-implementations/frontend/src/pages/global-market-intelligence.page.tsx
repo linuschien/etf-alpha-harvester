@@ -18,7 +18,7 @@ import { useGetTop20DcaRanks } from '@/hooks/use-get-top20-dca-ranks';
 import { useListDividendAnnouncements } from '@/hooks/use-list-dividend-announcements';
 import { useListCorporateActions } from '@/hooks/use-list-corporate-actions';
 import { useListPairwiseMatrix } from '@/hooks/use-list-pairwise-matrix';
-import { useBenchmarkQuotes } from '@/hooks/use-benchmark-quotes';
+import { useBenchmarkQuotes, usePanicQuotes } from '@/hooks/use-benchmark-quotes';
 import { useListMacroYieldSnapshots } from '@/hooks/use-list-macro-yield-snapshots';
 
 export interface PageProps {
@@ -90,12 +90,14 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const isTab2 = isTest || activeTab === 'all' || activeTab === 'qualified-leaderboard-section';
   const isTab3 = isTest || activeTab === 'all' || activeTab === 'dca-calendar-section';
 
-  const isBenchmarkOrPanic =
+  const isBenchmark =
     isTest ||
     (isTab1 &&
-      (activeSubTab === 'all' ||
-        activeSubTab === 'macro-subtab-benchmark' ||
-        activeSubTab === 'macro-subtab-panic'));
+      (activeSubTab === 'all' || activeSubTab === 'macro-subtab-benchmark'));
+  const isPanic =
+    isTest ||
+    (isTab1 &&
+      (activeSubTab === 'all' || activeSubTab === 'macro-subtab-panic'));
   const isYield =
     isTest ||
     (isTab1 &&
@@ -132,7 +134,10 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     { enabled: isTab2 }
   );
   const { data: benchmarkQuotes } = useBenchmarkQuotes('2025-10-01', '2026-09-30', {
-    enabled: isBenchmarkOrPanic,
+    enabled: isBenchmark,
+  });
+  const { data: panicQuotes } = usePanicQuotes('2025-10-01', '2026-09-30', {
+    enabled: isPanic,
   });
   const { data: macroYieldHistory } = useListMacroYieldSnapshots(undefined, {
     enabled: isYield,
@@ -204,16 +209,13 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
 
     if (benchmarkQuotes && syncedRef.current.benchmarkQuotes !== benchmarkQuotes) {
       syncedRef.current.benchmarkQuotes = benchmarkQuotes;
-      store.set('/data/quoteTimeSeries', benchmarkQuotes);
+      const existing = store.get('/data/quoteTimeSeries') || {};
+      store.set('/data/quoteTimeSeries', { ...existing, ...benchmarkQuotes });
       store.set('/data/quoteTimeSeries/^TWII', benchmarkQuotes.twii);
       store.set('/data/quoteTimeSeries/^GSPC', benchmarkQuotes.gspc);
       store.set('/data/quoteTimeSeries/^NDX', benchmarkQuotes.ndx);
       store.set('/data/quoteTimeSeries/^SOX', benchmarkQuotes.sox);
       store.set('/data/quoteTimeSeries/^N225', benchmarkQuotes.n225);
-      store.set('/data/quoteTimeSeries/^VIX', benchmarkQuotes.vix);
-      store.set('/data/quoteTimeSeries/^VXN', benchmarkQuotes.vxn);
-      store.set('/data/quoteTimeSeries/FEAR_GREED', benchmarkQuotes.fearGreed);
-      store.set('/data/quoteTimeSeries/^MOVE', benchmarkQuotes.move);
 
       const formatBenchmark = (series?: any[]) => {
         if (!series || series.length === 0) return { val: '--', date: '' };
@@ -256,6 +258,16 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       const n225 = formatBenchmark(benchmarkQuotes.n225);
       store.set('/metrics/metric-n225', n225.val);
       if (n225.date) store.set('/metrics/metric-n225-date', n225.date);
+    }
+
+    if (panicQuotes && syncedRef.current.panicQuotes !== panicQuotes) {
+      syncedRef.current.panicQuotes = panicQuotes;
+      const existing = store.get('/data/quoteTimeSeries') || {};
+      store.set('/data/quoteTimeSeries', { ...existing, ...panicQuotes });
+      store.set('/data/quoteTimeSeries/^VIX', panicQuotes.vix);
+      store.set('/data/quoteTimeSeries/^VXN', panicQuotes.vxn);
+      store.set('/data/quoteTimeSeries/FEAR_GREED', panicQuotes.fearGreed);
+      store.set('/data/quoteTimeSeries/^MOVE', panicQuotes.move);
 
       const formatPanic = (series?: any[], ticker?: string) => {
         if (!series || series.length === 0) return { val: '--', date: '' };
@@ -277,19 +289,19 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
         return { val, date };
       };
 
-      const vix = formatPanic(benchmarkQuotes.vix, '^VIX');
+      const vix = formatPanic(panicQuotes.vix, '^VIX');
       store.set('/metrics/metric-vix', vix.val);
       if (vix.date) store.set('/metrics/metric-vix-date', vix.date);
 
-      const vxn = formatPanic(benchmarkQuotes.vxn, '^VXN');
+      const vxn = formatPanic(panicQuotes.vxn, '^VXN');
       store.set('/metrics/metric-vxn', vxn.val);
       if (vxn.date) store.set('/metrics/metric-vxn-date', vxn.date);
 
-      const fg = formatPanic(benchmarkQuotes.fearGreed, 'FEAR_GREED');
+      const fg = formatPanic(panicQuotes.fearGreed, 'FEAR_GREED');
       store.set('/metrics/metric-fear-greed', fg.val);
       if (fg.date) store.set('/metrics/metric-fear-greed-date', fg.date);
 
-      const move = formatPanic(benchmarkQuotes.move, '^MOVE');
+      const move = formatPanic(panicQuotes.move, '^MOVE');
       store.set('/metrics/metric-move', move.val);
       if (move.date) store.set('/metrics/metric-move-date', move.date);
     }
@@ -306,6 +318,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     macroYieldHistory,
     macroRegime,
     benchmarkQuotes,
+    panicQuotes,
   ]);
 
   // Synchronize initial filter defaults
