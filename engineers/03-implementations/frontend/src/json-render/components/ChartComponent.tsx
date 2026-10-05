@@ -44,6 +44,25 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
   // Hover state for interactive SVG charts
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
+  // Responsive chart width
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(860);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const w = containerRef.current.clientWidth;
+        if (w > 300) setChartWidth(w);
+      }
+    };
+    updateWidth();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(updateWidth);
+      ro.observe(containerRef.current);
+      return () => ro.disconnect();
+    }
+  }, []);
+
   // 1. Sparkline / Emotion Gauge Charts
   if (id.includes('vix') || id.includes('vxn') || id.includes('move') || id.includes('fear-greed')) {
     const isVix = id.includes('vix') && !id.includes('vxn');
@@ -391,8 +410,8 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       String(a.tradeDate || '').localeCompare(String(b.tradeDate || ''))
     );
 
-    // Full series peak (52-week peak from lookback cache)
-    const peak = Math.max(
+    // Full series 52-week peak from cache
+    const peak52W = Math.max(
       ...sortedQuotes.map((q) => Number(q.highPrice || q.closePrice || 0))
     );
 
@@ -407,42 +426,128 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const pointsCount = Math.max(2, windowQuotes.length);
     const latestQuote = windowQuotes[windowQuotes.length - 1];
     const latestPrice = Number(latestQuote.closePrice);
-    const currentDD = Number((((latestPrice - peak) / peak) * 100).toFixed(2));
+    const currentDD = Number((((latestPrice - peak52W) / peak52W) * 100).toFixed(2));
 
     const ddPoints = windowQuotes.map((q) =>
-      Number((((Number(q.closePrice) - peak) / peak) * 100).toFixed(2))
+      Number((((Number(q.closePrice) - peak52W) / peak52W) * 100).toFixed(2))
     );
     const maxDD = Math.min(...ddPoints);
 
-    // Indicators from backend MonthlyQuoteCacheService (or rolling approximation)
-    const ma20Points = windowQuotes.map((q, idx) => {
-      if (q.ma20) return Number((((Number(q.ma20) - peak) / peak) * 100).toFixed(2));
-      const slice = ddPoints.slice(Math.max(0, idx - 4), idx + 1);
-      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
-    });
+    // Window extremes (anchor for Fibonacci Retracement within active Time Window)
+    const windowPriceMax = Math.max(
+      ...windowQuotes.map((q) => Number(q.highPrice || q.closePrice || 0))
+    );
+    const windowPriceMin = Math.min(
+      ...windowQuotes.map((q) => Number(q.lowPrice || q.closePrice || 0))
+    );
+    const windowRange = Math.max(1, windowPriceMax - windowPriceMin);
 
-    const ma60Points = windowQuotes.map((q, idx) => {
-      if (q.ma60) return Number((((Number(q.ma60) - peak) / peak) * 100).toFixed(2));
-      const slice = ddPoints.slice(Math.max(0, idx - 8), idx + 1);
-      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
-    });
+    // Fibonacci Retracement: 7 Levels anchored to Time Window [windowPriceMin, windowPriceMax]
+    const fibLevels = [
+      { pct: 0.0, label: '0.0% 波段頂部', color: '#64748b', pts: windowPriceMax },
+      { pct: -23.6, label: '-23.6% 多頭呼吸線', color: '#10b981', pts: windowPriceMax - 0.236 * windowRange },
+      { pct: -38.2, label: '-38.2% 黃金撈底線', color: '#f59e0b', pts: windowPriceMax - 0.382 * windowRange },
+      { pct: -50.0, label: '-50.0% 多空平衡線', color: '#3b82f6', pts: windowPriceMax - 0.500 * windowRange },
+      { pct: -61.8, label: '-61.8% 錯殺超跌線', color: '#8b5cf6', pts: windowPriceMax - 0.618 * windowRange },
+      { pct: -76.4, label: '-76.4% 黑天鵝救災線', color: '#ef4444', pts: windowPriceMax - 0.764 * windowRange },
+      { pct: -100.0, label: '-100.0% 波段地板', color: '#64748b', pts: windowPriceMin },
+    ];
 
-    const bbUpper = windowQuotes.map((q, idx) => {
-      if (q.bbUpper) return Number(Math.min(0, (((Number(q.bbUpper) - peak) / peak) * 100)).toFixed(2));
-      const ma = ma20Points[idx];
-      const slice = ddPoints.slice(Math.max(0, idx - 4), idx + 1);
-      const variance = slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
-      return Number(Math.min(0, ma + Math.sqrt(variance) * 1.5).toFixed(2));
-    });
+    // Compute Y-Axis Domain [yMin, yMax] based on all visible/active indicators
+    let domainMax = windowPriceMax;
+    let domainMin = windowPriceMin;
 
-    const bbLower = windowQuotes.map((q, idx) => {
-      if (q.bbLower) return Number((((Number(q.bbLower) - peak) / peak) * 100).toFixed(2));
-      const ma = ma20Points[idx];
-      const slice = ddPoints.slice(Math.max(0, idx - 4), idx + 1);
-      const variance = slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
-      return Number((ma - Math.sqrt(variance) * 1.5).toFixed(2));
-    });
+    if (showMA) {
+      windowQuotes.forEach((q) => {
+        if (q.ma20) { domainMax = Math.max(domainMax, Number(q.ma20)); domainMin = Math.min(domainMin, Number(q.ma20)); }
+        if (q.ma60) { domainMax = Math.max(domainMax, Number(q.ma60)); domainMin = Math.min(domainMin, Number(q.ma60)); }
+        if (q.ma120) { domainMax = Math.max(domainMax, Number(q.ma120)); domainMin = Math.min(domainMin, Number(q.ma120)); }
+        if (q.ma240) { domainMax = Math.max(domainMax, Number(q.ma240)); domainMin = Math.min(domainMin, Number(q.ma240)); }
+      });
+    }
 
+    if (showBB) {
+      windowQuotes.forEach((q) => {
+        if (q.bbUpper) domainMax = Math.max(domainMax, Number(q.bbUpper));
+        if (q.bbLower) domainMin = Math.min(domainMin, Number(q.bbLower));
+      });
+    }
+
+    // 5% breathing room padding
+    const span = Math.max(1, domainMax - domainMin);
+    const yMax = domainMax + span * 0.05;
+    const yMin = domainMin - span * 0.05;
+
+    // Layout coordinates
+    const width = chartWidth || 860;
+    const height = 340;
+    const paddingLeft = 85;
+    const paddingRight = 195;
+    const paddingTop = 32;
+    const paddingBottom = 42;
+
+    const scaleY = (v: number) =>
+      paddingTop + ((yMax - v) / (yMax - yMin)) * (height - paddingTop - paddingBottom);
+    const scaleX = (idx: number) =>
+      paddingLeft + (idx / (pointsCount - 1)) * (width - paddingLeft - paddingRight);
+
+    // Close price path & gradient area
+    const pricePath = windowQuotes.reduce(
+      (acc, q, idx) =>
+        `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(Number(q.closePrice))}`,
+      ''
+    );
+    const priceAreaPath = `${pricePath} L ${scaleX(pointsCount - 1)} ${scaleY(yMin)} L ${scaleX(0)} ${scaleY(yMin)} Z`;
+
+    // 4 Moving Average paths (20MA, 60MA, 120MA, 240MA)
+    const makeMaPath = (key: 'ma20' | 'ma60' | 'ma120' | 'ma240') => {
+      const valid = windowQuotes
+        .map((q, idx) => ({ idx, val: q[key] ? Number(q[key]) : null }))
+        .filter((p) => p.val !== null);
+      if (valid.length === 0) return '';
+      return valid.reduce(
+        (acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${scaleX(p.idx)} ${scaleY(p.val!)}`,
+        ''
+      );
+    };
+
+    const ma20Path = makeMaPath('ma20');
+    const ma60Path = makeMaPath('ma60');
+    const ma120Path = makeMaPath('ma120');
+    const ma240Path = makeMaPath('ma240');
+
+    // Bollinger Band envelope
+    const bbValid = windowQuotes
+      .map((q, idx) => ({
+        idx,
+        upper: q.bbUpper ? Number(q.bbUpper) : null,
+        lower: q.bbLower ? Number(q.bbLower) : null,
+      }))
+      .filter((p) => p.upper !== null && p.lower !== null);
+
+    let bbAreaPath = '';
+    if (bbValid.length > 0) {
+      const upperPart = bbValid.reduce(
+        (acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${scaleX(p.idx)} ${scaleY(p.upper!)}`,
+        ''
+      );
+      const lowerPart = bbValid
+        .slice()
+        .reverse()
+        .reduce(
+          (acc, p) => `${acc} L ${scaleX(p.idx)} ${scaleY(p.lower!)}`,
+          ''
+        );
+      bbAreaPath = `${upperPart} ${lowerPart} Z`;
+    }
+
+    // Y Axis Ticks (5 round point ticks)
+    const yTickCount = 5;
+    const yTicks = Array.from({ length: yTickCount }, (_, i) =>
+      yMin + (i / (yTickCount - 1)) * (yMax - yMin)
+    );
+
+    // X Axis Date Labels
     const tickIndices = [
       0,
       Math.floor(pointsCount * 0.25),
@@ -455,117 +560,64 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       return q?.tradeDate ? String(q.tradeDate).slice(5, 10) : '';
     });
 
-    const profile = {
-      name: bName,
-      ticker: selectedBenchmark,
-      peak,
-      latest: latestPrice,
-      currentDD,
-      maxDD,
-    };
-
-    const calcPoints = (pct: number) => profile.peak * (1 + pct / 100);
     const formatPoints = (pts: number) => Math.round(pts).toLocaleString() + ' 點';
-    // Layout coordinates - ample padding for index point labels on both sides
-    const width = 840;
-    const height = 300;
-    const paddingLeft = 110;
-    const paddingRight = 190;
-    const paddingTop = 32;
-    const paddingBottom = 42;
 
-    // Y Axis: 0.0% to -80.0% to accommodate all Fibonacci lines
-    const minY = -80.0;
-    const maxY = 0.0;
-
-    const scaleY = (v: number) =>
-      paddingTop + ((0 - v) / (0 - minY)) * (height - paddingTop - paddingBottom);
-    const scaleX = (idx: number) =>
-      paddingLeft + (idx / (pointsCount - 1)) * (width - paddingLeft - paddingRight);
-
-    const makePath = (pts: number[]) =>
-      pts.reduce(
-        (acc, v, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`,
-        ''
-      );
-
-    const ddPath = makePath(ddPoints);
-    const ma20Path = makePath(ma20Points);
-    const ma60Path = makePath(ma60Points);
-
-    // Bollinger area path
-    const bbAreaPath =
-      bbUpper.reduce(
-        (acc, v, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`,
-        ''
-      ) +
-      bbLower
-        .slice()
-        .reverse()
-        .reduce(
-          (acc, v, idx) =>
-            `${acc} L ${scaleX(pointsCount - 1 - idx)} ${scaleY(v)}`,
-          ''
-        ) +
-      ' Z';
-
-    // Fibonacci Defense Levels per PRD
-    const fibLevels = [
-      { pct: -23.6, label: '-23.6% 初級回撤', color: '#10b981' },
-      { pct: -38.2, label: '-38.2% 多空防線', color: '#f59e0b' },
-      { pct: -50.0, label: '-50.0% 平衡中位', color: '#3b82f6' },
-      { pct: -61.8, label: '-61.8% 極限支撐', color: '#8b5cf6' },
-      { pct: -76.4, label: '-76.4% 救災防線', color: '#ef4444' },
-    ];
-
-    // Dynamic market status badge
+    // Status badge
     let statusBadge = {
-      text: `🛡️ 多頭呼吸區 (回撤 ${profile.currentDD}%)`,
+      text: `🛡️ 多頭呼吸區 (回撤 ${currentDD}%)`,
       color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     };
-    if (profile.currentDD <= -76.4) {
+    if (currentDD <= -76.4) {
       statusBadge = {
-        text: `🚨 黑天鵝救災區 (回撤 ${profile.currentDD}%)`,
+        text: `🚨 黑天鵝救災區 (回撤 ${currentDD}%)`,
         color: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
       };
-    } else if (profile.currentDD <= -61.8) {
+    } else if (currentDD <= -61.8) {
       statusBadge = {
-        text: `💎 超跌黃金坑 (回撤 ${profile.currentDD}%)`,
+        text: `💎 超跌黃金坑 (回撤 ${currentDD}%)`,
         color: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
       };
-    } else if (profile.currentDD <= -50.0) {
+    } else if (currentDD <= -50.0) {
       statusBadge = {
-        text: `⚡ 多空平衡修正 (回撤 ${profile.currentDD}%)`,
+        text: `⚡ 多空平衡修正 (回撤 ${currentDD}%)`,
         color: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
       };
-    } else if (profile.currentDD <= -38.2) {
+    } else if (currentDD <= -38.2) {
       statusBadge = {
-        text: `⚠️ 黃金防守線加碼 (回撤 ${profile.currentDD}%)`,
+        text: `⚠️ 黃金防守線加碼 (回撤 ${currentDD}%)`,
         color: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
       };
-    } else if (profile.currentDD <= -23.6) {
+    } else if (currentDD <= -23.6) {
       statusBadge = {
-        text: `📉 拉回修正區 (回撤 ${profile.currentDD}%)`,
+        text: `📉 拉回修正區 (回撤 ${currentDD}%)`,
         color: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
       };
     }
 
+    const hoverQuote = hoverIndex !== null ? windowQuotes[hoverIndex] : null;
+    const hoverPrice = hoverQuote ? Number(hoverQuote.closePrice) : null;
+    const hoverDate = hoverQuote?.tradeDate ? String(hoverQuote.tradeDate).slice(0, 10) : '';
+    const hoverDD =
+      hoverPrice !== null
+        ? Number((((hoverPrice - peak52W) / peak52W) * 100).toFixed(2))
+        : null;
+
     return (
-      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
+      <div ref={containerRef} className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
         {/* Dynamic Header with Key Indicators - Prominently showing Index Points */}
         <div className="flex flex-wrap items-center justify-between border-b border-border pb-3 gap-2">
           <div>
             <div className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
-              <span>{profile.name} ({profile.ticker}) 52 週回撤雷達</span>
+              <span>{bName} ({selectedBenchmark}) 52 週回撤雷達</span>
               <span className="text-xs px-2 py-0.5 rounded font-mono bg-secondary text-secondary-foreground font-normal">
                 視窗: {selectedWindow}
               </span>
             </div>
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              <span>最新指數點數: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{profile.latest.toLocaleString()} 點</strong></span>
-              <span>52 週最高點數: <strong className="text-foreground font-mono font-semibold">{profile.peak.toLocaleString()} 點</strong></span>
-              <span>當前回撤幅度: <strong className="text-foreground font-mono font-semibold">{profile.currentDD}%</strong></span>
-              <span>52 週最大回撤: <strong className="text-foreground font-mono font-semibold">{profile.maxDD}%</strong></span>
+              <span>最新指數點數: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{latestPrice.toLocaleString()} 點</strong></span>
+              <span>52 週最高點數: <strong className="text-foreground font-mono font-semibold">{peak52W.toLocaleString()} 點</strong></span>
+              <span>當前回撤幅度: <strong className="text-foreground font-mono font-semibold">{currentDD}%</strong></span>
+              <span>52 週最大回撤: <strong className="text-foreground font-mono font-semibold">{maxDD}%</strong></span>
             </div>
           </div>
           <span className={`text-xs px-3 py-1 rounded-md font-semibold ${statusBadge.color}`}>
@@ -573,22 +625,30 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           </span>
         </div>
 
-        {/* Legend Toolbar */}
+        {/* Legend Toolbar with 4 MAs, BB, and Fib 7 Levels */}
         <div className="flex flex-wrap items-center justify-between text-xs text-muted-foreground gap-2">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5 font-medium">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="flex items-center gap-1.5 font-medium text-foreground">
               <span className="w-3 h-1 bg-rose-500 rounded-full inline-block"></span>
-              回撤曲線
+              收盤走勢
             </span>
             {showMA && (
               <>
                 <span className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
                   <span className="w-3 h-0.5 bg-amber-500 inline-block"></span>
-                  20MA
+                  20MA (月線)
                 </span>
                 <span className="flex items-center gap-1.5 font-medium text-purple-600 dark:text-purple-400">
                   <span className="w-3 h-0.5 bg-purple-500 inline-block"></span>
-                  60MA
+                  60MA (季線)
+                </span>
+                <span className="flex items-center gap-1.5 font-medium text-orange-600 dark:text-orange-400">
+                  <span className="w-3 h-0.5 bg-orange-500 inline-block"></span>
+                  120MA (半年線)
+                </span>
+                <span className="flex items-center gap-1.5 font-medium text-blue-600 dark:text-blue-400">
+                  <span className="w-3 h-0.5 bg-blue-500 inline-block"></span>
+                  240MA (年線)
                 </span>
               </>
             )}
@@ -601,25 +661,31 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             {showFib && (
               <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
                 <span className="w-3 h-0.5 border-b border-dashed border-foreground inline-block"></span>
-                黃金分割 5 級防線
+                黃金分割 7 級防線 (0% ~ -100%)
               </span>
             )}
           </div>
           <span className="font-mono text-[11px] text-muted-foreground">
-            基準軸心: 52W Peak ({formatPoints(profile.peak)})
+            52W Peak: {formatPoints(peak52W)} | 視窗區間: {formatPoints(windowPriceMin)} ~ {formatPoints(windowPriceMax)}
           </span>
         </div>
 
-        {/* SVG Chart */}
+        {/* SVG Chart - Responsive Full Width & 0-Drift Precision Coordinates */}
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-64 overflow-visible cursor-crosshair"
+          preserveAspectRatio="none"
+          className="w-full h-80 overflow-visible cursor-crosshair"
           onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const mouseX = ((e.clientX - rect.left) / rect.width) * width;
-            const chartWidth = width - paddingLeft - paddingRight;
-            if (mouseX >= paddingLeft && mouseX <= width - paddingRight) {
-              const ratio = (mouseX - paddingLeft) / chartWidth;
+            const svg = e.currentTarget;
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            const ctm = svg.getScreenCTM();
+            if (!ctm) return;
+            const svgP = pt.matrixTransform(ctm.inverse());
+            const chartAreaWidth = width - paddingLeft - paddingRight;
+            if (svgP.x >= paddingLeft && svgP.x <= width - paddingRight) {
+              const ratio = (svgP.x - paddingLeft) / chartAreaWidth;
               const idx = Math.min(
                 pointsCount - 1,
                 Math.max(0, Math.round(ratio * (pointsCount - 1)))
@@ -630,9 +696,9 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           onMouseLeave={() => setHoverIndex(null)}
         >
           <defs>
-            <linearGradient id="dd-radar-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.05" />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.45" />
+            <linearGradient id="price-radar-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
             </linearGradient>
           </defs>
 
@@ -646,36 +712,36 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             指數點數 (回撤%)
           </text>
 
-          {/* Zero Baseline (52W High) */}
-          <line
-            x1={paddingLeft}
-            y1={scaleY(0)}
-            x2={width - paddingRight}
-            y2={scaleY(0)}
-            stroke="#6b7280"
-            strokeWidth="1.5"
-          />
-          <text
-            x={paddingLeft - 8}
-            y={scaleY(0) + 3}
-            textAnchor="end"
-            className="text-[10px] font-mono font-bold fill-foreground"
-          >
-            {formatPoints(profile.peak)} (0%)
-          </text>
-          <text
-            x={width - paddingRight + 8}
-            y={scaleY(0) + 3}
-            className="text-[10px] font-mono font-bold fill-foreground"
-          >
-            0.0% 52W高點 ({formatPoints(profile.peak)})
-          </text>
+          {/* Left Y Axis Ticks (Real Points) */}
+          {yTicks.map((tickVal) => {
+            const ddFromPeak = Number((((tickVal - peak52W) / peak52W) * 100).toFixed(1));
+            const sign = ddFromPeak > 0 ? '+' : '';
+            return (
+              <g key={tickVal}>
+                <line
+                  x1={paddingLeft}
+                  y1={scaleY(tickVal)}
+                  x2={width - paddingRight}
+                  y2={scaleY(tickVal)}
+                  stroke="currentColor"
+                  strokeOpacity="0.08"
+                />
+                <text
+                  x={paddingLeft - 8}
+                  y={scaleY(tickVal) + 4}
+                  textAnchor="end"
+                  className="text-[10px] font-mono fill-muted-foreground"
+                >
+                  {formatPoints(tickVal)} ({sign}{ddFromPeak}%)
+                </text>
+              </g>
+            );
+          })}
 
-          {/* 5-Level Fibonacci Defense Lines with Index Points */}
+          {/* Fibonacci Retracement Lines (7 Levels within Time Window) */}
           {showFib &&
             fibLevels.map((lvl) => {
-              const y = scaleY(lvl.pct);
-              const pts = calcPoints(lvl.pct);
+              const y = scaleY(lvl.pts);
               return (
                 <g key={lvl.pct}>
                   <line
@@ -693,36 +759,14 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                     style={{ fill: lvl.color }}
                     className="text-[10px] font-mono font-semibold"
                   >
-                    {lvl.label} ({formatPoints(pts)})
+                    {lvl.label} ({formatPoints(lvl.pts)})
                   </text>
                 </g>
               );
             })}
 
-          {/* Left Y Axis percentage and index points ticks */}
-          {[-20, -40, -60, -80].map((t) => (
-            <g key={t}>
-              <line
-                x1={paddingLeft}
-                y1={scaleY(t)}
-                x2={width - paddingRight}
-                y2={scaleY(t)}
-                stroke="currentColor"
-                strokeOpacity="0.08"
-              />
-              <text
-                x={paddingLeft - 8}
-                y={scaleY(t) + 3}
-                textAnchor="end"
-                className="text-[10px] font-mono fill-muted-foreground"
-              >
-                {formatPoints(calcPoints(t))} ({t}%)
-              </text>
-            </g>
-          ))}
-
-          {/* Bollinger Band Shaded Envelope */}
-          {showBB && (
+          {/* Bollinger Band Shaded Cloud */}
+          {showBB && bbAreaPath && (
             <path
               d={bbAreaPath}
               fill="#0ea5e9"
@@ -733,89 +777,118 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             />
           )}
 
-          {/* Drawdown Area Gradient Fill */}
-          <path
-            d={`${ddPath} L ${scaleX(pointsCount - 1)} ${scaleY(0)} L ${scaleX(0)} ${scaleY(0)} Z`}
-            fill="url(#dd-radar-grad)"
-          />
+          {/* Close Price Area Gradient */}
+          <path d={priceAreaPath} fill="url(#price-radar-grad)" />
 
-          {/* Moving Average Lines */}
+          {/* 4 Moving Average Curves */}
           {showMA && (
             <>
-              <path d={ma20Path} fill="none" stroke="#eab308" strokeWidth="1.8" />
-              <path d={ma60Path} fill="none" stroke="#a855f7" strokeWidth="1.8" />
+              {ma20Path && <path d={ma20Path} fill="none" stroke="#eab308" strokeWidth="1.8" />}
+              {ma60Path && <path d={ma60Path} fill="none" stroke="#a855f7" strokeWidth="1.8" />}
+              {ma120Path && <path d={ma120Path} fill="none" stroke="#f97316" strokeWidth="1.8" />}
+              {ma240Path && <path d={ma240Path} fill="none" stroke="#3b82f6" strokeWidth="1.8" />}
             </>
           )}
 
-          {/* Primary Drawdown Curve */}
-          <path d={ddPath} fill="none" stroke="#ef4444" strokeWidth="2.5" />
+          {/* Primary Close Price Curve */}
+          <path d={pricePath} fill="none" stroke="#ef4444" strokeWidth="2.5" />
 
-          {/* Interactive Hover Crosshair */}
-          {hoverIndex !== null && (
-            <g>
-              <line
-                x1={scaleX(hoverIndex)}
-                y1={paddingTop}
-                x2={scaleX(hoverIndex)}
-                y2={height - paddingBottom}
-                stroke="#6b7280"
-                strokeDasharray="2 2"
-                strokeWidth="1"
-              />
-              <circle
-                cx={scaleX(hoverIndex)}
-                cy={scaleY(ddPoints[hoverIndex])}
-                r="4.5"
-                fill="#3b82f6"
-                stroke="#ffffff"
-                strokeWidth="1.5"
-              />
-              <rect
-                x={Math.max(paddingLeft, Math.min(scaleX(hoverIndex) - 75, width - paddingRight - 155))}
-                y={paddingTop + 6}
-                width="155"
-                height="22"
-                rx="4"
-                className="fill-background/95 stroke-border stroke shadow-md"
-              />
-              <text
-                x={Math.max(paddingLeft, Math.min(scaleX(hoverIndex) - 75, width - paddingRight - 155)) + 77}
-                y={paddingTop + 20}
-                textAnchor="middle"
-                className="text-[10px] font-mono font-semibold fill-foreground"
-              >
-                {formatPoints(calcPoints(ddPoints[hoverIndex]))} ({ddPoints[hoverIndex]}%)
-              </text>
-            </g>
-          )}
-
-          {/* Current Position Marker with Callout Box showing Latest Points */}
+          {/* Latest Point Marker */}
           <g>
             <circle
               cx={scaleX(pointsCount - 1)}
-              cy={scaleY(profile.currentDD)}
+              cy={scaleY(latestPrice)}
               r="5"
               fill="#ef4444"
               stroke="#ffffff"
               strokeWidth="2"
             />
             <rect
-              x={scaleX(pointsCount - 1) - 165}
-              y={scaleY(profile.currentDD) - 26}
-              width="158"
+              x={Math.max(paddingLeft, scaleX(pointsCount - 1) - 165)}
+              y={Math.max(paddingTop, scaleY(latestPrice) - 26)}
+              width="160"
               height="20"
               rx="4"
               className="fill-background/95 stroke-rose-500 stroke-[1.5]"
             />
             <text
-              x={scaleX(pointsCount - 1) - 86}
-              y={scaleY(profile.currentDD) - 12}
+              x={Math.max(paddingLeft, scaleX(pointsCount - 1) - 165) + 80}
+              y={Math.max(paddingTop, scaleY(latestPrice) - 26) + 14}
               textAnchor="middle"
               className="text-[10px] font-mono font-bold fill-rose-600 dark:fill-rose-400"
             >
-              📍 最新: {profile.latest.toLocaleString()} 點 ({profile.currentDD}%)
+              📍 最新: {latestPrice.toLocaleString()} 點 ({currentDD}%)
             </text>
           </g>
+
+          {/* Interactive Hover Crosshair with Date & Exact Price Tooltip */}
+          {hoverIndex !== null && hoverQuote && hoverPrice !== null && (
+            <g>
+              {/* Vertical Crosshair Line */}
+              <line
+                x1={scaleX(hoverIndex)}
+                y1={paddingTop}
+                x2={scaleX(hoverIndex)}
+                y2={height - paddingBottom}
+                stroke="#64748b"
+                strokeDasharray="3 3"
+                strokeWidth="1.2"
+              />
+              {/* Horizontal Crosshair Line */}
+              <line
+                x1={paddingLeft}
+                y1={scaleY(hoverPrice)}
+                x2={width - paddingRight}
+                y2={scaleY(hoverPrice)}
+                stroke="#64748b"
+                strokeDasharray="3 3"
+                strokeWidth="1.2"
+              />
+              {/* Intersection Dot */}
+              <circle
+                cx={scaleX(hoverIndex)}
+                cy={scaleY(hoverPrice)}
+                r="5"
+                fill="#3b82f6"
+                stroke="#ffffff"
+                strokeWidth="2"
+              />
+              {/* Floating Tooltip Box */}
+              {(() => {
+                const boxW = 185;
+                const boxH = 46;
+                const rawX = scaleX(hoverIndex) - boxW / 2;
+                const clampX = Math.max(paddingLeft + 5, Math.min(rawX, width - paddingRight - boxW - 5));
+                const boxY = Math.max(paddingTop + 5, scaleY(hoverPrice) - boxH - 12);
+                return (
+                  <g>
+                    <rect
+                      x={clampX}
+                      y={boxY}
+                      width={boxW}
+                      height={boxH}
+                      rx="6"
+                      className="fill-popover/95 stroke-border stroke shadow-xl"
+                    />
+                    <text
+                      x={clampX + 12}
+                      y={boxY + 18}
+                      className="text-[11px] font-mono font-bold fill-foreground"
+                    >
+                      📅 {hoverDate}
+                    </text>
+                    <text
+                      x={clampX + 12}
+                      y={boxY + 35}
+                      className="text-[11px] font-mono font-semibold fill-rose-600 dark:fill-rose-400"
+                    >
+                      📈 {formatPoints(hoverPrice)} ({hoverDD !== null && hoverDD >= 0 ? '+' : ''}{hoverDD}%)
+                    </text>
+                  </g>
+                );
+              })()}
+            </g>
+          )}
 
           {/* X Axis Date Labels */}
           {dateLabels.map((lbl, idx) => {

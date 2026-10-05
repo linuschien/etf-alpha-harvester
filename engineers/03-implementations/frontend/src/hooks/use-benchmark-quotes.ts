@@ -28,19 +28,19 @@ export function useBenchmarkQuotes(startDate = '2025-10-01', endDate = '2026-09-
         .graphql<BenchmarkQuotesData>(
           `query GetBenchmarkQuotes($startDate: String!, $endDate: String!) {
             twii: getQuoteTimeSeries(ticker: "^TWII", startDate: $startDate, endDate: $endDate) {
-              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 bbUpper bbMiddle bbLower
+              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 ma120 ma240 bbUpper bbMiddle bbLower
             }
             gspc: getQuoteTimeSeries(ticker: "^GSPC", startDate: $startDate, endDate: $endDate) {
-              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 bbUpper bbMiddle bbLower
+              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 ma120 ma240 bbUpper bbMiddle bbLower
             }
             ndx: getQuoteTimeSeries(ticker: "^NDX", startDate: $startDate, endDate: $endDate) {
-              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 bbUpper bbMiddle bbLower
+              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 ma120 ma240 bbUpper bbMiddle bbLower
             }
             sox: getQuoteTimeSeries(ticker: "^SOX", startDate: $startDate, endDate: $endDate) {
-              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 bbUpper bbMiddle bbLower
+              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 ma120 ma240 bbUpper bbMiddle bbLower
             }
             n225: getQuoteTimeSeries(ticker: "^N225", startDate: $startDate, endDate: $endDate) {
-              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 bbUpper bbMiddle bbLower
+              ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 ma120 ma240 bbUpper bbMiddle bbLower
             }
             vix: getQuoteTimeSeries(ticker: "^VIX", startDate: $startDate, endDate: $endDate) {
               ticker tradeDate openPrice highPrice lowPrice closePrice
