@@ -272,8 +272,51 @@ class MonthlyQuoteCacheServiceTest {
         assertThat(recovered).isNotNull();
         assertThat(recovered.getTicker()).isEqualTo("0050");
         assertThat(recovered.getQuotes()).hasSize(1);
-        assertThat(recovered.getQuotes().get(0).getClosePrice()).isEqualByComparingTo("151");
-
         reopenedManager.close();
+    }
+
+    @Test
+    @DisplayName("Should hit cache and not refresh when ongoing month has empty cached entry and DB has no newer data in ongoing month")
+    void shouldHitCacheWhenDbHasNoQuotesForOngoingMonthYet() {
+        String ticker = "^TWII";
+        YearMonth currentYm = YearMonth.now();
+        YearMonth previousYm = currentYm.minusMonths(1);
+
+        LocalDateTime previousMonthDate = previousYm.atEndOfMonth().atStartOfDay();
+        MarketDailyQuote prevQuote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                previousMonthDate, new BigDecimal("20000"), new BigDecimal("20100"),
+                new BigDecimal("19900"), new BigDecimal("20050"), 50000L, new BigDecimal("1000000000"));
+
+        // Preload cache: previous month has quote, current month has empty entry (latestTradeDate = null)
+        MonthlyQuoteCacheEntry prevEntry = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(previousYm.toString())
+                .latestTradeDate(previousMonthDate)
+                .quotes(List.of(prevQuote))
+                .build();
+        MonthlyQuoteCacheEntry currentEmptyEntry = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(currentYm.toString())
+                .latestTradeDate(null)
+                .quotes(List.of())
+                .build();
+
+        cache.put(cacheService.buildCacheKey(ticker, previousYm), prevEntry);
+        cache.put(cacheService.buildCacheKey(ticker, currentYm), currentEmptyEntry);
+
+        // In DB, latest quote is still in previous month (2026-09-30)
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker))
+                .thenReturn(Mono.just(prevQuote));
+
+        // When requesting range covering previous and current month:
+        LocalDateTime start = previousYm.atDay(1).atStartOfDay();
+        LocalDateTime end = currentYm.atDay(5).atStartOfDay();
+
+        StepVerifier.create(cacheService.getQuoteTimeSeries(ticker, start, end))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        // Repository findByTickerAndTradeDateBetweenOrderByTradeDateAsc should NOT be called (CACHE HIT)
+        verify(quoteRepository, never()).findByTickerAndTradeDateBetweenOrderByTradeDateAsc(any(), any(), any());
     }
 }

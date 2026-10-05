@@ -84,11 +84,22 @@ public class MonthlyQuoteCacheService {
             MonthlyQuoteCacheEntry currentEntry = monthlyQuoteCache.get(currentMonthKey);
             needsRefreshMono = quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker)
                     .map(latestDbQuote -> {
-                        if (currentEntry == null || currentEntry.getLatestTradeDate() == null) {
+                        if (currentEntry == null) {
                             return true;
                         }
-                        return latestDbQuote.getTradeDate() != null
-                                && latestDbQuote.getTradeDate().isAfter(currentEntry.getLatestTradeDate());
+                        if (latestDbQuote == null || latestDbQuote.getTradeDate() == null) {
+                            return false;
+                        }
+                        YearMonth latestDbYm = YearMonth.from(latestDbQuote.getTradeDate());
+                        if (latestDbYm.isBefore(currentYm)) {
+                            // DB has no records for current ongoing month yet; cache is up-to-date
+                            return false;
+                        }
+                        if (currentEntry.getLatestTradeDate() == null) {
+                            // DB now has records in ongoing month, but cache had none
+                            return true;
+                        }
+                        return latestDbQuote.getTradeDate().isAfter(currentEntry.getLatestTradeDate());
                     })
                     .defaultIfEmpty(false);
         } else {
