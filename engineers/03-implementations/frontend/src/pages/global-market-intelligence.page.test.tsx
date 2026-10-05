@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { JSONUIProvider, createStateStore } from '@json-render/react';
@@ -160,17 +160,19 @@ describe('GlobalMarketIntelligencePage', () => {
     // Leader row should be displayed
     expect(await screen.findByText(/👑 領頭羊 \(1 替代\)/i)).toBeInTheDocument();
 
-    // Alternative row should initially not be visible
-    expect(screen.queryByText('富邦台50')).not.toBeInTheDocument();
+    const expandBtn = screen.getByRole('button', { name: /切換折疊/i });
+    const clusterTable = expandBtn.closest('table')!;
+
+    // Alternative row should initially not be visible inside the table
+    expect(within(clusterTable).queryByText('富邦台50')).not.toBeInTheDocument();
 
     // Click toggle button to expand cluster
-    const expandBtn = screen.getByRole('button', { name: /切換折疊/i });
     await user.click(expandBtn);
 
-    // Alternative row should now be visible with R² badge
-    expect(await screen.findByText('富邦台50')).toBeInTheDocument();
-    expect(screen.getByText('006208')).toBeInTheDocument();
-    expect(screen.getByText(/R²: 99.8%/i)).toBeInTheDocument();
+    // Alternative row should now be visible with R² badge inside the table
+    expect(within(clusterTable).getByText('富邦台50')).toBeInTheDocument();
+    expect(within(clusterTable).getByText('006208')).toBeInTheDocument();
+    expect(within(clusterTable).getByText(/R²: 99.8%/i)).toBeInTheDocument();
   });
 
   // ── Pattern 3 — Modal Open + executeBehavior ─────────────────────────────

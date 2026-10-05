@@ -35,22 +35,36 @@ export function useGetOrthogonalCandidates(filter?: {
   seedTicker?: string;
   evaluationDate?: string;
 }) {
+  const effectiveFilter = {
+    assetClass: 'CORE',
+    seedTicker: '0050',
+    evaluationDate: '2026-09-01',
+    ...(filter ?? {}),
+  };
+
   return useQuery({
-    queryKey: filter
-      ? getOrthogonalCandidatesKeys.filtered(filter)
-      : getOrthogonalCandidatesKeys.all,
+    queryKey: getOrthogonalCandidatesKeys.filtered(effectiveFilter),
     queryFn: () =>
       api
         .graphql<{ getOrthogonalCandidates: GlobalAssetScore[] }>(
           `query GetOrthogonalCandidates($assetClass: CandidateAssetClass!, $seedTicker: String, $evaluationDate: String) {
             getOrthogonalCandidates(assetClass: $assetClass, seedTicker: $seedTicker, evaluationDate: $evaluationDate) {
               ticker
+              name
+              classRank
               compositeScore
-              rSquaredWithLeader
+              rSquared
               orthogonalStatus
+              closePrice
+              changePct
+              return1m
+              return3m
+              return6m
+              return1y
+              fundSizeTwd
             }
           }`,
-          filter
+          effectiveFilter
         )
         .then((data) => data.getOrthogonalCandidates),
   });

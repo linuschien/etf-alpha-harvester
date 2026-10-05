@@ -1020,20 +1020,11 @@
       "children": []
     },
     "calendar-events-container": {
-      "type": "Card",
+      "type": "EventCalendar",
       "props": {
-        "title": "除息與股票分割事件月曆",
-        "description": null,
-        "maxWidth": null,
-        "centered": null,
-        "className": null
+        "id": "calendar-events-container"
       },
-      "children": [
-        "calendar-heading",
-        "calendar-filter-bar",
-        "dividend-announcements-table",
-        "corporate-actions-table"
-      ]
+      "children": []
     },
     "calendar-heading": {
       "type": "Heading",

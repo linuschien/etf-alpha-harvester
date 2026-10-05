@@ -44,10 +44,15 @@ export function useGetClusteredCandidates(filter?: {
   threshold?: number;
   evaluationDate?: string;
 }) {
+  const effectiveFilter = {
+    assetClass: 'CORE',
+    threshold: 0.8,
+    evaluationDate: '2026-09-01',
+    ...(filter ?? {}),
+  };
+
   return useQuery({
-    queryKey: filter
-      ? getClusteredCandidatesKeys.filtered(filter)
-      : getClusteredCandidatesKeys.all,
+    queryKey: getClusteredCandidatesKeys.filtered(effectiveFilter),
     queryFn: () =>
       api
         .graphql<{ getClusteredCandidates: GlobalAssetCluster[] }>(
@@ -85,7 +90,7 @@ export function useGetClusteredCandidates(filter?: {
               }
             }
           }`,
-          filter
+          effectiveFilter
         )
         .then((data) => data.getClusteredCandidates),
   });

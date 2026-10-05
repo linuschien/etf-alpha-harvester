@@ -9,7 +9,8 @@ import DataTable from './components/DataTable';
 import Breadcrumb from './components/Breadcrumb';
 import AlertDialog from './components/AlertDialog';
 import MetricCard from './components/MetricCard';
-import ChartPlaceholder from './components/ChartPlaceholder';
+import ChartComponent from './components/ChartComponent';
+import EventCalendar from './components/EventCalendar';
 
 // ── Adapter: ComponentRenderProps → BaseComponentProps ──────────────────────
 export function adapt(Comp: ComponentType<any>): ComponentType<any> {
@@ -33,6 +34,16 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
       if (eventName === 'press' && store) {
         const id = element?.props?.id ?? '';
         const label = element?.props?.label ?? '';
+
+        // Auto-switch tabs when clicking tab buttons
+        if (id === 'tab-macro-trigger' || label.includes('Tab 1')) {
+          store.set('/activeTab', 'macro-sentiment-section');
+        } else if (id === 'tab-leaderboard-trigger' || label.includes('Tab 2')) {
+          store.set('/activeTab', 'qualified-leaderboard-section');
+        } else if (id === 'tab-dca-trigger' || label.includes('Tab 3')) {
+          store.set('/activeTab', 'dca-calendar-section');
+        }
+
         const isClosingAction =
           label === '關閉' ||
           label === '關閉抽屜' ||
@@ -91,12 +102,13 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
   Breadcrumb: Breadcrumb, // <nav><ol> wrapper
   AlertDialog: AlertDialog, // confirm dialog overlay
   MetricCard: MetricCard, // KPI metric card
+  EventCalendar: EventCalendar, // ETF Dividend & Split Calendar
 
-  // ── 4. Chart wrappers ────────────────────────────────────────────────────
-  'Chart:bar': ChartPlaceholder('Bar'),
-  'Chart:line': ChartPlaceholder('Line'),
-  'Chart:pie': ChartPlaceholder('Pie'),
-  Chart: ChartPlaceholder('Chart'),
+  // ── 4. Chart wrappers (Real interactive SVG charts) ──────────────────────
+  'Chart:bar': ChartComponent,
+  'Chart:line': ChartComponent,
+  'Chart:pie': ChartComponent,
+  Chart: ChartComponent,
 
   // ── 5. Native HTML passthrough ───────────────────────────────────────────
   div: ({ element, children }: any) => (

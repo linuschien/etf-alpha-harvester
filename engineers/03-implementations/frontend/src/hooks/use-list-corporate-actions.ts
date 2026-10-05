@@ -10,8 +10,10 @@ export interface CorporateAction {
   effectiveDate: string;
   ticker: string;
   actionType: string;
-  splitRatioNumerator: number;
-  splitRatioDenominator: number;
+  splitToShares: number;
+  splitFromShares: number;
+  splitRatioNumerator?: number;
+  splitRatioDenominator?: number;
   [key: string]: unknown;
 }
 
@@ -36,12 +38,18 @@ export function useListCorporateActions(filter?: Record<string, unknown>) {
               effectiveDate
               ticker
               actionType
-              splitRatioNumerator
-              splitRatioDenominator
+              splitToShares
+              splitFromShares
             }
           }`,
           { filter }
         )
-        .then((data) => data.listCorporateActions),
+        .then((data) =>
+          data.listCorporateActions.map((item) => ({
+            ...item,
+            splitRatioNumerator: item.splitToShares,
+            splitRatioDenominator: item.splitFromShares,
+          }))
+        ),
   });
 }

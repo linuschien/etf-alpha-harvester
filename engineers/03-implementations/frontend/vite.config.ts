@@ -11,6 +11,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/graphql': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       onwarn(warning, warn) {

@@ -23,13 +23,17 @@ export const listPairwiseMatrixKeys = {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 export function useListPairwiseMatrix(filter?: {
-  assetClass: string;
+  assetClass?: string;
   evaluationDate?: string;
 }) {
+  const effectiveFilter = {
+    assetClass: 'CORE',
+    evaluationDate: '2026-09-01',
+    ...(filter ?? {}),
+  };
+
   return useQuery({
-    queryKey: filter
-      ? listPairwiseMatrixKeys.filtered(filter)
-      : listPairwiseMatrixKeys.all,
+    queryKey: listPairwiseMatrixKeys.filtered(effectiveFilter),
     queryFn: () =>
       api
         .graphql<{ listPairwiseMatrix: GlobalAssetPairwiseMatrix[] }>(
@@ -41,7 +45,7 @@ export function useListPairwiseMatrix(filter?: {
               rSquared
             }
           }`,
-          filter
+          effectiveFilter
         )
         .then((data) => data.listPairwiseMatrix),
   });

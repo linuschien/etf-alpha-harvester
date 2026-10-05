@@ -7,13 +7,17 @@ import { api } from '@/lib/api-client';
 
 // ── Response Type ──────────────────────────────────────────────────────────
 export interface MacroYieldSnapshot {
-  dgs10: number;
-  dgs20: number;
-  dgs30: number;
-  dgs2: number;
-  t10y2ySpread: number;
-  bamlc0a0cmeyCorpYield: number;
-  snapshotDate: string;
+  recordDate: string;
+  usCorporateBondEffectiveYield: number;
+  us10YearTreasuryYield: number;
+  us20YearTreasuryYield: number;
+  yieldSpread10yMinus2y: number;
+  // Compatibility getters
+  dgs10?: number;
+  dgs20?: number;
+  t10y2ySpread?: number;
+  bamlc0a0cmeyCorpYield?: number;
+  snapshotDate?: string;
   [key: string]: unknown;
 }
 
@@ -28,19 +32,28 @@ export function useGetLatestMacroYieldSnapshot() {
     queryKey: getLatestMacroYieldSnapshotKeys.all,
     queryFn: () =>
       api
-        .graphql<{ getLatestMacroYieldSnapshot: MacroYieldSnapshot }>(
+        .graphql<{ getLatestMacroYieldSnapshot: any }>(
           `query GetLatestMacroYieldSnapshot {
             getLatestMacroYieldSnapshot {
-              dgs10
-              dgs20
-              dgs30
-              dgs2
-              t10y2ySpread
-              bamlc0a0cmeyCorpYield
-              snapshotDate
+              recordDate
+              usCorporateBondEffectiveYield
+              us10YearTreasuryYield
+              us20YearTreasuryYield
+              yieldSpread10yMinus2y
             }
           }`
         )
-        .then((data) => data.getLatestMacroYieldSnapshot),
+        .then((data) => {
+          const raw = data.getLatestMacroYieldSnapshot;
+          if (!raw) return raw;
+          return {
+            ...raw,
+            snapshotDate: raw.recordDate,
+            dgs10: raw.us10YearTreasuryYield,
+            dgs20: raw.us20YearTreasuryYield,
+            t10y2ySpread: raw.yieldSpread10yMinus2y,
+            bamlc0a0cmeyCorpYield: raw.usCorporateBondEffectiveYield,
+          } as MacroYieldSnapshot;
+        }),
   });
 }

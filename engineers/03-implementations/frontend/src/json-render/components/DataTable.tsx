@@ -272,6 +272,7 @@ export default function DataTable({
                               <button
                                 type="button"
                                 aria-label="切換折疊"
+                                onClick={(e) => toggleExpand(rowKey, e)}
                                 className="p-1 rounded hover:bg-muted font-mono text-xs text-muted-foreground hover:text-foreground"
                               >
                                 {isExpanded ? '▼' : '▶'}

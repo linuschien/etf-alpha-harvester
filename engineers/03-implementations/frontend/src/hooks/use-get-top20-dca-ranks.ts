@@ -25,7 +25,7 @@ export const getTop20DcaRanksKeys = {
 };
 
 // ── Hook ───────────────────────────────────────────────────────────────────
-export function useGetTop20DcaRanks(year?: number, month?: number) {
+export function useGetTop20DcaRanks(year: number = 2026, month: number = 8) {
   return useQuery({
     queryKey: getTop20DcaRanksKeys.filtered(year, month),
     queryFn: () =>
