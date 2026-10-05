@@ -27,6 +27,10 @@ spring:
       enabled: true
       path: /graphiql
 
+  web:
+    resources:
+      static-locations: "file:../frontend/dist/"
+
 logging:
   level:
     root: INFO
