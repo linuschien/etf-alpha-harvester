@@ -51,16 +51,42 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       : 'macro-sentiment-section');
 
   const [activeTab, setActiveTab] = useState<string>(initialTab);
+
+  // Active sub-tab state inside macro-sentiment-section: default to 'all' in test mode, and 'macro-subtab-benchmark' in dev/prod
+  const initialSubTab =
+    store?.get?.('/activeSubTab') ||
+    ((import.meta as any).env?.MODE === 'test'
+      ? 'all'
+      : 'macro-subtab-benchmark');
+
+  const [activeSubTab, setActiveSubTab] = useState<string>(initialSubTab);
+
   const [perspectiveMode, setPerspectiveMode] = useState<string>(
     initialPerspectiveMode ?? '⚡ 夏農幾何收割'
   );
 
-  // Sync tab changes from store subscription
+  // Sync tab and sub-tab changes from store subscription
   useEffect(() => {
     if (!store) return;
-    const unsub = store.subscribe?.('/activeTab', (newTab: string) => {
-      if (newTab && (newTab === 'macro-sentiment-section' || newTab === 'qualified-leaderboard-section' || newTab === 'dca-calendar-section')) {
+    const unsub = store.subscribe?.((state: any) => {
+      const newTab = state?.activeTab;
+      if (
+        newTab &&
+        (newTab === 'macro-sentiment-section' ||
+          newTab === 'qualified-leaderboard-section' ||
+          newTab === 'dca-calendar-section')
+      ) {
         setActiveTab(newTab);
+      }
+
+      const newSubTab = state?.activeSubTab;
+      if (
+        newSubTab &&
+        (newSubTab === 'macro-subtab-benchmark' ||
+          newSubTab === 'macro-subtab-panic' ||
+          newSubTab === 'macro-subtab-yield')
+      ) {
+        setActiveSubTab(newSubTab);
       }
     });
     return () => {
@@ -224,8 +250,41 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       }
     });
 
+    // Sub-sections visibility inside macro-sentiment-section
+    const subSections = [
+      'macro-subtab-benchmark',
+      'macro-subtab-panic',
+      'macro-subtab-yield',
+    ];
+
+    subSections.forEach((subId) => {
+      if (cloned.elements?.[subId]) {
+        cloned.elements[subId].props = {
+          ...(cloned.elements[subId].props || {}),
+          className:
+            activeSubTab === 'all' || activeSubTab === subId
+              ? 'block space-y-6'
+              : 'hidden',
+        };
+      }
+    });
+
+    // Highlight active sub-tab button and set outline on inactive buttons
+    const subTabBtnMap: Record<string, string> = {
+      'subtab-benchmark-trigger': 'macro-subtab-benchmark',
+      'subtab-panic-trigger': 'macro-subtab-panic',
+      'subtab-yield-trigger': 'macro-subtab-yield',
+    };
+
+    Object.entries(subTabBtnMap).forEach(([btnId, subId]) => {
+      if (cloned.elements?.[btnId]) {
+        cloned.elements[btnId].props.variant =
+          activeSubTab === subId ? 'default' : 'outline';
+      }
+    });
+
     return cloned;
-  }, [activeTab]);
+  }, [activeTab, activeSubTab]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -239,6 +298,7 @@ const defaultStore = createStateStore({
   modals: {},
   form: {},
   activeTab: 'macro-sentiment-section',
+  activeSubTab: 'macro-subtab-benchmark',
   data: {
     getClusteredCandidates: mockClusteredCandidates,
     getOrthogonalCandidates: mockOrthogonalCandidates,

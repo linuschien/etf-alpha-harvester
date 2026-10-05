@@ -24,12 +24,16 @@ const closeModal = vi.fn((p: any) => {
 const selectTab = vi.fn((p: any) => {
   if (p?.tab) store.set('/activeTab', p.tab);
 });
+const selectSubTab = vi.fn((p: any) => {
+  if (p?.subTab) store.set('/activeSubTab', p.subTab);
+});
 const navigate = vi.fn();
 const testHandlers = {
   navigate,
   openModal,
   closeModal,
   selectTab,
+  selectSubTab,
   executeBehavior,
 };
 
@@ -66,7 +70,7 @@ beforeEach(() => {
 
 describe('GlobalMarketIntelligencePage', () => {
   // ── Pattern 1 — Render ───────────────────────────────────────────────────
-  it('renders page heading and core tabs', async () => {
+  it('renders page heading and core tabs without Tab 1/2/3 prefix', async () => {
     renderPage();
     expect(
       await screen.findByRole('heading', {
@@ -74,11 +78,52 @@ describe('GlobalMarketIntelligencePage', () => {
       })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Tab 1：全球宏觀與情緒雷達/i })
+      screen.getByRole('button', { name: /全球宏觀與情緒雷達/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Tab 2：合規標的天梯榜與正交雷達/i })
+      screen.getByRole('button', { name: /合規標的天梯榜與正交雷達/i })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /定期定額散戶人氣榜與除息月曆/i })
+    ).toBeInTheDocument();
+  });
+
+  it('renders 3 sub-tabs under macro sentiment radar and switches sub-tabs', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Verify all 3 sub-tab buttons are rendered
+    const subTab1 = await screen.findByRole('button', {
+      name: /5 大全球核心基準指數即時行情與走勢/i,
+    });
+    const subTab2 = screen.getByRole('button', {
+      name: /四大恐慌情緒指標/i,
+    });
+    const subTab3 = screen.getByRole('button', {
+      name: /宏觀利率與殖利率曲線/i,
+    });
+
+    expect(subTab1).toBeInTheDocument();
+    expect(subTab2).toBeInTheDocument();
+    expect(subTab3).toBeInTheDocument();
+
+    // Click sub-tab 2 (Four Panic Indicators)
+    await user.click(subTab2);
+    expect(store.get('/activeSubTab')).toBe('macro-subtab-panic');
+
+    // Click sub-tab 3 (Macro Yield Curve)
+    await user.click(subTab3);
+    expect(store.get('/activeSubTab')).toBe('macro-subtab-yield');
+  });
+
+  it('renders four panic sentiment indicators in 2x2 matrix with sparklines', async () => {
+    renderPage();
+
+    // Verify 4 panic indicators exist
+    expect(await screen.findByText(/\^VIX 波動率指數/i)).toBeInTheDocument();
+    expect(screen.getByText(/\^VXN 那指波動率指數/i)).toBeInTheDocument();
+    expect(screen.getByText(/FEAR_GREED 恐懼貪婪指數/i)).toBeInTheDocument();
+    expect(screen.getByText(/\^MOVE 美債波動率指數/i)).toBeInTheDocument();
   });
 
   // ── Pattern 2 — Query (store-based table data) ───────────────────────────

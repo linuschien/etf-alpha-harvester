@@ -36,12 +36,21 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
         const label = element?.props?.label ?? '';
 
         // Auto-switch tabs when clicking tab buttons
-        if (id === 'tab-macro-trigger' || label.includes('Tab 1')) {
+        if (id === 'tab-macro-trigger' || label.includes('全球宏觀') || label.includes('情緒雷達')) {
           store.set('/activeTab', 'macro-sentiment-section');
-        } else if (id === 'tab-leaderboard-trigger' || label.includes('Tab 2')) {
+        } else if (id === 'tab-leaderboard-trigger' || label.includes('合規標的') || label.includes('天梯榜')) {
           store.set('/activeTab', 'qualified-leaderboard-section');
-        } else if (id === 'tab-dca-trigger' || label.includes('Tab 3')) {
+        } else if (id === 'tab-dca-trigger' || label.includes('定期定額') || label.includes('除息月曆')) {
           store.set('/activeTab', 'dca-calendar-section');
+        }
+
+        // Auto-switch sub-tabs inside macro-sentiment-section
+        if (id === 'subtab-benchmark-trigger' || label.includes('基準指數') || label.includes('即時行情與走勢')) {
+          store.set('/activeSubTab', 'macro-subtab-benchmark');
+        } else if (id === 'subtab-panic-trigger' || label.includes('恐慌情緒') || label.includes('四大恐慌')) {
+          store.set('/activeSubTab', 'macro-subtab-panic');
+        } else if (id === 'subtab-yield-trigger' || label.includes('殖利率曲線') || label.includes('宏觀利率')) {
+          store.set('/activeSubTab', 'macro-subtab-yield');
         }
 
         const isClosingAction =

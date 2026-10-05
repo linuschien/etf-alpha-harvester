@@ -107,7 +107,7 @@
     "tab-macro-trigger": {
       "type": "Button",
       "props": {
-        "label": "Tab 1：全球宏觀與情緒雷達",
+        "label": "全球宏觀與情緒雷達",
         "variant": "secondary",
         "disabled": null
       },
@@ -126,7 +126,7 @@
     "tab-leaderboard-trigger": {
       "type": "Button",
       "props": {
-        "label": "Tab 2：合規標的天梯榜與正交雷達",
+        "label": "合規標的天梯榜與正交雷達",
         "variant": "secondary",
         "disabled": null
       },
@@ -145,7 +145,7 @@
     "tab-dca-trigger": {
       "type": "Button",
       "props": {
-        "label": "Tab 3：定期定額散戶人氣榜與除息月曆",
+        "label": "定期定額散戶人氣榜與除息月曆",
         "variant": "secondary",
         "disabled": null
       },
@@ -164,14 +164,121 @@
     "macro-sentiment-section": {
       "type": "div",
       "props": {
-        "id": "macro-sentiment-section"
+        "id": "macro-sentiment-section",
+        "className": "space-y-6"
+      },
+      "children": [
+        "macro-subtabs-nav-stack",
+        "macro-subtab-benchmark",
+        "macro-subtab-panic",
+        "macro-subtab-yield"
+      ]
+    },
+    "macro-subtabs-nav-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": null,
+        "className": "border-b pb-3 mb-2"
+      },
+      "children": [
+        "subtab-benchmark-trigger",
+        "subtab-panic-trigger",
+        "subtab-yield-trigger"
+      ]
+    },
+    "subtab-benchmark-trigger": {
+      "type": "Button",
+      "props": {
+        "id": "subtab-benchmark-trigger",
+        "label": "5 大全球核心基準指數即時行情與走勢",
+        "variant": "default",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "selectSubTab",
+            "params": {
+              "subTab": "macro-subtab-benchmark"
+            }
+          }
+        ]
+      }
+    },
+    "subtab-panic-trigger": {
+      "type": "Button",
+      "props": {
+        "id": "subtab-panic-trigger",
+        "label": "四大恐慌情緒指標",
+        "variant": "outline",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "selectSubTab",
+            "params": {
+              "subTab": "macro-subtab-panic"
+            }
+          }
+        ]
+      }
+    },
+    "subtab-yield-trigger": {
+      "type": "Button",
+      "props": {
+        "id": "subtab-yield-trigger",
+        "label": "宏觀利率與殖利率曲線",
+        "variant": "outline",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "selectSubTab",
+            "params": {
+              "subTab": "macro-subtab-yield"
+            }
+          }
+        ]
+      }
+    },
+    "macro-subtab-benchmark": {
+      "type": "div",
+      "props": {
+        "id": "macro-subtab-benchmark",
+        "className": "space-y-6"
       },
       "children": [
         "benchmark-quotes-heading",
         "benchmark-quotes-grid",
-        "panic-sentiment-container",
-        "macro-yield-container",
         "drawdown-radar-container"
+      ]
+    },
+    "macro-subtab-panic": {
+      "type": "div",
+      "props": {
+        "id": "macro-subtab-panic",
+        "className": "space-y-6"
+      },
+      "children": [
+        "panic-sentiment-container"
+      ]
+    },
+    "macro-subtab-yield": {
+      "type": "div",
+      "props": {
+        "id": "macro-subtab-yield",
+        "className": "space-y-6"
+      },
+      "children": [
+        "macro-yield-container"
       ]
     },
     "benchmark-quotes-heading": {
@@ -268,8 +375,7 @@
       },
       "children": [
         "panic-sentiment-heading",
-        "panic-sentiment-grid",
-        "panic-sentiment-chart-grid"
+        "panic-sentiment-2x2-grid"
       ]
     },
     "panic-sentiment-heading": {
@@ -280,18 +386,58 @@
       },
       "children": []
     },
-    "panic-sentiment-grid": {
+    "panic-sentiment-2x2-grid": {
       "type": "Grid",
       "props": {
-        "columns": 4,
-        "gap": "md",
-        "className": null
+        "columns": 2,
+        "gap": "lg",
+        "className": "grid-cols-1 md:grid-cols-2"
+      },
+      "children": [
+        "panic-card-vix",
+        "panic-card-vxn",
+        "panic-card-fear-greed",
+        "panic-card-move"
+      ]
+    },
+    "panic-card-vix": {
+      "type": "div",
+      "props": {
+        "className": "space-y-3"
       },
       "children": [
         "metric-vix",
+        "chart-vix-spark"
+      ]
+    },
+    "panic-card-vxn": {
+      "type": "div",
+      "props": {
+        "className": "space-y-3"
+      },
+      "children": [
         "metric-vxn",
+        "chart-vxn-spark"
+      ]
+    },
+    "panic-card-fear-greed": {
+      "type": "div",
+      "props": {
+        "className": "space-y-3"
+      },
+      "children": [
         "metric-fear-greed",
-        "metric-move"
+        "chart-fear-greed-spark"
+      ]
+    },
+    "panic-card-move": {
+      "type": "div",
+      "props": {
+        "className": "space-y-3"
+      },
+      "children": [
+        "metric-move",
+        "chart-move-spark"
       ]
     },
     "metric-vix": {
@@ -342,20 +488,7 @@
       },
       "children": []
     },
-    "panic-sentiment-chart-grid": {
-      "type": "Grid",
-      "props": {
-        "columns": 4,
-        "gap": "md",
-        "className": null
-      },
-      "children": [
-        "chart-vix-spark",
-        "chart-vxn-spark",
-        "chart-fear-greed-spark",
-        "chart-move-spark"
-      ]
-    },
+
     "chart-vix-spark": {
       "type": "Chart",
       "props": {
