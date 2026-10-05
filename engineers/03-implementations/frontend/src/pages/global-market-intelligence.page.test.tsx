@@ -96,7 +96,7 @@ describe('GlobalMarketIntelligencePage', () => {
 
     // Verify all 3 sub-tab buttons are rendered
     const subTab1 = await screen.findByRole('button', {
-      name: /5 大全球核心基準指數即時行情與走勢/i,
+      name: /5 大全球核心基準指數近一日行情與走勢/i,
     });
     const subTab2 = screen.getByRole('button', {
       name: /四大恐慌情緒指標/i,

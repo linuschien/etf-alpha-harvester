@@ -444,13 +444,13 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
     // Fibonacci Retracement: 7 Levels anchored to Time Window [windowPriceMin, windowPriceMax]
     const fibLevels = [
-      { pct: 0.0, label: '0.0% 波段頂部', color: '#64748b', pts: windowPriceMax },
-      { pct: -23.6, label: '-23.6% 多頭呼吸線', color: '#10b981', pts: windowPriceMax - 0.236 * windowRange },
-      { pct: -38.2, label: '-38.2% 黃金撈底線', color: '#f59e0b', pts: windowPriceMax - 0.382 * windowRange },
-      { pct: -50.0, label: '-50.0% 多空平衡線', color: '#3b82f6', pts: windowPriceMax - 0.500 * windowRange },
-      { pct: -61.8, label: '-61.8% 錯殺超跌線', color: '#8b5cf6', pts: windowPriceMax - 0.618 * windowRange },
-      { pct: -76.4, label: '-76.4% 黑天鵝救災線', color: '#ef4444', pts: windowPriceMax - 0.764 * windowRange },
-      { pct: -100.0, label: '-100.0% 波段地板', color: '#64748b', pts: windowPriceMin },
+      { pct: 0.0, label: '0.0% 頂部', color: '#64748b', pts: windowPriceMax },
+      { pct: -23.6, label: '-23.6% 呼吸線', color: '#10b981', pts: windowPriceMax - 0.236 * windowRange },
+      { pct: -38.2, label: '-38.2% 撈底線', color: '#f59e0b', pts: windowPriceMax - 0.382 * windowRange },
+      { pct: -50.0, label: '-50.0% 平衡線', color: '#3b82f6', pts: windowPriceMax - 0.500 * windowRange },
+      { pct: -61.8, label: '-61.8% 超跌線', color: '#8b5cf6', pts: windowPriceMax - 0.618 * windowRange },
+      { pct: -76.4, label: '-76.4% 救災線', color: '#ef4444', pts: windowPriceMax - 0.764 * windowRange },
+      { pct: -100.0, label: '-100.0% 地板', color: '#64748b', pts: windowPriceMin },
     ];
 
     // Compute Y-Axis Domain [yMin, yMax] based on all visible/active indicators
@@ -478,11 +478,11 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const yMax = domainMax + span * 0.05;
     const yMin = domainMin - span * 0.05;
 
-    // Layout coordinates
+    // Layout coordinates - symmetric padding ensures chart is geometrically centered
     const width = chartWidth || 860;
     const height = 340;
-    const paddingLeft = 85;
-    const paddingRight = 195;
+    const paddingLeft = 125;
+    const paddingRight = 125;
     const paddingTop = 32;
     const paddingBottom = 42;
 
@@ -793,32 +793,26 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           {/* Primary Close Price Curve */}
           <path d={pricePath} fill="none" stroke="#ef4444" strokeWidth="2.5" />
 
-          {/* Latest Point Marker */}
+          {/* Latest Point Marker (Clean non-blocking indicator) */}
           <g>
             <circle
               cx={scaleX(pointsCount - 1)}
               cy={scaleY(latestPrice)}
-              r="5"
+              r="4.5"
               fill="#ef4444"
               stroke="#ffffff"
               strokeWidth="2"
             />
-            <rect
-              x={Math.max(paddingLeft, scaleX(pointsCount - 1) - 165)}
-              y={Math.max(paddingTop, scaleY(latestPrice) - 26)}
-              width="160"
-              height="20"
-              rx="4"
-              className="fill-background/95 stroke-rose-500 stroke-[1.5]"
+            <circle
+              cx={scaleX(pointsCount - 1)}
+              cy={scaleY(latestPrice)}
+              r="7.5"
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="1.5"
+              opacity="0.6"
+              className="animate-ping"
             />
-            <text
-              x={Math.max(paddingLeft, scaleX(pointsCount - 1) - 165) + 80}
-              y={Math.max(paddingTop, scaleY(latestPrice) - 26) + 14}
-              textAnchor="middle"
-              className="text-[10px] font-mono font-bold fill-rose-600 dark:fill-rose-400"
-            >
-              📍 最新: {latestPrice.toLocaleString()} 點 ({currentDD}%)
-            </text>
           </g>
 
           {/* Interactive Hover Crosshair with Date & Exact Price Tooltip */}

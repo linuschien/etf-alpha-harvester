@@ -156,7 +156,7 @@
               {
                 "id": "benchmark-quotes-heading",
                 "abstract_type": "Heading",
-                "label": "5 大全球核心基準指數即時行情",
+                "label": "5 大全球核心基準指數近一日行情",
                 "behavior_ref": "visual-hierarchy:weight"
               },
               {

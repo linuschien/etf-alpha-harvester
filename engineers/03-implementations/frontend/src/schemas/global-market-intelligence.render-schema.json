@@ -193,7 +193,7 @@
       "type": "Button",
       "props": {
         "id": "subtab-benchmark-trigger",
-        "label": "5 大全球核心基準指數即時行情與走勢",
+        "label": "5 大全球核心基準指數近一日行情與走勢",
         "variant": "default",
         "disabled": null
       },
@@ -284,7 +284,7 @@
     "benchmark-quotes-heading": {
       "type": "Heading",
       "props": {
-        "text": "5 大全球核心基準指數即時行情",
+        "text": "5 大全球核心基準指數近一日行情",
         "level": "h2"
       },
       "children": []
@@ -668,7 +668,7 @@
     "drawdown-radar-container": {
       "type": "Card",
       "props": {
-        "title": "全球 5 大基準指數走勢與黃金分割回撤雷達 (Benchmark Drawdown Radar)",
+        "title": null,
         "description": null,
         "maxWidth": null,
         "centered": null,
@@ -691,14 +691,27 @@
     "drawdown-toolbar-stack": {
       "type": "Stack",
       "props": {
-        "direction": "horizontal",
+        "direction": "vertical",
         "gap": "md",
-        "align": "center",
+        "align": "start",
         "justify": null,
-        "className": null
+        "className": "w-full"
       },
       "children": [
         "drawdown-window-selector",
+        "drawdown-switches-stack"
+      ]
+    },
+    "drawdown-switches-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "lg",
+        "align": "center",
+        "justify": null,
+        "className": "flex-wrap gap-4"
+      },
+      "children": [
         "toggle-ma-switch",
         "toggle-bb-switch",
         "toggle-fib-switch"

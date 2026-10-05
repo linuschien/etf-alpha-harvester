@@ -56,7 +56,7 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
         }
 
         // Auto-switch sub-tabs inside macro-sentiment-section
-        if (id === 'subtab-benchmark-trigger' || label.includes('基準指數') || label.includes('即時行情與走勢')) {
+        if (id === 'subtab-benchmark-trigger' || label.includes('基準指數') || label.includes('即時行情與走勢') || label.includes('近一日行情與走勢')) {
           store.set('/activeSubTab', 'macro-subtab-benchmark');
         } else if (id === 'subtab-panic-trigger' || label.includes('恐慌情緒') || label.includes('四大恐慌')) {
           store.set('/activeSubTab', 'macro-subtab-panic');
