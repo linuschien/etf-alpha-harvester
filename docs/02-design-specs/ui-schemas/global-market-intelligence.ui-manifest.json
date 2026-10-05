@@ -445,7 +445,7 @@
                   {
                     "id": "drawdown-heading",
                     "abstract_type": "Heading",
-                    "label": "單一基準專屬回撤雷達 (預設 ^TWII，LOCF 前值平滑遞延)",
+                    "label": "基準指數走勢與黃金分割回撤監控",
                     "behavior_ref": "visual-hierarchy:weight"
                   },
                   {
@@ -533,7 +533,7 @@
                   {
                     "id": "drawdown-radar-chart",
                     "abstract_type": "Chart",
-                    "label": "52 週回撤雷達走勢圖 (單一基準聚焦，240MA 連續滾動計算，LOCF 休市平滑)",
+                    "label": "52 週高點回撤走勢圖",
                     "data_ref": "getQuoteTimeSeries",
                     "behavior_ref": "visual-hierarchy:size"
                   }

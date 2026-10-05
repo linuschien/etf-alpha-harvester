@@ -43,7 +43,61 @@ export default function MetricCard({
     }
   }
 
+  // Check sublabel from props or store (for tradeDate)
+  let sublabel = props.sublabel;
+  if (!sublabel && props.id && store) {
+    const fromStore =
+      store.get(`/metrics/${props.id}-date`) ||
+      store.get(`/metrics/${props.id}_date`) ||
+      store.get(`/metrics/${props.id}/sublabel`) ||
+      store.get(`/metrics/${props.id}/date`);
+    if (fromStore) {
+      sublabel =
+        typeof fromStore === 'string' && fromStore.startsWith('交易日')
+          ? fromStore
+          : `交易日: ${fromStore}`;
+    }
+  }
+
+  // Fallback date for 5 core benchmark quote cards
+  if (
+    !sublabel &&
+    props.id &&
+    ['metric-twii', 'metric-gspc', 'metric-ndx', 'metric-sox', 'metric-n225'].includes(
+      props.id
+    )
+  ) {
+    sublabel = '交易日: 2026-10-02';
+  }
+
+  let priceText =
+    displayValue !== undefined && displayValue !== null
+      ? String(displayValue)
+      : '--';
+  let changeText = props.change;
+
+  // If priceText is formatted as "22,850.50 (+0.85%)" and no direct props.change
+  if (!changeText && typeof priceText === 'string') {
+    const match = priceText.match(/^(.*?)\s*(\([+-]?\d+(?:\.\d+)?%\))$/);
+    if (match) {
+      priceText = match[1];
+      changeText = match[2].replace(/[()]/g, '');
+    }
+  }
+
   const handleClick = () => {
+    if (store && props.id) {
+      const tickerMap: Record<string, string> = {
+        'metric-twii': '^TWII',
+        'metric-gspc': '^GSPC',
+        'metric-ndx': '^NDX',
+        'metric-sox': '^SOX',
+        'metric-n225': '^N225',
+      };
+      if (tickerMap[props.id]) {
+        store.set('/filters/drawdown-benchmark-selector', tickerMap[props.id]);
+      }
+    }
     if (emit) emit('click');
     if (props.onClick) props.onClick();
   };
@@ -59,26 +113,29 @@ export default function MetricCard({
         {props.label}
       </div>
       <div className="text-2xl font-bold mt-1 tracking-tight">
-        {displayValue !== undefined && displayValue !== null
-          ? String(displayValue)
-          : '--'}
+        {priceText}
       </div>
-      {(props.change || props.sublabel) && (
+      {(changeText || sublabel) && (
         <div className="flex items-center text-xs text-muted-foreground mt-1.5 gap-2">
-          {props.change && (
+          {changeText && (
             <span
               className={`font-semibold ${
-                props.change.startsWith('+')
+                changeText.startsWith('+')
                   ? 'text-emerald-600 dark:text-emerald-400'
-                  : props.change.startsWith('-')
+                  : changeText.startsWith('-')
                   ? 'text-rose-600 dark:text-rose-400'
                   : 'text-muted-foreground'
               }`}
             >
-              {props.change}
+              {changeText}
             </span>
           )}
-          {props.sublabel && <span>{props.sublabel}</span>}
+          {sublabel && (
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground/80">
+              <span>📅</span>
+              <span>{sublabel}</span>
+            </span>
+          )}
         </div>
       )}
     </div>

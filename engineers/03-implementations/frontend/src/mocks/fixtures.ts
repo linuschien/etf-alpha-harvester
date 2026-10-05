@@ -414,3 +414,46 @@ export function resetMockClusteredCandidates() {
     }
   );
 }
+
+export const mockMarketDailyQuotes: any[] = [
+  {
+    ticker: '^TWII',
+    name: '台股加權指數',
+    tradeDate: '2026-10-02',
+    closePrice: 22850.5,
+    changePct: 0.85,
+    volume: 385000000000,
+  },
+  {
+    ticker: '^GSPC',
+    name: '標普 500 指數',
+    tradeDate: '2026-10-02',
+    closePrice: 5751.0,
+    changePct: 0.42,
+    volume: 2450000000,
+  },
+  {
+    ticker: '^NDX',
+    name: '那斯達克 100 指數',
+    tradeDate: '2026-10-02',
+    closePrice: 20015.3,
+    changePct: 0.65,
+    volume: 5120000000,
+  },
+  {
+    ticker: '^SOX',
+    name: '費城半導體指數',
+    tradeDate: '2026-10-02',
+    closePrice: 5210.8,
+    changePct: 1.2,
+    volume: 1850000000,
+  },
+  {
+    ticker: '^N225',
+    name: '日經 225 指數',
+    tradeDate: '2026-10-02',
+    closePrice: 38650.0,
+    changePct: -0.3,
+    volume: 1420000000,
+  },
+];

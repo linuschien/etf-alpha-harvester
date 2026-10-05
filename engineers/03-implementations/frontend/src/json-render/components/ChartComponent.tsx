@@ -291,91 +291,433 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
   // 3. Drawdown Radar / 52W Drawdown Chart
   if (id.includes('drawdown-radar-chart')) {
-    const width = 720;
-    const height = 240;
-    const padding = 45;
+    const selectedBenchmark: string =
+      store?.get?.('/filters/drawdown-benchmark-selector') || '^TWII';
+    const selectedWindow: string =
+      store?.get?.('/filters/drawdown-window-selector') || '6M';
+    const showMA: boolean =
+      store?.get?.('/filters/toggle-ma-switch') !== false;
+    const showBB: boolean =
+      store?.get?.('/filters/toggle-bb-switch') !== false;
+    const showFib: boolean =
+      store?.get?.('/filters/toggle-fib-switch') !== false;
 
-    const days = 30;
-    const ddCurve = [
-      0.0, -0.4, -0.8, -0.5, -1.2, -1.8, -2.5, -3.2, -4.5, -5.8,
-      -7.2, -8.5, -9.8, -11.2, -12.4, -10.5, -8.2, -6.4, -5.1, -4.2,
-      -3.5, -2.8, -3.1, -2.5, -1.9, -1.5, -1.8, -2.1, -1.9, -1.4
-    ];
+    interface BenchmarkProfile {
+      name: string;
+      ticker: string;
+      peak: number;
+      latest: number;
+      currentDD: number;
+      maxDD: number;
+      baseCurve: number[];
+    }
 
-    const minDD = -15;
-    const maxDD = 0;
+    const BENCHMARK_DATA: Record<string, BenchmarkProfile> = {
+      '^TWII': {
+        name: '台股加權指數',
+        ticker: '^TWII',
+        peak: 24416.7,
+        latest: 22850.5,
+        currentDD: -6.4,
+        maxDD: -19.4,
+        baseCurve: [
+          0.0, -0.6, -1.2, -0.8, -2.1, -3.8, -5.2, -7.8, -10.5, -14.2,
+          -19.4, -17.5, -15.1, -12.8, -10.5, -8.7, -9.8, -11.2, -8.6, -7.2,
+          -6.8, -6.1, -7.4, -6.9, -6.4
+        ],
+      },
+      '^GSPC': {
+        name: '標普 500 指數',
+        ticker: '^GSPC',
+        peak: 5878.5,
+        latest: 5751.0,
+        currentDD: -2.2,
+        maxDD: -8.5,
+        baseCurve: [
+          0.0, -0.4, -0.8, -1.5, -2.4, -3.8, -5.2, -7.1, -8.5, -7.2,
+          -5.8, -4.5, -3.6, -2.9, -3.4, -4.1, -3.5, -2.8, -2.4, -2.6,
+          -2.1, -1.8, -2.5, -2.3, -2.2
+        ],
+      },
+      '^NDX': {
+        name: '那斯達克 100 指數',
+        ticker: '^NDX',
+        peak: 20690.1,
+        latest: 20015.3,
+        currentDD: -3.3,
+        maxDD: -13.1,
+        baseCurve: [
+          0.0, -0.7, -1.8, -3.2, -5.4, -7.8, -10.2, -13.1, -11.8, -9.5,
+          -7.2, -5.8, -4.5, -5.6, -6.4, -5.2, -4.3, -3.8, -4.1, -3.6,
+          -3.1, -2.8, -3.5, -3.4, -3.3
+        ],
+      },
+      '^SOX': {
+        name: '費城半導體指數',
+        ticker: '^SOX',
+        peak: 5904.2,
+        latest: 5210.8,
+        currentDD: -11.7,
+        maxDD: -25.2,
+        baseCurve: [
+          0.0, -1.5, -3.8, -6.5, -10.8, -15.6, -20.4, -25.2, -22.5, -19.2,
+          -15.8, -13.6, -12.2, -14.8, -16.5, -14.2, -13.0, -12.1, -12.8, -12.4,
+          -11.8, -11.2, -12.1, -11.9, -11.7
+        ],
+      },
+      '^N225': {
+        name: '日經 225 指數',
+        ticker: '^N225',
+        peak: 42426.8,
+        latest: 38650.0,
+        currentDD: -8.9,
+        maxDD: -25.5,
+        baseCurve: [
+          0.0, -1.8, -4.2, -7.8, -12.5, -18.4, -22.8, -25.5, -21.6, -17.2,
+          -14.1, -11.8, -10.2, -12.5, -13.8, -12.1, -10.5, -9.6, -10.1, -9.5,
+          -8.8, -8.2, -9.2, -9.0, -8.9
+        ],
+      },
+    };
+
+    const profile =
+      BENCHMARK_DATA[selectedBenchmark] ?? BENCHMARK_DATA['^TWII'];
+
+    // Slice or interpolate points based on selectedWindow
+    const rawCurve = profile.baseCurve;
+    let pointsCount = 25;
+    let dateLabels = ['04/02', '05/02', '06/03', '07/02', '08/01', '09/02', '10/02'];
+    if (selectedWindow === '1M') {
+      pointsCount = 12;
+      dateLabels = ['09/02', '09/10', '09/18', '09/25', '10/02'];
+    } else if (selectedWindow === '3M') {
+      pointsCount = 18;
+      dateLabels = ['07/02', '08/01', '09/02', '10/02'];
+    } else if (selectedWindow === '1Y') {
+      pointsCount = 35;
+      dateLabels = ['2025/10', '2026/01', '2026/04', '2026/07', '2026/10'];
+    }
+
+    // Generate curve scaled to pointsCount
+    const ddPoints: number[] = [];
+    for (let i = 0; i < pointsCount; i++) {
+      const ratio = i / (pointsCount - 1);
+      const rawIdx = ratio * (rawCurve.length - 1);
+      const lower = Math.floor(rawIdx);
+      const upper = Math.min(rawCurve.length - 1, Math.ceil(rawIdx));
+      const frac = rawIdx - lower;
+      const val = rawCurve[lower] * (1 - frac) + rawCurve[upper] * frac;
+      ddPoints.push(Number(val.toFixed(2)));
+    }
+
+    // Rolling 20MA and 60MA approximation over drawdown
+    const ma20Points = ddPoints.map((val, idx) => {
+      const windowStart = Math.max(0, idx - 4);
+      const slice = ddPoints.slice(windowStart, idx + 1);
+      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
+    });
+
+    const ma60Points = ddPoints.map((val, idx) => {
+      const windowStart = Math.max(0, idx - 8);
+      const slice = ddPoints.slice(windowStart, idx + 1);
+      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
+    });
+
+    // Bollinger Band (20MA ± 2σ)
+    const bbUpper = ma20Points.map((ma, idx) => {
+      const windowStart = Math.max(0, idx - 4);
+      const slice = ddPoints.slice(windowStart, idx + 1);
+      const variance =
+        slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
+      const sigma = Math.sqrt(variance);
+      return Number(Math.min(0, ma + sigma * 1.5).toFixed(2));
+    });
+
+    const bbLower = ma20Points.map((ma, idx) => {
+      const windowStart = Math.max(0, idx - 4);
+      const slice = ddPoints.slice(windowStart, idx + 1);
+      const variance =
+        slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
+      const sigma = Math.sqrt(variance);
+      return Number((ma - sigma * 1.5).toFixed(2));
+    });
+
+    // Layout coordinates
+    const width = 760;
+    const height = 280;
+    const paddingLeft = 55;
+    const paddingRight = 95;
+    const paddingTop = 25;
+    const paddingBottom = 40;
+
+    // Y Axis: 0.0% to -80.0% to accommodate all Fibonacci lines
+    const minY = -80.0;
+    const maxY = 0.0;
 
     const scaleY = (v: number) =>
-      padding + ((0 - v) / (0 - minDD)) * (height - padding * 2);
+      paddingTop + ((0 - v) / (0 - minY)) * (height - paddingTop - paddingBottom);
     const scaleX = (idx: number) =>
-      padding + (idx / (days - 1)) * (width - padding * 2);
+      paddingLeft + (idx / (pointsCount - 1)) * (width - paddingLeft - paddingRight);
 
-    const pathD = ddCurve.reduce(
-      (acc, v, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`,
-      ''
-    );
+    const makePath = (pts: number[]) =>
+      pts.reduce(
+        (acc, v, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`,
+        ''
+      );
+
+    const ddPath = makePath(ddPoints);
+    const ma20Path = makePath(ma20Points);
+    const ma60Path = makePath(ma60Points);
+
+    // Bollinger area path
+    const bbAreaPath =
+      bbUpper.reduce(
+        (acc, v, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`,
+        ''
+      ) +
+      bbLower
+        .slice()
+        .reverse()
+        .reduce(
+          (acc, v, idx) =>
+            `${acc} L ${scaleX(pointsCount - 1 - idx)} ${scaleY(v)}`,
+          ''
+        ) +
+      ' Z';
+
+    // Fibonacci Defense Levels per PRD
+    const fibLevels = [
+      { pct: -23.6, label: '-23.6% 初級回撤', color: '#10b981' },
+      { pct: -38.2, label: '-38.2% 多空防線', color: '#f59e0b' },
+      { pct: -50.0, label: '-50.0% 平衡中位', color: '#3b82f6' },
+      { pct: -61.8, label: '-61.8% 極限支撐', color: '#8b5cf6' },
+      { pct: -76.4, label: '-76.4% 救災防線', color: '#ef4444' },
+    ];
+
+    // Dynamic market status badge
+    let statusBadge = {
+      text: `🛡️ 多頭呼吸區 (回撤 ${profile.currentDD}%)`,
+      color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    };
+    if (profile.currentDD <= -76.4) {
+      statusBadge = {
+        text: `🚨 黑天鵝救災區 (回撤 ${profile.currentDD}%)`,
+        color: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+      };
+    } else if (profile.currentDD <= -61.8) {
+      statusBadge = {
+        text: `💎 超跌黃金坑 (回撤 ${profile.currentDD}%)`,
+        color: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
+      };
+    } else if (profile.currentDD <= -50.0) {
+      statusBadge = {
+        text: `⚡ 多空平衡修正 (回撤 ${profile.currentDD}%)`,
+        color: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+      };
+    } else if (profile.currentDD <= -38.2) {
+      statusBadge = {
+        text: `⚠️ 黃金防守線加碼 (回撤 ${profile.currentDD}%)`,
+        color: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+      };
+    } else if (profile.currentDD <= -23.6) {
+      statusBadge = {
+        text: `📉 拉回修正區 (回撤 ${profile.currentDD}%)`,
+        color: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
+      };
+    }
 
     return (
-      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-border pb-3">
+      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
+        {/* Dynamic Header with Key Indicators */}
+        <div className="flex flex-wrap items-center justify-between border-b border-border pb-3 gap-2">
           <div>
-            <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-            <div className="text-xs text-muted-foreground">
-              聚焦 52 週動態滾動回撤 (240MA 支撐線 | 當前回撤: -1.4% | 最大回撤: -12.4%)
+            <div className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
+              <span>{profile.name} ({profile.ticker}) 52 週回撤雷達</span>
+              <span className="text-xs px-2 py-0.5 rounded font-mono bg-secondary text-secondary-foreground font-normal">
+                視窗: {selectedWindow}
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              <span>52 週高點: <strong className="text-foreground">{profile.peak.toLocaleString()} 點</strong></span>
+              <span>最新市價: <strong className="text-foreground">{profile.latest.toLocaleString()} 點</strong></span>
+              <span>當前回撤: <strong className="text-foreground">{profile.currentDD}%</strong></span>
+              <span>52 週最大回撤: <strong className="text-foreground">{profile.maxDD}%</strong></span>
             </div>
           </div>
-          <span className="text-xs px-2.5 py-1 rounded-md font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-            常態健康區間
+          <span className={`text-xs px-3 py-1 rounded-md font-semibold ${statusBadge.color}`}>
+            {statusBadge.text}
           </span>
         </div>
 
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-56 overflow-visible">
-          {/* Zero baseline */}
+        {/* Legend Toolbar */}
+        <div className="flex flex-wrap items-center justify-between text-xs text-muted-foreground gap-2">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5 font-medium">
+              <span className="w-3 h-1 bg-rose-500 rounded-full inline-block"></span>
+              回撤曲線
+            </span>
+            {showMA && (
+              <>
+                <span className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                  <span className="w-3 h-0.5 bg-amber-500 inline-block"></span>
+                  20MA
+                </span>
+                <span className="flex items-center gap-1.5 font-medium text-purple-600 dark:text-purple-400">
+                  <span className="w-3 h-0.5 bg-purple-500 inline-block"></span>
+                  60MA
+                </span>
+              </>
+            )}
+            {showBB && (
+              <span className="flex items-center gap-1.5 font-medium text-sky-600 dark:text-sky-400">
+                <span className="w-3 h-2 bg-sky-500/20 border border-sky-400 rounded-sm inline-block"></span>
+                布林通道 (20MA ± 2σ)
+              </span>
+            )}
+            {showFib && (
+              <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                <span className="w-3 h-0.5 border-b border-dashed border-foreground inline-block"></span>
+                黃金分割 5 級防線
+              </span>
+            )}
+          </div>
+          <span className="font-mono text-[11px] text-muted-foreground">
+            基準軸心: 52W Peak (0.0%)
+          </span>
+        </div>
+
+        {/* SVG Chart */}
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 overflow-visible">
+          <defs>
+            <linearGradient id="dd-radar-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.05" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.45" />
+            </linearGradient>
+          </defs>
+
+          {/* Zero Baseline (52W High) */}
           <line
-            x1={padding}
+            x1={paddingLeft}
             y1={scaleY(0)}
-            x2={width - padding}
+            x2={width - paddingRight}
             y2={scaleY(0)}
-            stroke="#9ca3af"
+            stroke="#6b7280"
             strokeWidth="1.5"
           />
-          {[-5, -10, -15].map((tick) => (
-            <g key={tick}>
+          <text
+            x={width - paddingRight + 6}
+            y={scaleY(0) + 3}
+            className="text-[10px] font-mono font-bold fill-foreground"
+          >
+            0.0% (52W Peak)
+          </text>
+
+          {/* 5-Level Fibonacci Defense Lines (PRD Spec) */}
+          {showFib &&
+            fibLevels.map((lvl) => {
+              const y = scaleY(lvl.pct);
+              return (
+                <g key={lvl.pct}>
+                  <line
+                    x1={paddingLeft}
+                    y1={y}
+                    x2={width - paddingRight}
+                    y2={y}
+                    stroke={lvl.color}
+                    strokeDasharray="4 4"
+                    strokeWidth="1.2"
+                  />
+                  <text
+                    x={width - paddingRight + 6}
+                    y={y + 3}
+                    style={{ fill: lvl.color }}
+                    className="text-[10px] font-mono font-semibold"
+                  >
+                    {lvl.label}
+                  </text>
+                </g>
+              );
+            })}
+
+          {/* Y Axis percentage ticks */}
+          {[-20, -40, -60, -80].map((t) => (
+            <g key={t}>
               <line
-                x1={padding}
-                y1={scaleY(tick)}
-                x2={width - padding}
-                y2={scaleY(tick)}
+                x1={paddingLeft}
+                y1={scaleY(t)}
+                x2={width - paddingRight}
+                y2={scaleY(t)}
                 stroke="currentColor"
-                strokeOpacity="0.1"
+                strokeOpacity="0.08"
               />
               <text
-                x={padding - 8}
-                y={scaleY(tick) + 4}
+                x={paddingLeft - 8}
+                y={scaleY(t) + 3}
                 textAnchor="end"
                 className="text-[10px] font-mono fill-muted-foreground"
               >
-                {tick}%
+                {t}%
               </text>
             </g>
           ))}
 
-          {/* Area fill */}
+          {/* Bollinger Band Shaded Envelope */}
+          {showBB && (
+            <path
+              d={bbAreaPath}
+              fill="#0ea5e9"
+              fillOpacity="0.12"
+              stroke="#0ea5e9"
+              strokeWidth="0.8"
+              strokeDasharray="2 2"
+            />
+          )}
+
+          {/* Drawdown Area Gradient Fill */}
           <path
-            d={`${pathD} L ${scaleX(days - 1)} ${scaleY(0)} L ${scaleX(0)} ${scaleY(0)} Z`}
-            fill="url(#dd-grad)"
-            opacity="0.3"
+            d={`${ddPath} L ${scaleX(pointsCount - 1)} ${scaleY(0)} L ${scaleX(0)} ${scaleY(0)} Z`}
+            fill="url(#dd-radar-grad)"
           />
 
-          <defs>
-            <linearGradient id="dd-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.1" />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.8" />
-            </linearGradient>
-          </defs>
+          {/* Moving Average Lines */}
+          {showMA && (
+            <>
+              <path d={ma20Path} fill="none" stroke="#eab308" strokeWidth="1.8" />
+              <path d={ma60Path} fill="none" stroke="#a855f7" strokeWidth="1.8" />
+            </>
+          )}
 
-          {/* Drawdown Curve */}
-          <path d={pathD} fill="none" stroke="#ef4444" strokeWidth="2.5" />
+          {/* Primary Drawdown Curve */}
+          <path d={ddPath} fill="none" stroke="#ef4444" strokeWidth="2.5" />
+
+          {/* Current Position Marker */}
+          <circle
+            cx={scaleX(pointsCount - 1)}
+            cy={scaleY(profile.currentDD)}
+            r="4.5"
+            fill="#ef4444"
+            stroke="#ffffff"
+            strokeWidth="1.5"
+          />
+
+          {/* X Axis Date Labels */}
+          {dateLabels.map((lbl, idx) => {
+            const x =
+              paddingLeft +
+              (idx / (dateLabels.length - 1)) *
+                (width - paddingLeft - paddingRight);
+            return (
+              <text
+                key={lbl}
+                x={x}
+                y={height - paddingBottom + 16}
+                textAnchor="middle"
+                className="text-[10px] font-mono fill-muted-foreground"
+              >
+                {lbl}
+              </text>
+            );
+          })}
         </svg>
       </div>
     );

@@ -9,6 +9,7 @@ import {
   mockPairwiseMatrix,
   mockMacroYieldSnapshot,
   mockMacroRegime,
+  mockMarketDailyQuotes,
 } from './fixtures';
 
 export const handlers = [
@@ -127,12 +128,10 @@ export const handlers = [
       });
     }
 
-    if (query.includes('listMarketDailyQuotes')) {
+    if (query.includes('listMarketDailyQuotes') || operationName === 'ListMarketDailyQuotes') {
       return HttpResponse.json({
         data: {
-          listMarketDailyQuotes: [
-            { ticker: '^TWII', tradeDate: '2026-09-23', closePrice: 22850.5, changePct: 0.8 },
-          ],
+          listMarketDailyQuotes: mockMarketDailyQuotes,
         },
       });
     }

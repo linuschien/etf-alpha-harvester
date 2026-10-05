@@ -76,7 +76,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
           newTab === 'qualified-leaderboard-section' ||
           newTab === 'dca-calendar-section')
       ) {
-        setActiveTab(newTab);
+        setActiveTab((prev) => (prev !== newTab ? newTab : prev));
       }
 
       const newSubTab = state?.activeSubTab;
@@ -86,7 +86,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
           newSubTab === 'macro-subtab-panic' ||
           newSubTab === 'macro-subtab-yield')
       ) {
-        setActiveSubTab(newSubTab);
+        setActiveSubTab((prev) => (prev !== newSubTab ? newSubTab : prev));
       }
     });
     return () => {
@@ -119,42 +119,54 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
 
   useEffect(() => {
     if (!store) return;
-    if (clusteredCandidates) {
+    if (clusteredCandidates && store.get('/data/getClusteredCandidates') !== clusteredCandidates) {
       store.set('/data/getClusteredCandidates', clusteredCandidates);
     }
-    if (orthogonalCandidates) {
+    if (orthogonalCandidates && store.get('/data/getOrthogonalCandidates') !== orthogonalCandidates) {
       store.set('/data/getOrthogonalCandidates', orthogonalCandidates);
     }
-    if (watermarks) {
+    if (watermarks && store.get('/data/listDataFeedWatermarks') !== watermarks) {
       store.set('/data/listDataFeedWatermarks', watermarks);
     }
-    if (topDca) {
+    if (topDca && store.get('/data/getTop20DcaRanks') !== topDca) {
       store.set('/data/getTop20DcaRanks', topDca);
     }
-    if (dividendAnnouncements) {
+    if (dividendAnnouncements && store.get('/data/listDividendAnnouncements') !== dividendAnnouncements) {
       store.set('/data/listDividendAnnouncements', dividendAnnouncements);
     }
-    if (corporateActions) {
+    if (corporateActions && store.get('/data/listCorporateActions') !== corporateActions) {
       store.set('/data/listCorporateActions', corporateActions);
     }
-    if (pairwiseMatrix) {
+    if (pairwiseMatrix && store.get('/data/listPairwiseMatrix') !== pairwiseMatrix) {
       store.set('/data/listPairwiseMatrix', pairwiseMatrix);
     }
 
     // Dynamic metrics binding from real backend API results
     if (macroYield) {
       if (macroYield.us10YearTreasuryYield) {
-        store.set('/metrics/metric-dgs10', `${macroYield.us10YearTreasuryYield}%`);
+        const val = `${macroYield.us10YearTreasuryYield}%`;
+        if (store.get('/metrics/metric-dgs10') !== val) {
+          store.set('/metrics/metric-dgs10', val);
+        }
       }
       if (macroYield.us20YearTreasuryYield) {
-        store.set('/metrics/metric-dgs20', `${macroYield.us20YearTreasuryYield}%`);
+        const val = `${macroYield.us20YearTreasuryYield}%`;
+        if (store.get('/metrics/metric-dgs20') !== val) {
+          store.set('/metrics/metric-dgs20', val);
+        }
       }
       if (macroYield.yieldSpread10yMinus2y !== undefined) {
         const sign = macroYield.yieldSpread10yMinus2y >= 0 ? '+' : '';
-        store.set('/metrics/metric-t10y2y', `${sign}${macroYield.yieldSpread10yMinus2y}%`);
+        const val = `${sign}${macroYield.yieldSpread10yMinus2y}%`;
+        if (store.get('/metrics/metric-t10y2y') !== val) {
+          store.set('/metrics/metric-t10y2y', val);
+        }
       }
       if (macroYield.usCorporateBondEffectiveYield) {
-        store.set('/metrics/metric-corp-yield', `${macroYield.usCorporateBondEffectiveYield}%`);
+        const val = `${macroYield.usCorporateBondEffectiveYield}%`;
+        if (store.get('/metrics/metric-corp-yield') !== val) {
+          store.set('/metrics/metric-corp-yield', val);
+        }
       }
     }
 
@@ -162,7 +174,9 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       const regimeText = macroRegime.assessmentSummary
         ? `${macroRegime.macroState} (${macroRegime.assessmentSummary.slice(0, 16)}...)`
         : macroRegime.macroState;
-      store.set('/metrics/metric-macro-regime', regimeText);
+      if (store.get('/metrics/metric-macro-regime') !== regimeText) {
+        store.set('/metrics/metric-macro-regime', regimeText);
+      }
     }
 
     if (quotes && Array.isArray(quotes)) {
@@ -177,10 +191,13 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
         const metricKey = quoteMap[q.ticker];
         if (metricKey) {
           const sign = q.changePct >= 0 ? '+' : '';
-          store.set(
-            `/metrics/${metricKey}`,
-            `${q.closePrice.toLocaleString()} (${sign}${q.changePct}%)`
-          );
+          const formattedVal = `${q.closePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${sign}${q.changePct.toFixed(2)}%)`;
+          if (store.get(`/metrics/${metricKey}`) !== formattedVal) {
+            store.set(`/metrics/${metricKey}`, formattedVal);
+          }
+          if (q.tradeDate && store.get(`/metrics/${metricKey}-date`) !== q.tradeDate) {
+            store.set(`/metrics/${metricKey}-date`, q.tradeDate);
+          }
         }
       });
     }
@@ -315,10 +332,15 @@ const defaultStore = createStateStore({
   },
   metrics: {
     'metric-twii': '22,850.50 (+0.85%)',
-    'metric-gspc': '5,860.20 (+0.42%)',
-    'metric-ndx': '20,450.10 (+0.65%)',
-    'metric-sox': '5,320.80 (+1.20%)',
-    'metric-n225': '38,900.00 (-0.30%)',
+    'metric-twii-date': '2026-10-02',
+    'metric-gspc': '5,751.00 (+0.42%)',
+    'metric-gspc-date': '2026-10-02',
+    'metric-ndx': '20,015.30 (+0.65%)',
+    'metric-ndx-date': '2026-10-02',
+    'metric-sox': '5,210.80 (+1.20%)',
+    'metric-sox-date': '2026-10-02',
+    'metric-n225': '38,650.00 (-0.30%)',
+    'metric-n225-date': '2026-10-02',
     'metric-vix': '15.2 (常態低波)',
     'metric-vxn': '18.4',
     'metric-fear-greed': '62 (微幅貪婪)',

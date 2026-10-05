@@ -74,12 +74,36 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
       if (emit) emit(eventName, ...args);
     };
 
+    const rawProps = element?.props ?? {};
+    let effectiveBindings = { ...(bindings ?? element?.bindings ?? {}) };
+    let adaptedProps = { ...rawProps };
+
+    // Resolve two-way binding for Select, Radio, Input (value)
+    if (rawProps.value && typeof rawProps.value === 'object' && '$bindState' in rawProps.value) {
+      const path = rawProps.value.$bindState;
+      effectiveBindings.value = path;
+      if (store) {
+        const valFromStore = store.get(path);
+        adaptedProps.value = valFromStore !== undefined ? valFromStore : (rawProps.options ? rawProps.options[0] : '');
+      }
+    }
+
+    // Resolve two-way binding for Switch, Checkbox (checked)
+    if (rawProps.checked && typeof rawProps.checked === 'object' && '$bindState' in rawProps.checked) {
+      const path = rawProps.checked.$bindState;
+      effectiveBindings.checked = path;
+      if (store) {
+        const checkedFromStore = store.get(path);
+        adaptedProps.checked = checkedFromStore !== undefined ? checkedFromStore : true;
+      }
+    }
+
     return React.createElement(Comp, {
-      props: element?.props ?? {},
+      props: adaptedProps,
       children,
       emit: customEmit,
       on,
-      bindings,
+      bindings: effectiveBindings,
       loading,
     });
   };
