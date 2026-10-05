@@ -19,6 +19,10 @@ export interface MarketDailyQuote {
   ma60?: number;
   ma120?: number;
   ma240?: number;
+  bbUpper?: number;
+  bbMiddle?: number;
+  bbLower?: number;
+  tradeValueTwd?: number;
   [key: string]: unknown;
 }
 
@@ -35,9 +39,12 @@ export function useGetQuoteTimeSeries(
   startDate?: string,
   endDate?: string
 ) {
+  const queryStartDate = startDate ?? '2025-10-01';
+  const queryEndDate = endDate ?? '2026-09-30';
+
   return useQuery({
     queryKey: ticker
-      ? getQuoteTimeSeriesKeys.series(ticker, startDate, endDate)
+      ? getQuoteTimeSeriesKeys.series(ticker, queryStartDate, queryEndDate)
       : getQuoteTimeSeriesKeys.all,
     enabled: Boolean(ticker),
     queryFn: () =>
@@ -48,11 +55,21 @@ export function useGetQuoteTimeSeries(
               ticker
               tradeDate
               openPrice
+              highPrice
+              lowPrice
               closePrice
               volumeShares
+              tradeValueTwd
+              ma20
+              ma60
+              ma120
+              ma240
+              bbUpper
+              bbMiddle
+              bbLower
             }
           }`,
-          { ticker, startDate: startDate ?? '', endDate: endDate ?? '' }
+          { ticker, startDate: queryStartDate, endDate: queryEndDate }
         )
         .then((data) =>
           (data.getQuoteTimeSeries || []).map((item) => ({

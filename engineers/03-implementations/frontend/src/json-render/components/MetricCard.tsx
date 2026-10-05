@@ -26,6 +26,17 @@ export default function MetricCard({
     store = null;
   }
 
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    if (!store?.subscribe) return;
+    const unsub = store.subscribe(() => {
+      setTick((t) => t + 1);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [store]);
+
   let displayValue = props.value;
   if (
     displayValue &&
@@ -59,16 +70,6 @@ export default function MetricCard({
     }
   }
 
-  // Fallback date for 5 core benchmark quote cards
-  if (
-    !sublabel &&
-    props.id &&
-    ['metric-twii', 'metric-gspc', 'metric-ndx', 'metric-sox', 'metric-n225'].includes(
-      props.id
-    )
-  ) {
-    sublabel = '交易日: 2026-10-02';
-  }
 
   let priceText =
     displayValue !== undefined && displayValue !== null
@@ -76,7 +77,7 @@ export default function MetricCard({
       : '--';
   let changeText = props.change;
 
-  // If priceText is formatted as "22,850.50 (+0.85%)" and no direct props.change
+  // If priceText is formatted as "47,940.13 (+0.65%)" and no direct props.change
   if (!changeText && typeof priceText === 'string') {
     const match = priceText.match(/^(.*?)\s*(\([+-]?\d+(?:\.\d+)?%\))$/);
     if (match) {

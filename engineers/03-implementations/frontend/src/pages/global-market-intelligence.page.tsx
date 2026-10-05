@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Renderer,
   JSONUIProvider,
@@ -18,18 +18,8 @@ import { useGetTop20DcaRanks } from '@/hooks/use-get-top20-dca-ranks';
 import { useListDividendAnnouncements } from '@/hooks/use-list-dividend-announcements';
 import { useListCorporateActions } from '@/hooks/use-list-corporate-actions';
 import { useListPairwiseMatrix } from '@/hooks/use-list-pairwise-matrix';
-import { useListMarketDailyQuotes } from '@/hooks/use-list-market-daily-quotes';
-
-// Realistic fixtures for fallback
-import {
-  mockClusteredCandidates,
-  mockOrthogonalCandidates,
-  mockWatermarks,
-  mockDcaRanks,
-  mockDividendAnnouncements,
-  mockCorporateActions,
-  mockPairwiseMatrix,
-} from '@/mocks/fixtures';
+import { useBenchmarkQuotes } from '@/hooks/use-benchmark-quotes';
+import { useListMacroYieldSnapshots } from '@/hooks/use-list-macro-yield-snapshots';
 
 export interface PageProps {
   initialPerspectiveMode?: string;
@@ -115,118 +105,163 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     assetClass: 'CORE',
     evaluationDate: '2026-09-01',
   });
-  const { data: quotes } = useListMarketDailyQuotes();
+  const { data: benchmarkQuotes } = useBenchmarkQuotes();
+  const { data: macroYieldHistory } = useListMacroYieldSnapshots();
+
+  const syncedRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
     if (!store) return;
-    if (clusteredCandidates && store.get('/data/getClusteredCandidates') !== clusteredCandidates) {
+    if (clusteredCandidates && syncedRef.current.clusteredCandidates !== clusteredCandidates) {
+      syncedRef.current.clusteredCandidates = clusteredCandidates;
       store.set('/data/getClusteredCandidates', clusteredCandidates);
     }
-    if (orthogonalCandidates && store.get('/data/getOrthogonalCandidates') !== orthogonalCandidates) {
+    if (orthogonalCandidates && syncedRef.current.orthogonalCandidates !== orthogonalCandidates) {
+      syncedRef.current.orthogonalCandidates = orthogonalCandidates;
       store.set('/data/getOrthogonalCandidates', orthogonalCandidates);
     }
-    if (watermarks && store.get('/data/listDataFeedWatermarks') !== watermarks) {
+    if (watermarks && syncedRef.current.watermarks !== watermarks) {
+      syncedRef.current.watermarks = watermarks;
       store.set('/data/listDataFeedWatermarks', watermarks);
     }
-    if (topDca && store.get('/data/getTop20DcaRanks') !== topDca) {
+    if (topDca && syncedRef.current.topDca !== topDca) {
+      syncedRef.current.topDca = topDca;
       store.set('/data/getTop20DcaRanks', topDca);
     }
-    if (dividendAnnouncements && store.get('/data/listDividendAnnouncements') !== dividendAnnouncements) {
+    if (dividendAnnouncements && syncedRef.current.dividendAnnouncements !== dividendAnnouncements) {
+      syncedRef.current.dividendAnnouncements = dividendAnnouncements;
       store.set('/data/listDividendAnnouncements', dividendAnnouncements);
     }
-    if (corporateActions && store.get('/data/listCorporateActions') !== corporateActions) {
+    if (corporateActions && syncedRef.current.corporateActions !== corporateActions) {
+      syncedRef.current.corporateActions = corporateActions;
       store.set('/data/listCorporateActions', corporateActions);
     }
-    if (pairwiseMatrix && store.get('/data/listPairwiseMatrix') !== pairwiseMatrix) {
+    if (pairwiseMatrix && syncedRef.current.pairwiseMatrix !== pairwiseMatrix) {
+      syncedRef.current.pairwiseMatrix = pairwiseMatrix;
       store.set('/data/listPairwiseMatrix', pairwiseMatrix);
+    }
+    if (macroYieldHistory && syncedRef.current.macroYieldHistory !== macroYieldHistory) {
+      syncedRef.current.macroYieldHistory = macroYieldHistory;
+      store.set('/data/listMacroYieldSnapshots', macroYieldHistory);
     }
 
     // Dynamic metrics binding from real backend API results
-    if (macroYield) {
+    if (macroYield && syncedRef.current.macroYield !== macroYield) {
+      syncedRef.current.macroYield = macroYield;
+      store.set('/data/getLatestMacroYieldSnapshot', macroYield);
       if (macroYield.us10YearTreasuryYield) {
-        const val = `${macroYield.us10YearTreasuryYield}%`;
-        if (store.get('/metrics/metric-dgs10') !== val) {
-          store.set('/metrics/metric-dgs10', val);
-        }
+        store.set('/metrics/metric-dgs10', `${macroYield.us10YearTreasuryYield}%`);
       }
       if (macroYield.us20YearTreasuryYield) {
-        const val = `${macroYield.us20YearTreasuryYield}%`;
-        if (store.get('/metrics/metric-dgs20') !== val) {
-          store.set('/metrics/metric-dgs20', val);
-        }
+        store.set('/metrics/metric-dgs20', `${macroYield.us20YearTreasuryYield}%`);
       }
       if (macroYield.yieldSpread10yMinus2y !== undefined) {
         const sign = macroYield.yieldSpread10yMinus2y >= 0 ? '+' : '';
-        const val = `${sign}${macroYield.yieldSpread10yMinus2y}%`;
-        if (store.get('/metrics/metric-t10y2y') !== val) {
-          store.set('/metrics/metric-t10y2y', val);
-        }
+        store.set('/metrics/metric-t10y2y', `${sign}${macroYield.yieldSpread10yMinus2y}%`);
       }
       if (macroYield.usCorporateBondEffectiveYield) {
-        const val = `${macroYield.usCorporateBondEffectiveYield}%`;
-        if (store.get('/metrics/metric-corp-yield') !== val) {
-          store.set('/metrics/metric-corp-yield', val);
-        }
+        store.set('/metrics/metric-corp-yield', `${macroYield.usCorporateBondEffectiveYield}%`);
       }
     }
 
-    if (macroRegime) {
+    if (macroRegime && syncedRef.current.macroRegime !== macroRegime) {
+      syncedRef.current.macroRegime = macroRegime;
       const regimeText = macroRegime.assessmentSummary
         ? `${macroRegime.macroState} (${macroRegime.assessmentSummary.slice(0, 16)}...)`
         : macroRegime.macroState;
-      if (store.get('/metrics/metric-macro-regime') !== regimeText) {
-        store.set('/metrics/metric-macro-regime', regimeText);
-      }
+      store.set('/metrics/metric-macro-regime', regimeText);
     }
 
-    if (quotes && Array.isArray(quotes)) {
-      const benchmarkTickers = ['^TWII', '^GSPC', '^NDX', '^SOX', '^N225'];
-      const quoteMap: Record<string, string> = {
-        '^TWII': 'metric-twii',
-        '^GSPC': 'metric-gspc',
-        '^NDX': 'metric-ndx',
-        '^SOX': 'metric-sox',
-        '^N225': 'metric-n225',
+    if (benchmarkQuotes && syncedRef.current.benchmarkQuotes !== benchmarkQuotes) {
+      syncedRef.current.benchmarkQuotes = benchmarkQuotes;
+      store.set('/data/quoteTimeSeries', benchmarkQuotes);
+      store.set('/data/quoteTimeSeries/^TWII', benchmarkQuotes.twii);
+      store.set('/data/quoteTimeSeries/^GSPC', benchmarkQuotes.gspc);
+      store.set('/data/quoteTimeSeries/^NDX', benchmarkQuotes.ndx);
+      store.set('/data/quoteTimeSeries/^SOX', benchmarkQuotes.sox);
+      store.set('/data/quoteTimeSeries/^N225', benchmarkQuotes.n225);
+      store.set('/data/quoteTimeSeries/^VIX', benchmarkQuotes.vix);
+      store.set('/data/quoteTimeSeries/^VXN', benchmarkQuotes.vxn);
+      store.set('/data/quoteTimeSeries/FEAR_GREED', benchmarkQuotes.fearGreed);
+      store.set('/data/quoteTimeSeries/^MOVE', benchmarkQuotes.move);
+
+      const formatBenchmark = (series?: any[]) => {
+        if (!series || series.length === 0) return { val: '--', date: '' };
+        const sorted = [...series].sort((a, b) =>
+          String(a.tradeDate || '').localeCompare(String(b.tradeDate || ''))
+        );
+        const latestQ = sorted[sorted.length - 1];
+        const prevQ = sorted.length > 1 ? sorted[sorted.length - 2] : null;
+        let changePct = 0;
+        if (prevQ && prevQ.closePrice) {
+          changePct = Number((((latestQ.closePrice - prevQ.closePrice) / prevQ.closePrice) * 100).toFixed(2));
+        } else if (latestQ.openPrice) {
+          changePct = Number((((latestQ.closePrice - latestQ.openPrice) / latestQ.openPrice) * 100).toFixed(2));
+        }
+        const sign = changePct >= 0 ? '+' : '';
+        const val = `${latestQ.closePrice.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} (${sign}${changePct.toFixed(2)}%)`;
+        const date = latestQ.tradeDate ? String(latestQ.tradeDate).slice(0, 10) : '';
+        return { val, date };
       };
 
-      // Select the latest quote by tradeDate for each benchmark ticker
-      const latestMap = new Map<string, any>();
-      quotes.forEach((q) => {
-        if (benchmarkTickers.includes(q.ticker)) {
-          const current = latestMap.get(q.ticker);
-          const qDate = q.tradeDate ? String(q.tradeDate).slice(0, 10) : '';
-          const currentDate = current?.tradeDate ? String(current.tradeDate).slice(0, 10) : '';
-          if (!current || qDate > currentDate) {
-            latestMap.set(q.ticker, q);
-          }
-        }
-      });
+      const twii = formatBenchmark(benchmarkQuotes.twii);
+      store.set('/metrics/metric-twii', twii.val);
+      if (twii.date) store.set('/metrics/metric-twii-date', twii.date);
 
-      benchmarkTickers.forEach((ticker) => {
-        const q = latestMap.get(ticker);
-        const metricKey = quoteMap[ticker];
-        if (q && metricKey) {
-          const changePct =
-            typeof q.changePct === 'number'
-              ? q.changePct
-              : q.openPrice && q.closePrice
-              ? Number((((q.closePrice - q.openPrice) / q.openPrice) * 100).toFixed(2))
-              : 0;
-          const sign = changePct >= 0 ? '+' : '';
-          const formattedVal = `${q.closePrice.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })} (${sign}${changePct.toFixed(2)}%)`;
+      const gspc = formatBenchmark(benchmarkQuotes.gspc);
+      store.set('/metrics/metric-gspc', gspc.val);
+      if (gspc.date) store.set('/metrics/metric-gspc-date', gspc.date);
 
-          if (store.get(`/metrics/${metricKey}`) !== formattedVal) {
-            store.set(`/metrics/${metricKey}`, formattedVal);
-          }
-          const rawDate = q.tradeDate ? String(q.tradeDate).slice(0, 10) : '';
-          if (rawDate && store.get(`/metrics/${metricKey}-date`) !== rawDate) {
-            store.set(`/metrics/${metricKey}-date`, rawDate);
-          }
+      const ndx = formatBenchmark(benchmarkQuotes.ndx);
+      store.set('/metrics/metric-ndx', ndx.val);
+      if (ndx.date) store.set('/metrics/metric-ndx-date', ndx.date);
+
+      const sox = formatBenchmark(benchmarkQuotes.sox);
+      store.set('/metrics/metric-sox', sox.val);
+      if (sox.date) store.set('/metrics/metric-sox-date', sox.date);
+
+      const n225 = formatBenchmark(benchmarkQuotes.n225);
+      store.set('/metrics/metric-n225', n225.val);
+      if (n225.date) store.set('/metrics/metric-n225-date', n225.date);
+
+      const formatPanic = (series?: any[], ticker?: string) => {
+        if (!series || series.length === 0) return { val: '--', date: '' };
+        const sorted = [...series].sort((a, b) =>
+          String(a.tradeDate || '').localeCompare(String(b.tradeDate || ''))
+        );
+        const latestQ = sorted[sorted.length - 1];
+        let val = `${latestQ.closePrice.toFixed(2)}`;
+        if (ticker === '^VIX') {
+          val += latestQ.closePrice >= 25 ? ' (⚠️ 警戒)' : ' (常態低波)';
+        } else if (ticker === '^VXN') {
+          val += latestQ.closePrice >= 35 ? ' (⚠️ 警戒)' : ' (常態平穩)';
+        } else if (ticker === 'FEAR_GREED') {
+          val += latestQ.closePrice < 25 ? ' (極度恐懼)' : latestQ.closePrice < 45 ? ' (恐懼區間)' : ' (常態平衡)';
+        } else if (ticker === '^MOVE') {
+          val += latestQ.closePrice >= 120 ? ' (⚠️ 警戒)' : ' (債市平穩)';
         }
-      });
+        const date = latestQ.tradeDate ? String(latestQ.tradeDate).slice(0, 10) : '';
+        return { val, date };
+      };
+
+      const vix = formatPanic(benchmarkQuotes.vix, '^VIX');
+      store.set('/metrics/metric-vix', vix.val);
+      if (vix.date) store.set('/metrics/metric-vix-date', vix.date);
+
+      const vxn = formatPanic(benchmarkQuotes.vxn, '^VXN');
+      store.set('/metrics/metric-vxn', vxn.val);
+      if (vxn.date) store.set('/metrics/metric-vxn-date', vxn.date);
+
+      const fg = formatPanic(benchmarkQuotes.fearGreed, 'FEAR_GREED');
+      store.set('/metrics/metric-fear-greed', fg.val);
+      if (fg.date) store.set('/metrics/metric-fear-greed-date', fg.date);
+
+      const move = formatPanic(benchmarkQuotes.move, '^MOVE');
+      store.set('/metrics/metric-move', move.val);
+      if (move.date) store.set('/metrics/metric-move-date', move.date);
     }
   }, [
     store,
@@ -238,8 +273,9 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     corporateActions,
     pairwiseMatrix,
     macroYield,
+    macroYieldHistory,
     macroRegime,
-    quotes,
+    benchmarkQuotes,
   ]);
 
   // Synchronize initial filter defaults
@@ -247,6 +283,21 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     if (!store) return;
     if (!store.get('/filters/perspective-mode-selector')) {
       store.set('/filters/perspective-mode-selector', perspectiveMode);
+    }
+    if (!store.get('/filters/drawdown-benchmark-selector')) {
+      store.set('/filters/drawdown-benchmark-selector', '^TWII');
+    }
+    if (!store.get('/filters/drawdown-window-selector')) {
+      store.set('/filters/drawdown-window-selector', '6M');
+    }
+    if (store.get('/filters/toggle-ma-switch') === undefined) {
+      store.set('/filters/toggle-ma-switch', true);
+    }
+    if (store.get('/filters/toggle-bb-switch') === undefined) {
+      store.set('/filters/toggle-bb-switch', true);
+    }
+    if (store.get('/filters/toggle-fib-switch') === undefined) {
+      store.set('/filters/toggle-fib-switch', true);
     }
   }, [store, perspectiveMode]);
 
@@ -343,40 +394,42 @@ const defaultStore = createStateStore({
   form: {},
   activeTab: 'macro-sentiment-section',
   activeSubTab: 'macro-subtab-benchmark',
-  data: {
-    getClusteredCandidates: mockClusteredCandidates,
-    getOrthogonalCandidates: mockOrthogonalCandidates,
-    getTop20DcaRanks: mockDcaRanks,
-    listDividendAnnouncements: mockDividendAnnouncements,
-    listCorporateActions: mockCorporateActions,
-    listPairwiseMatrix: mockPairwiseMatrix,
-    listDataFeedWatermarks: mockWatermarks,
-  },
+  data: {},
   filters: {
     'perspective-mode-selector': '⚡ 夏農幾何收割',
     'asset-class-selector': '核心大盤 (Core)',
     'freq-filter-selector': '全部',
+    'drawdown-benchmark-selector': '^TWII',
+    'drawdown-window-selector': '6M',
+    'toggle-ma-switch': true,
+    'toggle-bb-switch': true,
+    'toggle-fib-switch': true,
+    'macro-yield-window-selector': '6M',
   },
   metrics: {
-    'metric-twii': '22,850.50 (+0.85%)',
-    'metric-twii-date': '2026-10-02',
-    'metric-gspc': '5,751.00 (+0.42%)',
-    'metric-gspc-date': '2026-10-02',
-    'metric-ndx': '20,015.30 (+0.65%)',
-    'metric-ndx-date': '2026-10-02',
-    'metric-sox': '5,210.80 (+1.20%)',
-    'metric-sox-date': '2026-10-02',
-    'metric-n225': '38,650.00 (-0.30%)',
-    'metric-n225-date': '2026-10-02',
-    'metric-vix': '15.2 (常態低波)',
-    'metric-vxn': '18.4',
-    'metric-fear-greed': '62 (微幅貪婪)',
-    'metric-move': '98.5 (債市平穩)',
-    'metric-dgs10': '5.26%',
-    'metric-dgs20': '5.64%',
-    'metric-t10y2y': '+0.41%',
-    'metric-corp-yield': '5.97%',
-    'metric-macro-regime': '擴張期 (EXPANSION)',
+    'metric-twii': '--',
+    'metric-twii-date': '',
+    'metric-gspc': '--',
+    'metric-gspc-date': '',
+    'metric-ndx': '--',
+    'metric-ndx-date': '',
+    'metric-sox': '--',
+    'metric-sox-date': '',
+    'metric-n225': '--',
+    'metric-n225-date': '',
+    'metric-vix': '--',
+    'metric-vix-date': '',
+    'metric-vxn': '--',
+    'metric-vxn-date': '',
+    'metric-fear-greed': '--',
+    'metric-fear-greed-date': '',
+    'metric-move': '--',
+    'metric-move-date': '',
+    'metric-dgs10': '--',
+    'metric-dgs20': '--',
+    'metric-t10y2y': '--',
+    'metric-corp-yield': '--',
+    'metric-macro-regime': '--',
   },
 });
 
@@ -394,6 +447,11 @@ const defaultHandlers = {
   selectTab: (params: any) => {
     if (params?.tab) {
       defaultStore.set('/activeTab', params.tab);
+    }
+  },
+  selectSubTab: (params: any) => {
+    if (params?.subTab) {
+      defaultStore.set('/activeSubTab', params.subTab);
     }
   },
   resetSeed: () => {

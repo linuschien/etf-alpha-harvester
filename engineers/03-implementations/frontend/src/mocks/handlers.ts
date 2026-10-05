@@ -73,6 +73,31 @@ export const handlers = [
       });
     }
 
+    if (query.includes('GetBenchmarkQuotes') || operationName === 'GetBenchmarkQuotes') {
+      const byTicker = (t: string) => mockMarketDailyQuotes.filter((q) => q.ticker === t);
+      return HttpResponse.json({
+        data: {
+          twii: byTicker('^TWII'),
+          gspc: byTicker('^GSPC'),
+          ndx: byTicker('^NDX'),
+          sox: byTicker('^SOX'),
+          n225: byTicker('^N225'),
+          vix: byTicker('^VIX'),
+          vxn: byTicker('^VXN'),
+          fearGreed: byTicker('FEAR_GREED'),
+          move: byTicker('^MOVE'),
+        },
+      });
+    }
+
+    if (query.includes('listMacroYieldSnapshots') || operationName === 'ListMacroYieldSnapshots') {
+      return HttpResponse.json({
+        data: {
+          listMacroYieldSnapshots: [mockMacroYieldSnapshot],
+        },
+      });
+    }
+
     if (query.includes('getGlobalAssetByTicker')) {
       return HttpResponse.json({
         data: {
@@ -97,7 +122,7 @@ export const handlers = [
             starRating: '★★★★ 超跌區',
             historical1yWinRate: 85.2,
             actionRecommendation: '分批加碼建立底倉',
-            calculatedAt: '2026-10-02T16:00:00Z',
+            calculatedAt: '2026-09-30T16:00:00Z',
           },
         },
       });

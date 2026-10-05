@@ -27,9 +27,10 @@ export const listMarketDailyQuotesKeys = {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 export function useListMarketDailyQuotes(filter?: Record<string, unknown>) {
+  const queryFilter = filter !== undefined ? filter : { startDate: '2026-09-29', endDate: '2026-09-30' };
   return useQuery({
-    queryKey: filter
-      ? listMarketDailyQuotesKeys.filtered(filter)
+    queryKey: queryFilter
+      ? listMarketDailyQuotesKeys.filtered(queryFilter)
       : listMarketDailyQuotesKeys.all,
     queryFn: () =>
       api
@@ -45,7 +46,7 @@ export function useListMarketDailyQuotes(filter?: Record<string, unknown>) {
               volumeShares
             }
           }`,
-          { filter }
+          { filter: queryFilter }
         )
         .then((data) =>
           (data.listMarketDailyQuotes || []).map((q) => ({

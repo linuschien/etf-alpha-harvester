@@ -29,6 +29,17 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
       store = null;
     }
 
+    const [, setTick] = React.useState(0);
+    React.useEffect(() => {
+      if (!store?.subscribe) return;
+      const unsub = store.subscribe(() => {
+        setTick((t) => t + 1);
+      });
+      return () => {
+        if (typeof unsub === 'function') unsub();
+      };
+    }, [store]);
+
     // Intercept button press to auto-close modals and trigger toasts
     const customEmit = (eventName: string, ...args: any[]) => {
       if (eventName === 'press' && store) {

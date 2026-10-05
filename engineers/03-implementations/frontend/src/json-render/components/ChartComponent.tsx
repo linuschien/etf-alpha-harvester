@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStateStore } from '@json-render/react';
 
 export interface ChartProps {
@@ -30,6 +30,17 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     store = null;
   }
 
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!store?.subscribe) return;
+    const unsub = store.subscribe(() => {
+      setTick((t) => t + 1);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [store]);
+
   // Hover state for interactive SVG charts
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -47,18 +58,40 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       ? 'CNN Fear & Greed 雷達'
       : '^MOVE 美國公債波動指數';
 
-    const currentVal = isVix ? 15.2 : isVxn ? 18.4 : isFg ? 62 : 98.5;
     const alert1 = isVix ? 25 : isVxn ? 35 : isFg ? 20 : 120;
     const alert2 = isVix ? 30 : isVxn ? 40 : isFg ? 80 : 140;
 
-    // 20-point historical time series
-    const points = isVix
-      ? [19.2, 18.5, 21.0, 24.5, 22.8, 20.1, 18.2, 17.5, 16.8, 17.2, 16.5, 15.8, 16.1, 15.4, 15.2]
-      : isVxn
-      ? [22.5, 21.8, 24.0, 27.2, 25.1, 23.4, 21.0, 20.2, 19.5, 19.8, 19.1, 18.7, 18.9, 18.5, 18.4]
-      : isFg
-      ? [35, 38, 42, 45, 48, 50, 55, 58, 60, 59, 61, 64, 63, 62, 62]
-      : [115, 118, 122, 128, 125, 119, 112, 108, 105, 103, 101, 99.5, 99.0, 98.8, 98.5];
+    const ticker = isVix ? '^VIX' : isVxn ? '^VXN' : isFg ? 'FEAR_GREED' : '^MOVE';
+    const tickerKey = isVix ? 'vix' : isVxn ? 'vxn' : isFg ? 'fearGreed' : 'move';
+    const quoteSeries: any[] =
+      store?.get?.(`/data/quoteTimeSeries/${ticker}`) ||
+      store?.get?.('/data/quoteTimeSeries')?.[tickerKey] ||
+      [];
+
+    if (!quoteSeries || quoteSeries.length === 0) {
+      return (
+        <div className="w-full rounded-xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between animate-pulse">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground">{title}</div>
+              <div className="text-xl font-bold font-mono tracking-tight text-foreground flex items-center gap-2">
+                --
+              </div>
+            </div>
+            <div className="text-right text-xs font-mono text-muted-foreground">
+              <div>警戒: {alert1}</div>
+              <div>恐慌: {alert2}</div>
+            </div>
+          </div>
+          <div className="w-full h-28 bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
+            載入走勢中...
+          </div>
+        </div>
+      );
+    }
+
+    const points = quoteSeries.map((q: any) => Number(q.closePrice));
+    const currentVal = points[points.length - 1];
 
     const min = Math.min(...points, alert1) * 0.85;
     const max = Math.max(...points, alert2) * 1.15;
@@ -170,12 +203,29 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const height = 280;
     const padding = 45;
 
-    // 12 months yield trends
-    const months = ['25/10', '25/11', '25/12', '26/01', '26/02', '26/03', '26/04', '26/05', '26/06', '26/07', '26/08', '26/09'];
-    const us10Y = [4.24, 4.28, 4.35, 4.41, 4.52, 4.68, 4.82, 4.95, 5.08, 5.14, 5.20, 5.26];
-    const us20Y = [4.58, 4.61, 4.70, 4.78, 4.89, 5.02, 5.18, 5.32, 5.45, 5.52, 5.58, 5.64];
-    const corpYield = [5.11, 5.14, 5.22, 5.30, 5.42, 5.55, 5.68, 5.75, 5.84, 5.88, 5.92, 5.97];
-    const spread10y2y = [-0.12, -0.08, -0.02, 0.05, 0.11, 0.18, 0.22, 0.27, 0.31, 0.35, 0.38, 0.41];
+    const yieldHistory: any[] = store?.get?.('/data/listMacroYieldSnapshots') || [];
+    const latestSnapshot: any = store?.get?.('/data/getLatestMacroYieldSnapshot') || null;
+
+    if (!yieldHistory || yieldHistory.length === 0) {
+      return (
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-pulse">
+          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
+          <div className="h-64 w-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
+            宏觀殖利率時間序列載入中...
+          </div>
+        </div>
+      );
+    }
+
+    const months = yieldHistory.map((s: any) => String(s.recordDate || '').slice(2, 7));
+    const us10Y = yieldHistory.map((s: any) => Number(s.us10YearTreasuryYield));
+    const us20Y = yieldHistory.map((s: any) => Number(s.us20YearTreasuryYield));
+    const corpYield = yieldHistory.map((s: any) => Number(s.usCorporateBondEffectiveYield));
+    const spread10y2y = yieldHistory.map((s: any) => Number(s.yieldSpread10yMinus2y));
+
+    const latest = latestSnapshot || yieldHistory[yieldHistory.length - 1];
+    const latestDate = latest?.recordDate ? String(latest.recordDate).slice(0, 10) : '--';
+    const subheaderText = `最新記錄: ${latestDate} (10Y: ${latest?.us10YearTreasuryYield ?? '--'}% | 20Y: ${latest?.us20YearTreasuryYield ?? '--'}% | 投資級公司債: ${latest?.usCorporateBondEffectiveYield ?? '--'}% | 利差: ${latest?.yieldSpread10yMinus2y !== undefined ? (latest.yieldSpread10yMinus2y >= 0 ? '+' : '') + latest.yieldSpread10yMinus2y + '%' : '--'})`;
 
     const minY = -0.5;
     const maxY = 6.5;
@@ -183,7 +233,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const scaleY = (v: number) =>
       height - padding - ((v - minY) / (maxY - minY)) * (height - padding * 2);
     const scaleX = (idx: number) =>
-      padding + (idx / (months.length - 1)) * (width - padding * 2);
+      padding + (idx / Math.max(1, months.length - 1)) * (width - padding * 2);
 
     const makePath = (arr: number[]) =>
       arr.reduce((acc, v, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`, '');
@@ -194,7 +244,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           <div>
             <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
             <div className="text-xs text-muted-foreground">
-              最新記錄: 2026-09-30 (10Y: 5.26% | 20Y: 5.64% | 投資級公司債: 5.97% | 利差: +0.41%)
+              {subheaderText}
             </div>
           </div>
           <div className="flex items-center gap-4 text-xs font-medium">
@@ -302,174 +352,120 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const showFib: boolean =
       store?.get?.('/filters/toggle-fib-switch') !== false;
 
-    interface BenchmarkProfile {
-      name: string;
-      ticker: string;
-      peak: number;
-      latest: number;
-      currentDD: number;
-      maxDD: number;
-      baseCurve: number[];
+    const benchmarkKeyMap: Record<string, string> = {
+      '^TWII': 'twii',
+      '^GSPC': 'gspc',
+      '^NDX': 'ndx',
+      '^SOX': 'sox',
+      '^N225': 'n225',
+    };
+    const benchmarkNameMap: Record<string, string> = {
+      '^TWII': '台股加權指數',
+      '^GSPC': '標普 500 指數',
+      '^NDX': '那斯達克 100 指數',
+      '^SOX': '費城半導體指數',
+      '^N225': '日經 225 指數',
+    };
+
+    const bKey = benchmarkKeyMap[selectedBenchmark] || 'twii';
+    const bName = benchmarkNameMap[selectedBenchmark] || selectedBenchmark;
+
+    const allQuotes: any[] =
+      store?.get?.(`/data/quoteTimeSeries/${selectedBenchmark}`) ||
+      store?.get?.('/data/quoteTimeSeries')?.[bKey] ||
+      [];
+
+    if (!allQuotes || allQuotes.length === 0) {
+      return (
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-pulse">
+          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
+          <div className="h-80 w-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
+            {bName} 回撤雷達時間序列載入中...
+          </div>
+        </div>
+      );
     }
 
-    const BENCHMARK_DATA: Record<string, BenchmarkProfile> = {
-      '^TWII': {
-        name: '台股加權指數',
-        ticker: '^TWII',
-        peak: 24416.7,
-        latest: 22850.5,
-        currentDD: -6.4,
-        maxDD: -19.4,
-        baseCurve: [
-          0.0, -0.6, -1.2, -0.8, -2.1, -3.8, -5.2, -7.8, -10.5, -14.2,
-          -19.4, -17.5, -15.1, -12.8, -10.5, -8.7, -9.8, -11.2, -8.6, -7.2,
-          -6.8, -6.1, -7.4, -6.9, -6.4
-        ],
-      },
-      '^GSPC': {
-        name: '標普 500 指數',
-        ticker: '^GSPC',
-        peak: 5878.5,
-        latest: 5751.0,
-        currentDD: -2.2,
-        maxDD: -8.5,
-        baseCurve: [
-          0.0, -0.4, -0.8, -1.5, -2.4, -3.8, -5.2, -7.1, -8.5, -7.2,
-          -5.8, -4.5, -3.6, -2.9, -3.4, -4.1, -3.5, -2.8, -2.4, -2.6,
-          -2.1, -1.8, -2.5, -2.3, -2.2
-        ],
-      },
-      '^NDX': {
-        name: '那斯達克 100 指數',
-        ticker: '^NDX',
-        peak: 20690.1,
-        latest: 20015.3,
-        currentDD: -3.3,
-        maxDD: -13.1,
-        baseCurve: [
-          0.0, -0.7, -1.8, -3.2, -5.4, -7.8, -10.2, -13.1, -11.8, -9.5,
-          -7.2, -5.8, -4.5, -5.6, -6.4, -5.2, -4.3, -3.8, -4.1, -3.6,
-          -3.1, -2.8, -3.5, -3.4, -3.3
-        ],
-      },
-      '^SOX': {
-        name: '費城半導體指數',
-        ticker: '^SOX',
-        peak: 5904.2,
-        latest: 5210.8,
-        currentDD: -11.7,
-        maxDD: -25.2,
-        baseCurve: [
-          0.0, -1.5, -3.8, -6.5, -10.8, -15.6, -20.4, -25.2, -22.5, -19.2,
-          -15.8, -13.6, -12.2, -14.8, -16.5, -14.2, -13.0, -12.1, -12.8, -12.4,
-          -11.8, -11.2, -12.1, -11.9, -11.7
-        ],
-      },
-      '^N225': {
-        name: '日經 225 指數',
-        ticker: '^N225',
-        peak: 42426.8,
-        latest: 38650.0,
-        currentDD: -8.9,
-        maxDD: -25.5,
-        baseCurve: [
-          0.0, -1.8, -4.2, -7.8, -12.5, -18.4, -22.8, -25.5, -21.6, -17.2,
-          -14.1, -11.8, -10.2, -12.5, -13.8, -12.1, -10.5, -9.6, -10.1, -9.5,
-          -8.8, -8.2, -9.2, -9.0, -8.9
-        ],
-      },
-    };
+    // Sort quotes ascending by tradeDate
+    const sortedQuotes = [...allQuotes].sort((a, b) =>
+      String(a.tradeDate || '').localeCompare(String(b.tradeDate || ''))
+    );
+
+    // Full series peak (52-week peak from lookback cache)
+    const peak = Math.max(
+      ...sortedQuotes.map((q) => Number(q.highPrice || q.closePrice || 0))
+    );
+
+    // Slice window
+    let windowQuotes = sortedQuotes;
+    if (selectedWindow === '1M') windowQuotes = sortedQuotes.slice(-22);
+    else if (selectedWindow === '3M') windowQuotes = sortedQuotes.slice(-66);
+    else if (selectedWindow === '6M') windowQuotes = sortedQuotes.slice(-132);
+    else if (selectedWindow === '1Y') windowQuotes = sortedQuotes.slice(-264);
+    if (windowQuotes.length === 0) windowQuotes = sortedQuotes;
+
+    const pointsCount = Math.max(2, windowQuotes.length);
+    const latestQuote = windowQuotes[windowQuotes.length - 1];
+    const latestPrice = Number(latestQuote.closePrice);
+    const currentDD = Number((((latestPrice - peak) / peak) * 100).toFixed(2));
+
+    const ddPoints = windowQuotes.map((q) =>
+      Number((((Number(q.closePrice) - peak) / peak) * 100).toFixed(2))
+    );
+    const maxDD = Math.min(...ddPoints);
+
+    // Indicators from backend MonthlyQuoteCacheService (or rolling approximation)
+    const ma20Points = windowQuotes.map((q, idx) => {
+      if (q.ma20) return Number((((Number(q.ma20) - peak) / peak) * 100).toFixed(2));
+      const slice = ddPoints.slice(Math.max(0, idx - 4), idx + 1);
+      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
+    });
+
+    const ma60Points = windowQuotes.map((q, idx) => {
+      if (q.ma60) return Number((((Number(q.ma60) - peak) / peak) * 100).toFixed(2));
+      const slice = ddPoints.slice(Math.max(0, idx - 8), idx + 1);
+      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
+    });
+
+    const bbUpper = windowQuotes.map((q, idx) => {
+      if (q.bbUpper) return Number(Math.min(0, (((Number(q.bbUpper) - peak) / peak) * 100)).toFixed(2));
+      const ma = ma20Points[idx];
+      const slice = ddPoints.slice(Math.max(0, idx - 4), idx + 1);
+      const variance = slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
+      return Number(Math.min(0, ma + Math.sqrt(variance) * 1.5).toFixed(2));
+    });
+
+    const bbLower = windowQuotes.map((q, idx) => {
+      if (q.bbLower) return Number((((Number(q.bbLower) - peak) / peak) * 100).toFixed(2));
+      const ma = ma20Points[idx];
+      const slice = ddPoints.slice(Math.max(0, idx - 4), idx + 1);
+      const variance = slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
+      return Number((ma - Math.sqrt(variance) * 1.5).toFixed(2));
+    });
+
+    const tickIndices = [
+      0,
+      Math.floor(pointsCount * 0.25),
+      Math.floor(pointsCount * 0.5),
+      Math.floor(pointsCount * 0.75),
+      pointsCount - 1,
+    ];
+    const dateLabels = tickIndices.map((idx) => {
+      const q = windowQuotes[Math.min(idx, pointsCount - 1)];
+      return q?.tradeDate ? String(q.tradeDate).slice(5, 10) : '';
+    });
 
     const profile = {
-      ...(BENCHMARK_DATA[selectedBenchmark] ?? BENCHMARK_DATA['^TWII']),
+      name: bName,
+      ticker: selectedBenchmark,
+      peak,
+      latest: latestPrice,
+      currentDD,
+      maxDD,
     };
 
-    // Dynamically bind latest price from store if available
-    const metricKeyMap: Record<string, string> = {
-      '^TWII': 'metric-twii',
-      '^GSPC': 'metric-gspc',
-      '^NDX': 'metric-ndx',
-      '^SOX': 'metric-sox',
-      '^N225': 'metric-n225',
-    };
-    const storeMetricVal = store?.get?.(`/metrics/${metricKeyMap[selectedBenchmark]}`);
-    if (storeMetricVal && typeof storeMetricVal === 'string') {
-      const match = storeMetricVal.match(/^([\d,]+(?:\.\d+)?)/);
-      if (match) {
-        const livePrice = parseFloat(match[1].replace(/,/g, ''));
-        if (!isNaN(livePrice) && livePrice > 0) {
-          profile.latest = livePrice;
-          profile.currentDD = Number(
-            (((livePrice - profile.peak) / profile.peak) * 100).toFixed(2)
-          );
-        }
-      }
-    }
-
-    // Formulas for calculating and formatting index points
     const calcPoints = (pct: number) => profile.peak * (1 + pct / 100);
-    const formatPoints = (pts: number) =>
-      Math.round(pts).toLocaleString() + ' 點';
-
-    // Slice or interpolate points based on selectedWindow
-    const rawCurve = profile.baseCurve;
-    let pointsCount = 25;
-    let dateLabels = ['04/02', '05/02', '06/03', '07/02', '08/01', '09/02', '10/02'];
-    if (selectedWindow === '1M') {
-      pointsCount = 12;
-      dateLabels = ['09/02', '09/10', '09/18', '09/25', '10/02'];
-    } else if (selectedWindow === '3M') {
-      pointsCount = 18;
-      dateLabels = ['07/02', '08/01', '09/02', '10/02'];
-    } else if (selectedWindow === '1Y') {
-      pointsCount = 35;
-      dateLabels = ['2025/10', '2026/01', '2026/04', '2026/07', '2026/10'];
-    }
-
-    // Generate curve scaled to pointsCount
-    const ddPoints: number[] = [];
-    for (let i = 0; i < pointsCount; i++) {
-      const ratio = i / (pointsCount - 1);
-      const rawIdx = ratio * (rawCurve.length - 1);
-      const lower = Math.floor(rawIdx);
-      const upper = Math.min(rawCurve.length - 1, Math.ceil(rawIdx));
-      const frac = rawIdx - lower;
-      const val = rawCurve[lower] * (1 - frac) + rawCurve[upper] * frac;
-      ddPoints.push(Number(val.toFixed(2)));
-    }
-
-    // Rolling 20MA and 60MA approximation over drawdown
-    const ma20Points = ddPoints.map((val, idx) => {
-      const windowStart = Math.max(0, idx - 4);
-      const slice = ddPoints.slice(windowStart, idx + 1);
-      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
-    });
-
-    const ma60Points = ddPoints.map((val, idx) => {
-      const windowStart = Math.max(0, idx - 8);
-      const slice = ddPoints.slice(windowStart, idx + 1);
-      return Number((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
-    });
-
-    // Bollinger Band (20MA ± 2σ)
-    const bbUpper = ma20Points.map((ma, idx) => {
-      const windowStart = Math.max(0, idx - 4);
-      const slice = ddPoints.slice(windowStart, idx + 1);
-      const variance =
-        slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
-      const sigma = Math.sqrt(variance);
-      return Number(Math.min(0, ma + sigma * 1.5).toFixed(2));
-    });
-
-    const bbLower = ma20Points.map((ma, idx) => {
-      const windowStart = Math.max(0, idx - 4);
-      const slice = ddPoints.slice(windowStart, idx + 1);
-      const variance =
-        slice.reduce((acc, v) => acc + Math.pow(v - ma, 2), 0) / slice.length;
-      const sigma = Math.sqrt(variance);
-      return Number((ma - sigma * 1.5).toFixed(2));
-    });
-
+    const formatPoints = (pts: number) => Math.round(pts).toLocaleString() + ' 點';
     // Layout coordinates - ample padding for index point labels on both sides
     const width = 840;
     const height = 300;
@@ -829,7 +825,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                 (width - paddingLeft - paddingRight);
             return (
               <text
-                key={lbl}
+                key={`${lbl}-${idx}`}
                 x={x}
                 y={height - paddingBottom + 16}
                 textAnchor="middle"
@@ -846,15 +842,33 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
   // 4. Pairwise Matrix Heatmap Chart
   if (id.includes('pairwise-matrix-chart')) {
-    const tickers = ['0050', '006208', '00692', '00850', '00713', '0056'];
-    const r2Matrix = [
-      [1.000, 0.998, 0.937, 0.947, 0.425, 0.347],
-      [0.998, 1.000, 0.935, 0.945, 0.420, 0.342],
-      [0.937, 0.935, 1.000, 0.920, 0.410, 0.335],
-      [0.947, 0.945, 0.920, 1.000, 0.415, 0.338],
-      [0.425, 0.420, 0.410, 0.415, 1.000, 0.580],
-      [0.347, 0.342, 0.335, 0.338, 0.580, 1.000],
-    ];
+    const rawMatrix: any[] = store?.get?.('/data/listPairwiseMatrix') || [];
+
+    if (!rawMatrix || rawMatrix.length === 0) {
+      return (
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-pulse">
+          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
+          <div className="h-64 w-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
+            正交相關性矩陣載入中...
+          </div>
+        </div>
+      );
+    }
+
+    const tickerSet = new Set<string>();
+    rawMatrix.forEach((m: any) => {
+      if (m.baseTicker) tickerSet.add(m.baseTicker);
+      if (m.targetTicker) tickerSet.add(m.targetTicker);
+    });
+    const tickers = Array.from(tickerSet).slice(0, 6);
+    const r2Lookup = new Map<string, number>();
+    rawMatrix.forEach((m: any) => {
+      r2Lookup.set(`${m.baseTicker}-${m.targetTicker}`, Number(m.rSquared));
+      r2Lookup.set(`${m.targetTicker}-${m.baseTicker}`, Number(m.rSquared));
+    });
+    const r2Matrix = tickers.map((t1) =>
+      tickers.map((t2) => (t1 === t2 ? 1.0 : (r2Lookup.get(`${t1}-${t2}`) ?? 0.5)))
+    );
 
     return (
       <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
@@ -914,14 +928,31 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
   // 5. Spider / Radar Chart
   if (id.includes('spider-radar-chart')) {
+    const candidates: any[] = store?.get?.('/data/getOrthogonalCandidates') || [];
+
+    if (!candidates || candidates.length === 0) {
+      return (
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col items-center space-y-3 animate-pulse">
+          <div className="w-full flex items-center justify-between border-b border-border pb-3">
+            <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
+            <span className="text-xs font-mono text-muted-foreground">7 因子綜合評分</span>
+          </div>
+          <div className="w-64 h-64 bg-muted/20 rounded-full flex items-center justify-center text-xs text-muted-foreground">
+            因子評分載入中...
+          </div>
+        </div>
+      );
+    }
+
+    const first = candidates[0];
     const factors = [
-      { name: 'R² 獨立度', val: 0.95 },
-      { name: 'DCA 人氣', val: 0.88 },
-      { name: 'AUM 規模', val: 0.92 },
-      { name: 'MOM 12M', val: 0.78 },
-      { name: 'KER 效率', val: 0.82 },
-      { name: 'Sharpe 報酬', val: 0.85 },
-      { name: 'YTM 殖利率', val: 0.65 },
+      { name: 'R² 獨立度', val: Math.min(1, Math.max(0.1, 1 - (first.rSquared ?? 0.5))) },
+      { name: 'DCA 人氣', val: Math.min(1, Math.max(0.1, (20 - (first.dcaRank ?? 10)) / 20)) },
+      { name: 'AUM 規模', val: Math.min(1, Math.max(0.1, (first.fundSizeTwd ?? 50) / 100)) },
+      { name: 'MOM 12M', val: Math.min(1, Math.max(0.1, ((first.momentum12m ?? 0) + 0.3) / 0.6)) },
+      { name: 'KER 效率', val: Math.min(1, Math.max(0.1, first.kerEfficiency ?? 0.7)) },
+      { name: 'Sharpe 報酬', val: Math.min(1, Math.max(0.1, (first.sharpeRatio ?? 1.0) / 2.0)) },
+      { name: 'YTM 殖利率', val: Math.min(1, Math.max(0.1, (first.dividendYield ?? 5) / 10)) },
     ];
 
     const size = 260;
@@ -1014,30 +1045,35 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const height = 280;
     const padding = 45;
 
-    // 20 daily candles
-    const candles = [
-      { o: 190.5, h: 193.0, l: 189.5, c: 192.0 },
-      { o: 192.0, h: 194.5, l: 191.0, c: 194.0 },
-      { o: 194.0, h: 195.0, l: 192.5, c: 193.0 },
-      { o: 193.0, h: 196.0, l: 192.0, c: 195.5 },
-      { o: 195.5, h: 197.5, l: 194.0, c: 196.8 },
-      { o: 196.8, h: 198.5, l: 195.0, c: 198.0 },
-      { o: 198.0, h: 199.5, l: 196.5, c: 197.2 },
-      { o: 197.2, h: 198.0, l: 194.5, c: 195.0 },
-      { o: 195.0, h: 196.5, l: 193.0, c: 193.8 },
-      { o: 193.8, h: 197.0, l: 193.5, c: 196.5 },
-      { o: 196.5, h: 199.0, l: 195.5, c: 198.5 },
-      { o: 198.5, h: 201.0, l: 197.8, c: 200.5 },
-      { o: 200.5, h: 202.5, l: 199.0, c: 201.8 },
-      { o: 201.8, h: 203.0, l: 199.5, c: 200.0 },
-      { o: 200.0, h: 201.5, l: 198.0, c: 198.5 },
-    ];
+    const klineQuotes: any[] =
+      store?.get?.('/data/quoteTimeSeries/^TWII') ||
+      store?.get?.('/data/quoteTimeSeries')?.twii ||
+      [];
 
-    const minPrice = 188;
-    const maxPrice = 205;
+    if (!klineQuotes || klineQuotes.length === 0) {
+      return (
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-pulse">
+          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
+          <div className="h-64 w-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
+            K 線時間序列載入中...
+          </div>
+        </div>
+      );
+    }
+
+    const candles = klineQuotes.slice(-20).map((q: any) => ({
+      o: Number(q.openPrice ?? q.closePrice),
+      h: Number(q.highPrice ?? q.closePrice),
+      l: Number(q.lowPrice ?? q.closePrice),
+      c: Number(q.closePrice),
+    }));
+
+    const minPrice = Math.min(...candles.map((c: any) => c.l)) * 0.99;
+    const maxPrice = Math.max(...candles.map((c: any) => c.h)) * 1.01;
+    const latestCandle = candles[candles.length - 1];
 
     const scaleY = (p: number) =>
-      height - padding - ((p - minPrice) / (maxPrice - minPrice)) * (height - padding * 2);
+      height - padding - ((p - minPrice) / Math.max(1, maxPrice - minPrice)) * (height - padding * 2);
     const candleWidth = (width - padding * 2) / candles.length - 8;
 
     return (
@@ -1046,7 +1082,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           <div>
             <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
             <div className="text-xs text-muted-foreground">
-              日 K 線 (含 20MA/60MA 與月線布林通道，當前最新價: 198.5 TWD)
+              日 K 線 (當前最新價: {latestCandle.c.toLocaleString()} 點)
             </div>
           </div>
           <div className="flex items-center gap-3 text-xs font-medium">

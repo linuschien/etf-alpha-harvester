@@ -65,6 +65,8 @@ beforeEach(() => {
   store.set('/data', {});
   store.set('/filters', {});
   store.set('/metrics', {});
+  store.set('/activeTab', 'all');
+  store.set('/activeSubTab', 'all');
   vi.clearAllMocks();
 });
 
@@ -319,5 +321,33 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(await screen.findByText(/最新指數點數/i)).toBeInTheDocument();
     expect(screen.getByText(/52 週最高點數/i)).toBeInTheDocument();
     expect(screen.getByText(/指數點數 \(回撤%\)/i)).toBeInTheDocument();
+  });
+
+  it('renders exact 2026-09-30 Flyway benchmark quotes and panic indicators on cards', async () => {
+    renderPage();
+
+    // Find the TWII label first
+    const twiiHeading = await screen.findByText(/\^TWII 台股加權指數/i);
+    expect(twiiHeading).toBeInTheDocument();
+
+    const card = twiiHeading.closest('div[class*="rounded-xl"]');
+    await waitFor(() => {
+      expect(card?.textContent).not.toContain('--');
+    });
+
+    // Verify TWII 47,940.13 and all 5 benchmarks
+    expect(card?.textContent).toContain('47,940.13');
+    expect(screen.getByText(/7,651\.54/i)).toBeInTheDocument();
+    expect(screen.getByText(/30,408\.50/i)).toBeInTheDocument();
+    expect(screen.getByText(/12,628\.62/i)).toBeInTheDocument();
+    expect(screen.getByText(/66,753\.72/i)).toBeInTheDocument();
+
+    // Verify trade date 2026-09-30
+    const dateElements = screen.getAllByText(/交易日:\s*2026-09-30/i);
+    expect(dateElements.length).toBeGreaterThan(0);
+
+    // Verify panic indicators
+    expect(screen.getAllByText(/16\.34/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/30\.83/i).length).toBeGreaterThanOrEqual(1);
   });
 });

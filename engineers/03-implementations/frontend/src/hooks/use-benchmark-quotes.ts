@@ -1,0 +1,62 @@
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api-client';
+import { MarketDailyQuote } from './use-get-quote-time-series';
+
+export interface BenchmarkQuotesData {
+  twii: MarketDailyQuote[];
+  gspc: MarketDailyQuote[];
+  ndx: MarketDailyQuote[];
+  sox: MarketDailyQuote[];
+  n225: MarketDailyQuote[];
+  vix: MarketDailyQuote[];
+  vxn: MarketDailyQuote[];
+  fearGreed: MarketDailyQuote[];
+  move: MarketDailyQuote[];
+}
+
+export const benchmarkQuotesKeys = {
+  all: ['benchmarkQuotes'] as const,
+  window: (startDate: string, endDate: string) =>
+    ['benchmarkQuotes', startDate, endDate] as const,
+};
+
+export function useBenchmarkQuotes(startDate = '2025-10-01', endDate = '2026-09-30') {
+  return useQuery({
+    queryKey: benchmarkQuotesKeys.window(startDate, endDate),
+    queryFn: () =>
+      api
+        .graphql<BenchmarkQuotesData>(
+          `query GetBenchmarkQuotes($startDate: String!, $endDate: String!) {
+            twii: getQuoteTimeSeries(ticker: "^TWII", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares ma20 ma60 bbUpper bbMiddle bbLower
+            }
+            gspc: getQuoteTimeSeries(ticker: "^GSPC", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares ma20 ma60 bbUpper bbMiddle bbLower
+            }
+            ndx: getQuoteTimeSeries(ticker: "^NDX", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares ma20 ma60 bbUpper bbMiddle bbLower
+            }
+            sox: getQuoteTimeSeries(ticker: "^SOX", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares ma20 ma60 bbUpper bbMiddle bbLower
+            }
+            n225: getQuoteTimeSeries(ticker: "^N225", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares ma20 ma60 bbUpper bbMiddle bbLower
+            }
+            vix: getQuoteTimeSeries(ticker: "^VIX", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares
+            }
+            vxn: getQuoteTimeSeries(ticker: "^VXN", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares
+            }
+            fearGreed: getQuoteTimeSeries(ticker: "FEAR_GREED", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares
+            }
+            move: getQuoteTimeSeries(ticker: "^MOVE", startDate: $startDate, endDate: $endDate) {
+              ticker tradeDate openPrice highPrice lowPrice closePrice volumeShares
+            }
+          }`,
+          { startDate, endDate }
+        )
+        .then((data) => data),
+  });
+}

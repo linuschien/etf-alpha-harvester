@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useStateStore } from '@json-render/react';
-import { mockDividendAnnouncements, mockCorporateActions } from '@/mocks/fixtures';
 
 export interface EventCalendarProps {
   element?: {
@@ -38,11 +37,11 @@ export default function EventCalendar({ element, props: directProps }: EventCale
   const [month, setMonth] = useState<number>(defaultMonth);
   const [viewMode, setViewMode] = useState<'calendar' | 'table'>('calendar');
   const [selectedFreq, setSelectedFreq] = useState<string>('全部');
-  const [selectedDate, setSelectedDate] = useState<string | null>('2026-10-18');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Pull data from store or rich fallback fixtures
-  const rawDividends: any[] = store?.get?.('/data/listDividendAnnouncements') || mockDividendAnnouncements;
-  const rawSplits: any[] = store?.get?.('/data/listCorporateActions') || mockCorporateActions;
+  // Pull data from store
+  const rawDividends: any[] = store?.get?.('/data/listDividendAnnouncements') || [];
+  const rawSplits: any[] = store?.get?.('/data/listCorporateActions') || [];
 
   // Build unified calendar event list
   const allEvents = useMemo<CalendarEvent[]>(() => {
