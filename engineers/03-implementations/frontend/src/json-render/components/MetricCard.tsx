@@ -85,18 +85,23 @@ export default function MetricCard({
     }
   }
 
+  const tickerMap: Record<string, string> = {
+    'metric-twii': '^TWII',
+    'metric-gspc': '^GSPC',
+    'metric-ndx': '^NDX',
+    'metric-sox': '^SOX',
+    'metric-n225': '^N225',
+  };
+
+  const isBenchmarkCard = Boolean(props.id && tickerMap[props.id]);
+  const currentSelectedBenchmark =
+    store?.get?.('/filters/drawdown-benchmark-selector') || '^TWII';
+  const isSelectedBenchmark =
+    isBenchmarkCard && tickerMap[props.id!] === currentSelectedBenchmark;
+
   const handleClick = () => {
-    if (store && props.id) {
-      const tickerMap: Record<string, string> = {
-        'metric-twii': '^TWII',
-        'metric-gspc': '^GSPC',
-        'metric-ndx': '^NDX',
-        'metric-sox': '^SOX',
-        'metric-n225': '^N225',
-      };
-      if (tickerMap[props.id]) {
-        store.set('/filters/drawdown-benchmark-selector', tickerMap[props.id]);
-      }
+    if (store && props.id && tickerMap[props.id]) {
+      store.set('/filters/drawdown-benchmark-selector', tickerMap[props.id]);
     }
     if (emit) emit('click');
     if (props.onClick) props.onClick();
@@ -106,11 +111,20 @@ export default function MetricCard({
     <div
       onClick={handleClick}
       className={`p-4 rounded-xl border bg-card text-card-foreground shadow-sm transition-all hover:shadow-md cursor-pointer ${
-        props.className ?? ''
-      }`}
+        isSelectedBenchmark
+          ? 'ring-2 ring-primary border-primary bg-primary/5 shadow-md'
+          : 'hover:border-primary/50'
+      } ${props.className ?? ''}`}
     >
-      <div className="text-xs font-medium text-muted-foreground line-clamp-1">
-        {props.label}
+      <div className="flex items-center justify-between gap-1">
+        <div className="text-xs font-medium text-muted-foreground line-clamp-1">
+          {props.label}
+        </div>
+        {isSelectedBenchmark && (
+          <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-primary text-primary-foreground shrink-0 shadow-xs">
+            🎯 聚焦中
+          </span>
+        )}
       </div>
       <div className="text-2xl font-bold mt-1 tracking-tight">
         {priceText}

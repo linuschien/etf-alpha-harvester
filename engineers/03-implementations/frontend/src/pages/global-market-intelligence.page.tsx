@@ -180,6 +180,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     }
 
     if (quotes && Array.isArray(quotes)) {
+      const benchmarkTickers = ['^TWII', '^GSPC', '^NDX', '^SOX', '^N225'];
       const quoteMap: Record<string, string> = {
         '^TWII': 'metric-twii',
         '^GSPC': 'metric-gspc',
@@ -187,16 +188,42 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
         '^SOX': 'metric-sox',
         '^N225': 'metric-n225',
       };
+
+      // Select the latest quote by tradeDate for each benchmark ticker
+      const latestMap = new Map<string, any>();
       quotes.forEach((q) => {
-        const metricKey = quoteMap[q.ticker];
-        if (metricKey) {
-          const sign = q.changePct >= 0 ? '+' : '';
-          const formattedVal = `${q.closePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${sign}${q.changePct.toFixed(2)}%)`;
+        if (benchmarkTickers.includes(q.ticker)) {
+          const current = latestMap.get(q.ticker);
+          const qDate = q.tradeDate ? String(q.tradeDate).slice(0, 10) : '';
+          const currentDate = current?.tradeDate ? String(current.tradeDate).slice(0, 10) : '';
+          if (!current || qDate > currentDate) {
+            latestMap.set(q.ticker, q);
+          }
+        }
+      });
+
+      benchmarkTickers.forEach((ticker) => {
+        const q = latestMap.get(ticker);
+        const metricKey = quoteMap[ticker];
+        if (q && metricKey) {
+          const changePct =
+            typeof q.changePct === 'number'
+              ? q.changePct
+              : q.openPrice && q.closePrice
+              ? Number((((q.closePrice - q.openPrice) / q.openPrice) * 100).toFixed(2))
+              : 0;
+          const sign = changePct >= 0 ? '+' : '';
+          const formattedVal = `${q.closePrice.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} (${sign}${changePct.toFixed(2)}%)`;
+
           if (store.get(`/metrics/${metricKey}`) !== formattedVal) {
             store.set(`/metrics/${metricKey}`, formattedVal);
           }
-          if (q.tradeDate && store.get(`/metrics/${metricKey}-date`) !== q.tradeDate) {
-            store.set(`/metrics/${metricKey}-date`, q.tradeDate);
+          const rawDate = q.tradeDate ? String(q.tradeDate).slice(0, 10) : '';
+          if (rawDate && store.get(`/metrics/${metricKey}-date`) !== rawDate) {
+            store.set(`/metrics/${metricKey}-date`, rawDate);
           }
         }
       });

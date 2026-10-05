@@ -9,8 +9,12 @@ import { api } from '@/lib/api-client';
 export interface MarketDailyQuoteItem {
   ticker: string;
   tradeDate: string;
+  openPrice?: number;
+  highPrice?: number;
+  lowPrice?: number;
   closePrice: number;
-  changePct: number;
+  volumeShares?: number;
+  changePct?: number;
   [key: string]: unknown;
 }
 
@@ -34,12 +38,27 @@ export function useListMarketDailyQuotes(filter?: Record<string, unknown>) {
             listMarketDailyQuotes(filter: $filter) {
               ticker
               tradeDate
+              openPrice
+              highPrice
+              lowPrice
               closePrice
-              changePct
+              volumeShares
             }
           }`,
           { filter }
         )
-        .then((data) => data.listMarketDailyQuotes),
+        .then((data) =>
+          (data.listMarketDailyQuotes || []).map((q) => ({
+            ...q,
+            changePct:
+              q.changePct !== undefined
+                ? q.changePct
+                : q.openPrice && q.closePrice
+                ? Number(
+                    (((q.closePrice - q.openPrice) / q.openPrice) * 100).toFixed(2)
+                  )
+                : 0,
+          }))
+        ),
   });
 }

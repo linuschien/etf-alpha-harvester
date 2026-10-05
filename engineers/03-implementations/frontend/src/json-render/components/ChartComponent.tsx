@@ -380,8 +380,36 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       },
     };
 
-    const profile =
-      BENCHMARK_DATA[selectedBenchmark] ?? BENCHMARK_DATA['^TWII'];
+    const profile = {
+      ...(BENCHMARK_DATA[selectedBenchmark] ?? BENCHMARK_DATA['^TWII']),
+    };
+
+    // Dynamically bind latest price from store if available
+    const metricKeyMap: Record<string, string> = {
+      '^TWII': 'metric-twii',
+      '^GSPC': 'metric-gspc',
+      '^NDX': 'metric-ndx',
+      '^SOX': 'metric-sox',
+      '^N225': 'metric-n225',
+    };
+    const storeMetricVal = store?.get?.(`/metrics/${metricKeyMap[selectedBenchmark]}`);
+    if (storeMetricVal && typeof storeMetricVal === 'string') {
+      const match = storeMetricVal.match(/^([\d,]+(?:\.\d+)?)/);
+      if (match) {
+        const livePrice = parseFloat(match[1].replace(/,/g, ''));
+        if (!isNaN(livePrice) && livePrice > 0) {
+          profile.latest = livePrice;
+          profile.currentDD = Number(
+            (((livePrice - profile.peak) / profile.peak) * 100).toFixed(2)
+          );
+        }
+      }
+    }
+
+    // Formulas for calculating and formatting index points
+    const calcPoints = (pct: number) => profile.peak * (1 + pct / 100);
+    const formatPoints = (pts: number) =>
+      Math.round(pts).toLocaleString() + ' 點';
 
     // Slice or interpolate points based on selectedWindow
     const rawCurve = profile.baseCurve;
@@ -442,13 +470,13 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       return Number((ma - sigma * 1.5).toFixed(2));
     });
 
-    // Layout coordinates
-    const width = 760;
-    const height = 280;
-    const paddingLeft = 55;
-    const paddingRight = 95;
-    const paddingTop = 25;
-    const paddingBottom = 40;
+    // Layout coordinates - ample padding for index point labels on both sides
+    const width = 840;
+    const height = 300;
+    const paddingLeft = 110;
+    const paddingRight = 190;
+    const paddingTop = 32;
+    const paddingBottom = 42;
 
     // Y Axis: 0.0% to -80.0% to accommodate all Fibonacci lines
     const minY = -80.0;
@@ -528,7 +556,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
     return (
       <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        {/* Dynamic Header with Key Indicators */}
+        {/* Dynamic Header with Key Indicators - Prominently showing Index Points */}
         <div className="flex flex-wrap items-center justify-between border-b border-border pb-3 gap-2">
           <div>
             <div className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
@@ -538,10 +566,10 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
               </span>
             </div>
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              <span>52 週高點: <strong className="text-foreground">{profile.peak.toLocaleString()} 點</strong></span>
-              <span>最新市價: <strong className="text-foreground">{profile.latest.toLocaleString()} 點</strong></span>
-              <span>當前回撤: <strong className="text-foreground">{profile.currentDD}%</strong></span>
-              <span>52 週最大回撤: <strong className="text-foreground">{profile.maxDD}%</strong></span>
+              <span>最新指數點數: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{profile.latest.toLocaleString()} 點</strong></span>
+              <span>52 週最高點數: <strong className="text-foreground font-mono font-semibold">{profile.peak.toLocaleString()} 點</strong></span>
+              <span>當前回撤幅度: <strong className="text-foreground font-mono font-semibold">{profile.currentDD}%</strong></span>
+              <span>52 週最大回撤: <strong className="text-foreground font-mono font-semibold">{profile.maxDD}%</strong></span>
             </div>
           </div>
           <span className={`text-xs px-3 py-1 rounded-md font-semibold ${statusBadge.color}`}>
@@ -582,18 +610,45 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             )}
           </div>
           <span className="font-mono text-[11px] text-muted-foreground">
-            基準軸心: 52W Peak (0.0%)
+            基準軸心: 52W Peak ({formatPoints(profile.peak)})
           </span>
         </div>
 
         {/* SVG Chart */}
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 overflow-visible">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full h-64 overflow-visible cursor-crosshair"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const mouseX = ((e.clientX - rect.left) / rect.width) * width;
+            const chartWidth = width - paddingLeft - paddingRight;
+            if (mouseX >= paddingLeft && mouseX <= width - paddingRight) {
+              const ratio = (mouseX - paddingLeft) / chartWidth;
+              const idx = Math.min(
+                pointsCount - 1,
+                Math.max(0, Math.round(ratio * (pointsCount - 1)))
+              );
+              setHoverIndex(idx);
+            }
+          }}
+          onMouseLeave={() => setHoverIndex(null)}
+        >
           <defs>
             <linearGradient id="dd-radar-grad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#ef4444" stopOpacity="0.05" />
               <stop offset="100%" stopColor="#ef4444" stopOpacity="0.45" />
             </linearGradient>
           </defs>
+
+          {/* Left Y Axis Title */}
+          <text
+            x={paddingLeft - 8}
+            y={paddingTop - 12}
+            textAnchor="end"
+            className="text-[10px] font-bold font-mono fill-muted-foreground"
+          >
+            指數點數 (回撤%)
+          </text>
 
           {/* Zero Baseline (52W High) */}
           <line
@@ -605,17 +660,26 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             strokeWidth="1.5"
           />
           <text
-            x={width - paddingRight + 6}
+            x={paddingLeft - 8}
+            y={scaleY(0) + 3}
+            textAnchor="end"
+            className="text-[10px] font-mono font-bold fill-foreground"
+          >
+            {formatPoints(profile.peak)} (0%)
+          </text>
+          <text
+            x={width - paddingRight + 8}
             y={scaleY(0) + 3}
             className="text-[10px] font-mono font-bold fill-foreground"
           >
-            0.0% (52W Peak)
+            0.0% 52W高點 ({formatPoints(profile.peak)})
           </text>
 
-          {/* 5-Level Fibonacci Defense Lines (PRD Spec) */}
+          {/* 5-Level Fibonacci Defense Lines with Index Points */}
           {showFib &&
             fibLevels.map((lvl) => {
               const y = scaleY(lvl.pct);
+              const pts = calcPoints(lvl.pct);
               return (
                 <g key={lvl.pct}>
                   <line
@@ -628,18 +692,18 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                     strokeWidth="1.2"
                   />
                   <text
-                    x={width - paddingRight + 6}
+                    x={width - paddingRight + 8}
                     y={y + 3}
                     style={{ fill: lvl.color }}
                     className="text-[10px] font-mono font-semibold"
                   >
-                    {lvl.label}
+                    {lvl.label} ({formatPoints(pts)})
                   </text>
                 </g>
               );
             })}
 
-          {/* Y Axis percentage ticks */}
+          {/* Left Y Axis percentage and index points ticks */}
           {[-20, -40, -60, -80].map((t) => (
             <g key={t}>
               <line
@@ -656,7 +720,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                 textAnchor="end"
                 className="text-[10px] font-mono fill-muted-foreground"
               >
-                {t}%
+                {formatPoints(calcPoints(t))} ({t}%)
               </text>
             </g>
           ))}
@@ -690,15 +754,72 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           {/* Primary Drawdown Curve */}
           <path d={ddPath} fill="none" stroke="#ef4444" strokeWidth="2.5" />
 
-          {/* Current Position Marker */}
-          <circle
-            cx={scaleX(pointsCount - 1)}
-            cy={scaleY(profile.currentDD)}
-            r="4.5"
-            fill="#ef4444"
-            stroke="#ffffff"
-            strokeWidth="1.5"
-          />
+          {/* Interactive Hover Crosshair */}
+          {hoverIndex !== null && (
+            <g>
+              <line
+                x1={scaleX(hoverIndex)}
+                y1={paddingTop}
+                x2={scaleX(hoverIndex)}
+                y2={height - paddingBottom}
+                stroke="#6b7280"
+                strokeDasharray="2 2"
+                strokeWidth="1"
+              />
+              <circle
+                cx={scaleX(hoverIndex)}
+                cy={scaleY(ddPoints[hoverIndex])}
+                r="4.5"
+                fill="#3b82f6"
+                stroke="#ffffff"
+                strokeWidth="1.5"
+              />
+              <rect
+                x={Math.max(paddingLeft, Math.min(scaleX(hoverIndex) - 75, width - paddingRight - 155))}
+                y={paddingTop + 6}
+                width="155"
+                height="22"
+                rx="4"
+                className="fill-background/95 stroke-border stroke shadow-md"
+              />
+              <text
+                x={Math.max(paddingLeft, Math.min(scaleX(hoverIndex) - 75, width - paddingRight - 155)) + 77}
+                y={paddingTop + 20}
+                textAnchor="middle"
+                className="text-[10px] font-mono font-semibold fill-foreground"
+              >
+                {formatPoints(calcPoints(ddPoints[hoverIndex]))} ({ddPoints[hoverIndex]}%)
+              </text>
+            </g>
+          )}
+
+          {/* Current Position Marker with Callout Box showing Latest Points */}
+          <g>
+            <circle
+              cx={scaleX(pointsCount - 1)}
+              cy={scaleY(profile.currentDD)}
+              r="5"
+              fill="#ef4444"
+              stroke="#ffffff"
+              strokeWidth="2"
+            />
+            <rect
+              x={scaleX(pointsCount - 1) - 165}
+              y={scaleY(profile.currentDD) - 26}
+              width="158"
+              height="20"
+              rx="4"
+              className="fill-background/95 stroke-rose-500 stroke-[1.5]"
+            />
+            <text
+              x={scaleX(pointsCount - 1) - 86}
+              y={scaleY(profile.currentDD) - 12}
+              textAnchor="middle"
+              className="text-[10px] font-mono font-bold fill-rose-600 dark:fill-rose-400"
+            >
+              📍 最新: {profile.latest.toLocaleString()} 點 ({profile.currentDD}%)
+            </text>
+          </g>
 
           {/* X Axis Date Labels */}
           {dateLabels.map((lbl, idx) => {

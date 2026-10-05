@@ -456,23 +456,6 @@
                     "behavior_ref": "nielsen:control",
                     "children": [
                       {
-                        "id": "drawdown-benchmark-selector",
-                        "abstract_type": "Selection",
-                        "semantic_variant": "dropdown",
-                        "label": "基準指數切換 (預設: ^TWII 台灣加權指數)",
-                        "behavior_ref": "nielsen:control",
-                        "ux_hints": {
-                          "max_visible_options": 5
-                        },
-                        "interactions": [
-                          {
-                            "on_event": "on_change",
-                            "target_id": "drawdown-radar-chart",
-                            "behavior_ref": "nielsen:feedback"
-                          }
-                        ]
-                      },
-                      {
                         "id": "drawdown-window-selector",
                         "abstract_type": "Selection",
                         "semantic_variant": "radio",

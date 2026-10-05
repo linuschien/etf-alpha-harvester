@@ -293,4 +293,31 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(store.get('/modals/asset-detail-drawer')).toBe(true);
     expect(store.get('/selectedAsset')).toBe('0050');
   });
+
+  // ── Pattern 5 — Benchmark Selection & Radar Chart Points ─────────────────
+  it('switches active benchmark when clicking benchmark cards', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Find the S&P 500 card
+    const sp500Card = await screen.findByText(/\^GSPC 標普500指數/i);
+    await user.click(sp500Card);
+
+    // Verify store filter is updated to ^GSPC
+    expect(store.get('/filters/drawdown-benchmark-selector')).toBe('^GSPC');
+
+    // Find the TWII card and click it back
+    const twiiCard = screen.getByText(/\^TWII 台股加權指數/i);
+    await user.click(twiiCard);
+    expect(store.get('/filters/drawdown-benchmark-selector')).toBe('^TWII');
+  });
+
+  it('renders index points and fibonacci labels in the drawdown radar chart', async () => {
+    renderPage();
+
+    // Verify index point text in radar chart
+    expect(await screen.findByText(/最新指數點數/i)).toBeInTheDocument();
+    expect(screen.getByText(/52 週最高點數/i)).toBeInTheDocument();
+    expect(screen.getByText(/指數點數 \(回撤%\)/i)).toBeInTheDocument();
+  });
 });

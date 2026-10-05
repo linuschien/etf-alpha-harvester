@@ -47,12 +47,18 @@ export function useGetQuoteTimeSeries(
             getQuoteTimeSeries(ticker: $ticker, startDate: $startDate, endDate: $endDate) {
               ticker
               tradeDate
+              openPrice
               closePrice
-              volume
+              volumeShares
             }
           }`,
           { ticker, startDate: startDate ?? '', endDate: endDate ?? '' }
         )
-        .then((data) => data.getQuoteTimeSeries),
+        .then((data) =>
+          (data.getQuoteTimeSeries || []).map((item) => ({
+            ...item,
+            volume: item.volumeShares ?? 0,
+          }))
+        ),
   });
 }

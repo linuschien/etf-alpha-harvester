@@ -698,33 +698,11 @@
         "className": null
       },
       "children": [
-        "drawdown-benchmark-selector",
         "drawdown-window-selector",
         "toggle-ma-switch",
         "toggle-bb-switch",
         "toggle-fib-switch"
       ]
-    },
-    "drawdown-benchmark-selector": {
-      "type": "Select",
-      "props": {
-        "label": "基準指數切換 (預設: ^TWII 台灣加權指數)",
-        "name": "drawdown-benchmark-selector",
-        "options": [
-          "^TWII",
-          "^GSPC",
-          "^NDX",
-          "^SOX",
-          "^N225"
-        ],
-        "placeholder": "請選擇 基準指數切換 (預設: ^TWII 台灣加權指數)",
-        "value": {
-          "$bindState": "/filters/drawdown-benchmark-selector"
-        },
-        "checks": null,
-        "validateOn": null
-      },
-      "children": []
     },
     "drawdown-window-selector": {
       "type": "Radio",

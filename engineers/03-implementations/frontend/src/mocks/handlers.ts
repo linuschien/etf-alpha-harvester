@@ -107,7 +107,14 @@ export const handlers = [
       return HttpResponse.json({
         data: {
           getQuoteTimeSeries: [
-            { ticker: '0050', tradeDate: '2026-09-23', closePrice: 198.5, volume: 15000000 },
+            {
+              ticker: '0050',
+              tradeDate: '2026-09-23',
+              openPrice: 197.0,
+              closePrice: 198.5,
+              volumeShares: 15000000,
+              volume: 15000000,
+            },
           ],
         },
       });
