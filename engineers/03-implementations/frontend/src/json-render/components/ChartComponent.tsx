@@ -426,12 +426,6 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const pointsCount = Math.max(2, windowQuotes.length);
     const latestQuote = windowQuotes[windowQuotes.length - 1];
     const latestPrice = Number(latestQuote.closePrice);
-    const currentDD = Number((((latestPrice - peak52W) / peak52W) * 100).toFixed(2));
-
-    const ddPoints = windowQuotes.map((q) =>
-      Number((((Number(q.closePrice) - peak52W) / peak52W) * 100).toFixed(2))
-    );
-    const maxDD = Math.min(...ddPoints);
 
     // Window extremes (anchor for Fibonacci Retracement within active Time Window)
     const windowPriceMax = Math.max(
@@ -441,6 +435,21 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       ...windowQuotes.map((q) => Number(q.lowPrice || q.closePrice || 0))
     );
     const windowRange = Math.max(1, windowPriceMax - windowPriceMin);
+
+    // Current Retracement on the Fibonacci Retracement Base:
+    // Retracement % = ((Price - windowPriceMax) / windowRange) * 100
+    // Top (windowPriceMax) = 0.0%, Floor (windowPriceMin) = -100.0%
+    const currentFibDD = Number(
+      (((latestPrice - windowPriceMax) / windowRange) * 100).toFixed(2)
+    );
+
+    // Fibonacci Drawdown map for each quote in window
+    const fibDDMap = new Map<any, number>();
+    windowQuotes.forEach((q) => {
+      const price = Number(q.closePrice || 0);
+      const dd = ((price - windowPriceMax) / windowRange) * 100;
+      fibDDMap.set(q, Number(dd.toFixed(2)));
+    });
 
     // Fibonacci Retracement: 7 Levels anchored to Time Window [windowPriceMin, windowPriceMax]
     const fibLevels = [
@@ -600,34 +609,34 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
     const formatPoints = (pts: number) => Math.round(pts).toLocaleString() + ' 點';
 
-    // Status badge
+    // Status badge anchored to Fibonacci Retracement zones
     let statusBadge = {
-      text: `🛡️ 多頭呼吸區 (回撤 ${currentDD}%)`,
+      text: `🛡️ 多頭呼吸區 (回撤 ${currentFibDD}%)`,
       color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     };
-    if (currentDD <= -76.4) {
+    if (currentFibDD <= -76.4) {
       statusBadge = {
-        text: `🚨 黑天鵝救災區 (回撤 ${currentDD}%)`,
+        text: `🚨 黑天鵝救災區 (回撤 ${currentFibDD}%)`,
         color: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
       };
-    } else if (currentDD <= -61.8) {
+    } else if (currentFibDD <= -61.8) {
       statusBadge = {
-        text: `💎 超跌黃金坑 (回撤 ${currentDD}%)`,
+        text: `💎 超跌黃金坑 (回撤 ${currentFibDD}%)`,
         color: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
       };
-    } else if (currentDD <= -50.0) {
+    } else if (currentFibDD <= -50.0) {
       statusBadge = {
-        text: `⚡ 多空平衡修正 (回撤 ${currentDD}%)`,
+        text: `⚡ 多空平衡修正 (回撤 ${currentFibDD}%)`,
         color: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
       };
-    } else if (currentDD <= -38.2) {
+    } else if (currentFibDD <= -38.2) {
       statusBadge = {
-        text: `⚠️ 黃金防守線加碼 (回撤 ${currentDD}%)`,
+        text: `⚠️ 黃金防守線加碼 (回撤 ${currentFibDD}%)`,
         color: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
       };
-    } else if (currentDD <= -23.6) {
+    } else if (currentFibDD <= -23.6) {
       statusBadge = {
-        text: `📉 拉回修正區 (回撤 ${currentDD}%)`,
+        text: `📉 拉回修正區 (回撤 ${currentFibDD}%)`,
         color: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
       };
     }
@@ -636,13 +645,13 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const hoverPrice = hoverQuote ? Number(hoverQuote.closePrice) : null;
     const hoverDate = hoverQuote?.tradeDate ? String(hoverQuote.tradeDate).slice(0, 10) : '';
     const hoverDD =
-      hoverPrice !== null
-        ? Number((((hoverPrice - peak52W) / peak52W) * 100).toFixed(2))
+      hoverQuote && fibDDMap.has(hoverQuote)
+        ? fibDDMap.get(hoverQuote)!
         : null;
 
     return (
       <div ref={containerRef} className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        {/* Dynamic Header with Key Indicators - Prominently showing Index Points */}
+        {/* Dynamic Header with Key Indicators - Prominently showing Index Points and Fibonacci Retracement */}
         <div className="flex flex-wrap items-center justify-between border-b border-border pb-3 gap-2">
           <div>
             <div className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
@@ -653,9 +662,10 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             </div>
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1">
               <span>最新指數點數: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{latestPrice.toLocaleString()} 點</strong></span>
+              <span>視窗頂部 (0.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMax.toLocaleString()} 點</strong></span>
+              <span>視窗地板 (-100.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMin.toLocaleString()} 點</strong></span>
+              <span>當前黃金分割回撤: <strong className="text-rose-600 dark:text-rose-400 font-mono font-bold">{currentFibDD}%</strong></span>
               <span>52 週最高點數: <strong className="text-foreground font-mono font-semibold">{peak52W.toLocaleString()} 點</strong></span>
-              <span>當前回撤幅度: <strong className="text-foreground font-mono font-semibold">{currentDD}%</strong></span>
-              <span>52 週最大回撤: <strong className="text-foreground font-mono font-semibold">{maxDD}%</strong></span>
             </div>
           </div>
           <span className={`text-xs px-3 py-1 rounded-md font-semibold ${statusBadge.color}`}>
@@ -901,7 +911,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
               />
               {/* Floating Tooltip Box */}
               {(() => {
-                const boxW = 185;
+                const boxW = 195;
                 const boxH = 46;
                 const rawX = scaleX(hoverIndex) - boxW / 2;
                 const clampX = Math.max(paddingLeft + 5, Math.min(rawX, width - paddingRight - boxW - 5));
@@ -928,7 +938,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                       y={boxY + 35}
                       className="text-[11px] font-mono font-semibold fill-rose-600 dark:fill-rose-400"
                     >
-                      📈 {formatPoints(hoverPrice)} ({hoverDD !== null && hoverDD >= 0 ? '+' : ''}{hoverDD}%)
+                      📈 {formatPoints(hoverPrice)} {hoverDD !== null ? (hoverDD === 0 ? '(0.0% 頂部)' : `(回撤 ${hoverDD}%)`) : ''}
                     </text>
                   </g>
                 );
