@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
+import { getRollingDateRange } from '@/lib/date-utils';
 import { MarketDailyQuote } from './use-get-quote-time-series';
 
 export interface BenchmarkQuotesData {
@@ -30,12 +31,16 @@ export const panicQuotesKeys = {
 };
 
 export function useBenchmarkQuotes(
-  startDate = '2025-10-01',
-  endDate = '2026-09-30',
+  startDate?: string,
+  endDate?: string,
   options?: { enabled?: boolean }
 ) {
+  const defaultRange = getRollingDateRange(1);
+  const qStart = startDate ?? defaultRange.startDate;
+  const qEnd = endDate ?? defaultRange.endDate;
+
   return useQuery({
-    queryKey: benchmarkQuotesKeys.window(startDate, endDate),
+    queryKey: benchmarkQuotesKeys.window(qStart, qEnd),
     enabled: options?.enabled,
     queryFn: () =>
       api
@@ -57,19 +62,23 @@ export function useBenchmarkQuotes(
               ticker tradeDate openPrice highPrice lowPrice closePrice ma20 ma60 ma120 ma240 bbUpper bbMiddle bbLower
             }
           }`,
-          { startDate, endDate }
+          { startDate: qStart, endDate: qEnd }
         )
         .then((data) => data),
   });
 }
 
 export function usePanicQuotes(
-  startDate = '2025-10-01',
-  endDate = '2026-09-30',
+  startDate?: string,
+  endDate?: string,
   options?: { enabled?: boolean }
 ) {
+  const defaultRange = getRollingDateRange(1);
+  const qStart = startDate ?? defaultRange.startDate;
+  const qEnd = endDate ?? defaultRange.endDate;
+
   return useQuery({
-    queryKey: panicQuotesKeys.window(startDate, endDate),
+    queryKey: panicQuotesKeys.window(qStart, qEnd),
     enabled: options?.enabled,
     queryFn: () =>
       api
@@ -88,7 +97,7 @@ export function usePanicQuotes(
               ticker tradeDate openPrice highPrice lowPrice closePrice
             }
           }`,
-          { startDate, endDate }
+          { startDate: qStart, endDate: qEnd }
         )
         .then((data) => data),
   });

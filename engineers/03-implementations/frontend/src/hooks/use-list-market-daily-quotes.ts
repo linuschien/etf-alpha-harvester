@@ -4,6 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
+import { getRecentDaysRange } from '@/lib/date-utils';
 
 // ── Response Type ──────────────────────────────────────────────────────────
 export interface MarketDailyQuoteItem {
@@ -27,7 +28,8 @@ export const listMarketDailyQuotesKeys = {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 export function useListMarketDailyQuotes(filter?: Record<string, unknown>) {
-  const queryFilter = filter !== undefined ? filter : { startDate: '2026-09-29', endDate: '2026-09-30' };
+  const defaultRange = getRecentDaysRange(5);
+  const queryFilter = filter !== undefined ? filter : { startDate: defaultRange.startDate, endDate: defaultRange.endDate };
   return useQuery({
     queryKey: queryFilter
       ? listMarketDailyQuotesKeys.filtered(queryFilter)

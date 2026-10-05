@@ -133,10 +133,10 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     },
     { enabled: isTab2 }
   );
-  const { data: benchmarkQuotes } = useBenchmarkQuotes('2025-10-01', '2026-09-30', {
+  const { data: benchmarkQuotes } = useBenchmarkQuotes(undefined, undefined, {
     enabled: isBenchmark,
   });
-  const { data: panicQuotes } = usePanicQuotes('2025-10-01', '2026-09-30', {
+  const { data: panicQuotes } = usePanicQuotes(undefined, undefined, {
     enabled: isPanic,
   });
   const { data: macroYieldHistory } = useListMacroYieldSnapshots(undefined, {

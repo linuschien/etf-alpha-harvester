@@ -4,6 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
+import { getRollingDateRange } from '@/lib/date-utils';
 
 // ── Response Type ──────────────────────────────────────────────────────────
 export interface MarketDailyQuote {
@@ -39,8 +40,9 @@ export function useGetQuoteTimeSeries(
   startDate?: string,
   endDate?: string
 ) {
-  const queryStartDate = startDate ?? '2025-10-01';
-  const queryEndDate = endDate ?? '2026-09-30';
+  const defaultRange = getRollingDateRange(1);
+  const queryStartDate = startDate ?? defaultRange.startDate;
+  const queryEndDate = endDate ?? defaultRange.endDate;
 
   return useQuery({
     queryKey: ticker

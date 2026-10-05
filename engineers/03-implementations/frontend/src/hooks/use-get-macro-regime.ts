@@ -4,6 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
+import { formatDate } from '@/lib/date-utils';
 
 // ── Response Type ──────────────────────────────────────────────────────────
 export interface MacroRegimeAssessment {
@@ -50,7 +51,7 @@ export function useGetMacroRegime(options?: { enabled?: boolean }) {
             ...raw,
             currentRegime: raw.macroState,
             confidenceScore: 0.88,
-            effectiveDate: '2026-09-30',
+            effectiveDate: formatDate(new Date()),
           } as MacroRegimeAssessment;
         }),
   });

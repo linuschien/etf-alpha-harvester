@@ -4,6 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
+import { getRollingDateRange } from '@/lib/date-utils';
 
 // ── Response Type ──────────────────────────────────────────────────────────
 export interface MacroYieldSnapshotItem {
@@ -30,9 +31,10 @@ export function useListMacroYieldSnapshots(
   },
   options?: { enabled?: boolean }
 ) {
-  const queryFilter = filter ?? {
-    startDate: '2025-10-01',
-    endDate: '2026-09-30',
+  const defaultRange = getRollingDateRange(1);
+  const queryFilter = {
+    startDate: filter?.startDate ?? defaultRange.startDate,
+    endDate: filter?.endDate ?? defaultRange.endDate,
   };
 
   return useQuery({
