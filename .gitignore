@@ -1,2 +1,6 @@
 docs/02-design-specs/db-schemas/schema.dbdiagram
 engineers/03-implementations/backend/target
+engineers/03-implementations/frontend/node_modules
+engineers/03-implementations/frontend/dist
+engineers/03-implementations/frontend/coverage
+*.tsbuildinfo

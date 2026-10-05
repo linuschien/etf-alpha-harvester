@@ -1,0 +1,1600 @@
+{
+  "root": "global-market-intelligence-page",
+  "elements": {
+    "global-market-intelligence-page": {
+      "type": "Container:page",
+      "props": {
+        "id": "global-market-intelligence-page"
+      },
+      "children": [
+        "page-header-section",
+        "main-tabs-container",
+        "watermark-detail-modal",
+        "pairwise-matrix-modal",
+        "asset-detail-drawer"
+      ]
+    },
+    "page-header-section": {
+      "type": "div",
+      "props": {
+        "id": "page-header-section"
+      },
+      "children": [
+        "header-title-stack"
+      ]
+    },
+    "header-title-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": "between",
+        "className": null
+      },
+      "children": [
+        "page-title-heading",
+        "page-subtitle-text",
+        "data-freshness-trigger"
+      ]
+    },
+    "page-title-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "全球市場情報 (Global Market Intelligence)",
+        "level": "h1"
+      },
+      "children": []
+    },
+    "page-subtitle-text": {
+      "type": "Text",
+      "props": {
+        "text": "跨週期主動收割引擎 (Adaptive Cross-Cycle Harvest Engine)",
+        "variant": null
+      },
+      "children": []
+    },
+    "data-freshness-trigger": {
+      "type": "Button",
+      "props": {
+        "label": "數據新鮮度監控",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "openModal",
+            "params": {
+              "id": "watermark-detail-modal"
+            }
+          }
+        ]
+      }
+    },
+    "main-tabs-container": {
+      "type": "Card",
+      "props": {
+        "title": null,
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "tabs-nav-stack",
+        "macro-sentiment-section",
+        "qualified-leaderboard-section",
+        "dca-calendar-section"
+      ]
+    },
+    "tabs-nav-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": "between",
+        "className": null
+      },
+      "children": [
+        "tab-macro-trigger",
+        "tab-leaderboard-trigger",
+        "tab-dca-trigger"
+      ]
+    },
+    "tab-macro-trigger": {
+      "type": "Button",
+      "props": {
+        "label": "Tab 1：全球宏觀與情緒雷達",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "selectTab",
+            "params": {
+              "tab": "macro-sentiment-section"
+            }
+          }
+        ]
+      }
+    },
+    "tab-leaderboard-trigger": {
+      "type": "Button",
+      "props": {
+        "label": "Tab 2：合規標的天梯榜與正交雷達",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "selectTab",
+            "params": {
+              "tab": "qualified-leaderboard-section"
+            }
+          }
+        ]
+      }
+    },
+    "tab-dca-trigger": {
+      "type": "Button",
+      "props": {
+        "label": "Tab 3：定期定額散戶人氣榜與除息月曆",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "selectTab",
+            "params": {
+              "tab": "dca-calendar-section"
+            }
+          }
+        ]
+      }
+    },
+    "macro-sentiment-section": {
+      "type": "div",
+      "props": {
+        "id": "macro-sentiment-section"
+      },
+      "children": [
+        "benchmark-quotes-heading",
+        "benchmark-quotes-grid",
+        "panic-sentiment-container",
+        "macro-yield-container",
+        "drawdown-radar-container"
+      ]
+    },
+    "benchmark-quotes-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "5 大全球核心基準指數即時行情",
+        "level": "h2"
+      },
+      "children": []
+    },
+    "benchmark-quotes-grid": {
+      "type": "Grid",
+      "props": {
+        "columns": 5,
+        "gap": "md",
+        "className": null
+      },
+      "children": [
+        "metric-twii",
+        "metric-gspc",
+        "metric-ndx",
+        "metric-sox",
+        "metric-n225"
+      ]
+    },
+    "metric-twii": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-twii",
+        "label": "^TWII 台股加權指數 (預設基準)",
+        "value": {
+          "$bindState": "/metrics/metric-twii"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "metric-gspc": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-gspc",
+        "label": "^GSPC 標普500指數",
+        "value": {
+          "$bindState": "/metrics/metric-gspc"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "metric-ndx": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-ndx",
+        "label": "^NDX 那斯達克100指數",
+        "value": {
+          "$bindState": "/metrics/metric-ndx"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "metric-sox": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-sox",
+        "label": "^SOX 費城半導體指數",
+        "value": {
+          "$bindState": "/metrics/metric-sox"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "metric-n225": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-n225",
+        "label": "^N225 日經225指數",
+        "value": {
+          "$bindState": "/metrics/metric-n225"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "panic-sentiment-container": {
+      "type": "Card",
+      "props": {
+        "title": "四大恐慌情緒指標 2x2 監控矩陣 (Panic Sentiment Matrix)",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "panic-sentiment-heading",
+        "panic-sentiment-grid",
+        "panic-sentiment-chart-grid"
+      ]
+    },
+    "panic-sentiment-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "跨市場恐慌風向球 (2x2 同步監控，均值回歸水平警戒線)",
+        "level": "h3"
+      },
+      "children": []
+    },
+    "panic-sentiment-grid": {
+      "type": "Grid",
+      "props": {
+        "columns": 4,
+        "gap": "md",
+        "className": null
+      },
+      "children": [
+        "metric-vix",
+        "metric-vxn",
+        "metric-fear-greed",
+        "metric-move"
+      ]
+    },
+    "metric-vix": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-vix",
+        "label": "^VIX 波動率指數 (警戒線: 25.0 / 30.0)",
+        "value": {
+          "$bindState": "/metrics/metric-vix"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "metric-vxn": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-vxn",
+        "label": "^VXN 那指波動率指數 (警戒線: 35.0 / 40.0)",
+        "value": {
+          "$bindState": "/metrics/metric-vxn"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "metric-fear-greed": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-fear-greed",
+        "label": "FEAR_GREED 恐懼貪婪指數 (極度恐懼: <20 / 極度貪婪: >80)",
+        "value": {
+          "$bindState": "/metrics/metric-fear-greed"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "metric-move": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-move",
+        "label": "^MOVE 美債波動率指數 (警戒線: 120.0 / 140.0)",
+        "value": {
+          "$bindState": "/metrics/metric-move"
+        },
+        "data_ref": "listMarketDailyQuotes"
+      },
+      "children": []
+    },
+    "panic-sentiment-chart-grid": {
+      "type": "Grid",
+      "props": {
+        "columns": 4,
+        "gap": "md",
+        "className": null
+      },
+      "children": [
+        "chart-vix-spark",
+        "chart-vxn-spark",
+        "chart-fear-greed-spark",
+        "chart-move-spark"
+      ]
+    },
+    "chart-vix-spark": {
+      "type": "Chart",
+      "props": {
+        "id": "chart-vix-spark",
+        "label": "^VIX 走勢圖 (預設 6M，水平警戒線: 25/30)",
+        "data_ref": "getQuoteTimeSeries"
+      },
+      "children": []
+    },
+    "chart-vxn-spark": {
+      "type": "Chart",
+      "props": {
+        "id": "chart-vxn-spark",
+        "label": "^VXN 走勢圖 (預設 6M，水平警戒線: 35/40)",
+        "data_ref": "getQuoteTimeSeries"
+      },
+      "children": []
+    },
+    "chart-fear-greed-spark": {
+      "type": "Chart",
+      "props": {
+        "id": "chart-fear-greed-spark",
+        "label": "FEAR_GREED 走勢圖 (預設 6M，水平警戒線: 20/80)",
+        "data_ref": "getQuoteTimeSeries"
+      },
+      "children": []
+    },
+    "chart-move-spark": {
+      "type": "Chart",
+      "props": {
+        "id": "chart-move-spark",
+        "label": "^MOVE 走勢圖 (預設 6M，水平警戒線: 120/140)",
+        "data_ref": "getQuoteTimeSeries"
+      },
+      "children": []
+    },
+    "macro-yield-container": {
+      "type": "Card",
+      "props": {
+        "title": "宏觀利率與殖利率曲線單一整合走勢圖 (Macro Yield & Spread)",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "macro-yield-heading",
+        "macro-yield-grid",
+        "macro-yield-toolbar-stack",
+        "macro-yield-chart"
+      ]
+    },
+    "macro-yield-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "長短天期美債殖利率、企業債殖利率與 10Y-2Y 倒掛利差",
+        "level": "h3"
+      },
+      "children": []
+    },
+    "macro-yield-grid": {
+      "type": "Grid",
+      "props": {
+        "columns": 5,
+        "gap": "md",
+        "className": null
+      },
+      "children": [
+        "metric-dgs10",
+        "metric-dgs20",
+        "metric-t10y2y",
+        "metric-corp-yield",
+        "metric-macro-regime"
+      ]
+    },
+    "metric-dgs10": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-dgs10",
+        "label": "10Y 美國公債殖利率 (DGS10)",
+        "value": {
+          "$bindState": "/metrics/metric-dgs10"
+        },
+        "data_ref": "getLatestMacroYieldSnapshot"
+      },
+      "children": []
+    },
+    "metric-dgs20": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-dgs20",
+        "label": "20Y 美國公債殖利率 (DGS20)",
+        "value": {
+          "$bindState": "/metrics/metric-dgs20"
+        },
+        "data_ref": "getLatestMacroYieldSnapshot"
+      },
+      "children": []
+    },
+    "metric-t10y2y": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-t10y2y",
+        "label": "10Y-2Y 殖利率利差 (T10Y2Y)",
+        "value": {
+          "$bindState": "/metrics/metric-t10y2y"
+        },
+        "data_ref": "getLatestMacroYieldSnapshot"
+      },
+      "children": []
+    },
+    "metric-corp-yield": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-corp-yield",
+        "label": "ICE BofA 企業債殖利率 (BAMLC0A0CMEY)",
+        "value": {
+          "$bindState": "/metrics/metric-corp-yield"
+        },
+        "data_ref": "getLatestMacroYieldSnapshot"
+      },
+      "children": []
+    },
+    "metric-macro-regime": {
+      "type": "MetricCard",
+      "props": {
+        "id": "metric-macro-regime",
+        "label": "宏觀景氣燈號 (Macro Regime)",
+        "value": {
+          "$bindState": "/metrics/metric-macro-regime"
+        },
+        "data_ref": "getMacroRegime"
+      },
+      "children": []
+    },
+    "macro-yield-toolbar-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": null,
+        "className": null
+      },
+      "children": [
+        "macro-yield-window-selector"
+      ]
+    },
+    "macro-yield-window-selector": {
+      "type": "Radio",
+      "props": {
+        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
+        "name": "macro-yield-window-selector",
+        "options": [
+          "1M",
+          "3M",
+          "6M",
+          "1Y"
+        ],
+        "value": {
+          "$bindState": "/filters/macro-yield-window-selector"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "macro-yield-chart": {
+      "type": "Chart",
+      "props": {
+        "id": "macro-yield-chart",
+        "label": "宏觀利率與利差整合走勢圖 (含 5.0% 蓄水線 / 3.5% 收割線 / 0.0% 倒掛線)",
+        "data_ref": "getLatestMacroYieldSnapshot"
+      },
+      "children": []
+    },
+    "drawdown-radar-container": {
+      "type": "Card",
+      "props": {
+        "title": "全球 5 大基準指數走勢與黃金分割回撤雷達 (Benchmark Drawdown Radar)",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "drawdown-heading",
+        "drawdown-toolbar-stack",
+        "drawdown-radar-chart"
+      ]
+    },
+    "drawdown-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "單一基準專屬回撤雷達 (預設 ^TWII，LOCF 前值平滑遞延)",
+        "level": "h3"
+      },
+      "children": []
+    },
+    "drawdown-toolbar-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": null,
+        "className": null
+      },
+      "children": [
+        "drawdown-benchmark-selector",
+        "drawdown-window-selector",
+        "toggle-ma-switch",
+        "toggle-bb-switch",
+        "toggle-fib-switch"
+      ]
+    },
+    "drawdown-benchmark-selector": {
+      "type": "Select",
+      "props": {
+        "label": "基準指數切換 (預設: ^TWII 台灣加權指數)",
+        "name": "drawdown-benchmark-selector",
+        "options": [
+          "^TWII",
+          "^GSPC",
+          "^NDX",
+          "^SOX",
+          "^N225"
+        ],
+        "placeholder": "請選擇 基準指數切換 (預設: ^TWII 台灣加權指數)",
+        "value": {
+          "$bindState": "/filters/drawdown-benchmark-selector"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "drawdown-window-selector": {
+      "type": "Radio",
+      "props": {
+        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
+        "name": "drawdown-window-selector",
+        "options": [
+          "1M",
+          "3M",
+          "6M",
+          "1Y"
+        ],
+        "value": {
+          "$bindState": "/filters/drawdown-window-selector"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "toggle-ma-switch": {
+      "type": "Switch",
+      "props": {
+        "label": "四條均線開關 (20/60/120/240MA)",
+        "name": "toggle-ma-switch",
+        "checked": {
+          "$bindState": "/filters/toggle-ma-switch"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "toggle-bb-switch": {
+      "type": "Switch",
+      "props": {
+        "label": "月線布林通道開關 (20MA ± 2σ)",
+        "name": "toggle-bb-switch",
+        "checked": {
+          "$bindState": "/filters/toggle-bb-switch"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "toggle-fib-switch": {
+      "type": "Switch",
+      "props": {
+        "label": "黃金分割警戒線 (-23.6%, -38.2%, -50.0%, -61.8%, -76.4%)",
+        "name": "toggle-fib-switch",
+        "checked": {
+          "$bindState": "/filters/toggle-fib-switch"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "drawdown-radar-chart": {
+      "type": "Chart",
+      "props": {
+        "id": "drawdown-radar-chart",
+        "label": "52 週回撤雷達走勢圖 (單一基準聚焦，240MA 連續滾動計算，LOCF 休市平滑)",
+        "data_ref": "getQuoteTimeSeries"
+      },
+      "children": []
+    },
+    "qualified-leaderboard-section": {
+      "type": "div",
+      "props": {
+        "id": "qualified-leaderboard-section"
+      },
+      "children": [
+        "leaderboard-heading",
+        "orthogonal-control-bar",
+        "qualified-leaderboard-table",
+        "clustering-leaderboard-table"
+      ]
+    },
+    "leaderboard-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "合規標的天梯榜與正交去共線雷達",
+        "level": "h2"
+      },
+      "children": []
+    },
+    "orthogonal-control-bar": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": null,
+        "className": null
+      },
+      "children": [
+        "asset-class-selector",
+        "perspective-mode-selector",
+        "current-seed-badge-text",
+        "reset-seed-trigger",
+        "open-pairwise-matrix-btn"
+      ]
+    },
+    "asset-class-selector": {
+      "type": "Select",
+      "props": {
+        "label": "候選資產池 (核心大盤 / 動能衛星 / 防禦債券)",
+        "name": "asset-class-selector",
+        "options": [
+          "核心大盤 (Core)",
+          "動能衛星 (Satellite)",
+          "防禦債券 (Defensive)"
+        ],
+        "placeholder": "請選擇 候選資產池 (核心大盤 / 動能衛星 / 防禦債券)",
+        "value": {
+          "$bindState": "/filters/asset-class-selector"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "perspective-mode-selector": {
+      "type": "Radio",
+      "props": {
+        "label": "決策視角模式 (⚡ 夏農幾何收割 / 🧩 分群去冗餘族群)",
+        "name": "perspective-mode-selector",
+        "options": [
+          "⚡ 夏農幾何收割",
+          "🧩 分群去冗餘族群"
+        ],
+        "value": {
+          "$bindState": "/filters/perspective-mode-selector"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "current-seed-badge-text": {
+      "type": "Text",
+      "props": {
+        "text": "當前錨定種子: 預設 Rank 1 (夏農模式點擊任意標的切換錨點)",
+        "variant": null
+      },
+      "children": []
+    },
+    "reset-seed-trigger": {
+      "type": "Button",
+      "props": {
+        "label": "↺ 重設為 Rank 1 種子",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "executeBehavior",
+            "params": {
+              "ref": "reset-seed-trigger",
+              "id": "reset-seed-trigger"
+            }
+          }
+        ]
+      }
+    },
+    "open-pairwise-matrix-btn": {
+      "type": "Button",
+      "props": {
+        "label": "查看兩兩正交矩陣 (Pairwise Matrix)",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "openModal",
+            "params": {
+              "id": "pairwise-matrix-modal"
+            }
+          }
+        ]
+      }
+    },
+    "qualified-leaderboard-table": {
+      "type": "DataTable",
+      "props": {
+        "id": "qualified-leaderboard-table",
+        "label": "夏農模式正交去共線天梯表 (Shannon Orthogonal Table)",
+        "columns": [
+          {
+            "field": "classRank",
+            "label": "組內排名",
+            "sortable": true,
+            "default_sort": "asc"
+          },
+          {
+            "field": "orthogonalStatus",
+            "label": "正交狀態",
+            "sortable": true
+          },
+          {
+            "field": "ticker",
+            "label": "標的代碼",
+            "sortable": false
+          },
+          {
+            "field": "name",
+            "label": "標的名稱",
+            "sortable": false
+          },
+          {
+            "field": "distributionFrequency",
+            "label": "配息週期",
+            "sortable": false
+          },
+          {
+            "field": "closePrice",
+            "label": "最新市價",
+            "sortable": true
+          },
+          {
+            "field": "changePct",
+            "label": "單日漲跌(%)",
+            "sortable": true
+          },
+          {
+            "field": "return1m",
+            "label": "1 個月報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "return3m",
+            "label": "3 個月報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "return6m",
+            "label": "6 個月報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "return1y",
+            "label": "1 年報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "fundSizeTwd",
+            "label": "基金規模(AUM)",
+            "sortable": true
+          },
+          {
+            "field": "compositeScore",
+            "label": "綜合評分",
+            "sortable": true
+          }
+        ],
+        "data": {
+          "$bindState": "/data/getOrthogonalCandidates"
+        }
+      },
+      "children": []
+    },
+    "clustering-leaderboard-table": {
+      "type": "DataTable",
+      "props": {
+        "id": "clustering-leaderboard-table",
+        "label": "合規標的去冗餘分群階層表 (Hierarchical Expandable Table)",
+        "columns": [
+          {
+            "field": "clusterId",
+            "label": "族群編號",
+            "sortable": true,
+            "default_sort": "asc"
+          },
+          {
+            "field": "isSingleton",
+            "label": "賽道角色/折疊指示",
+            "sortable": true
+          },
+          {
+            "field": "ticker",
+            "label": "標的代碼",
+            "sortable": false
+          },
+          {
+            "field": "name",
+            "label": "標的名稱",
+            "sortable": false
+          },
+          {
+            "field": "underlyingIndex",
+            "label": "追蹤指數名稱",
+            "sortable": false
+          },
+          {
+            "field": "closePrice",
+            "label": "最新市價",
+            "sortable": true
+          },
+          {
+            "field": "changePct",
+            "label": "單日漲跌(%)",
+            "sortable": true
+          },
+          {
+            "field": "return1m",
+            "label": "1 個月報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "return3m",
+            "label": "3 個月報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "return6m",
+            "label": "6 個月報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "return1y",
+            "label": "1 年報酬(%)",
+            "sortable": true
+          },
+          {
+            "field": "fundSizeTwd",
+            "label": "基金規模(AUM)",
+            "sortable": true
+          },
+          {
+            "field": "compositeScore",
+            "label": "綜合評分",
+            "sortable": true
+          }
+        ],
+        "data": {
+          "$bindState": "/data/getClusteredCandidates"
+        }
+      },
+      "children": []
+    },
+    "dca-calendar-section": {
+      "type": "div",
+      "props": {
+        "id": "dca-calendar-section"
+      },
+      "children": [
+        "dca-top20-container",
+        "calendar-events-container"
+      ]
+    },
+    "dca-top20-container": {
+      "type": "Card",
+      "props": {
+        "title": "定期定額散戶人氣榜 Top 20",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "dca-heading",
+        "dca-top20-table"
+      ]
+    },
+    "dca-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "證交所定期定額散戶人氣榜 Top 20",
+        "level": "h3"
+      },
+      "children": []
+    },
+    "dca-top20-table": {
+      "type": "DataTable",
+      "props": {
+        "id": "dca-top20-table",
+        "label": "定期定額人氣表格",
+        "columns": [
+          {
+            "field": "rankPosition",
+            "label": "排名",
+            "sortable": true,
+            "default_sort": "asc"
+          },
+          {
+            "field": "ticker",
+            "label": "標的代碼",
+            "sortable": false
+          },
+          {
+            "field": "name",
+            "label": "標的名稱",
+            "sortable": false
+          },
+          {
+            "field": "distributionFrequency",
+            "label": "配息週期",
+            "sortable": false
+          },
+          {
+            "field": "investorCount",
+            "label": "定額交易戶數",
+            "sortable": true
+          },
+          {
+            "field": "rankingYear",
+            "label": "統計年份",
+            "sortable": true
+          },
+          {
+            "field": "rankingMonth",
+            "label": "統計月份",
+            "sortable": true
+          }
+        ],
+        "data": {
+          "$bindState": "/data/getTop20DcaRanks"
+        }
+      },
+      "children": []
+    },
+    "calendar-events-container": {
+      "type": "Card",
+      "props": {
+        "title": "除息與股票分割事件月曆",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "calendar-heading",
+        "calendar-filter-bar",
+        "dividend-announcements-table",
+        "corporate-actions-table"
+      ]
+    },
+    "calendar-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "ETF 除息月曆與股票分割事件視圖",
+        "level": "h2"
+      },
+      "children": []
+    },
+    "calendar-filter-bar": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": null,
+        "className": null
+      },
+      "children": [
+        "freq-filter-selector"
+      ]
+    },
+    "freq-filter-selector": {
+      "type": "Select",
+      "props": {
+        "label": "配息週期快篩 (月配 / 季配 / 半年配 / 年配 / 全部)",
+        "name": "freq-filter-selector",
+        "options": [
+          "全部",
+          "月配",
+          "季配",
+          "半年配",
+          "年配"
+        ],
+        "placeholder": "請選擇 配息週期快篩 (月配 / 季配 / 半年配 / 年配 / 全部)",
+        "value": {
+          "$bindState": "/filters/freq-filter-selector"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "dividend-announcements-table": {
+      "type": "DataTable",
+      "props": {
+        "id": "dividend-announcements-table",
+        "label": "除息公告清單 (綠色標記除息日 / 藍色標記發放日)",
+        "columns": [
+          {
+            "field": "exDate",
+            "label": "除息日",
+            "sortable": true,
+            "default_sort": "asc"
+          },
+          {
+            "field": "ticker",
+            "label": "標的代碼",
+            "sortable": false
+          },
+          {
+            "field": "dividendPerShare",
+            "label": "每股配息金額 (TWD)",
+            "sortable": true
+          },
+          {
+            "field": "paymentDate",
+            "label": "發放日",
+            "sortable": true
+          },
+          {
+            "field": "taxTag",
+            "label": "稅務標籤 (76W免二代健保 / 54C)",
+            "sortable": true
+          }
+        ],
+        "data": {
+          "$bindState": "/data/listDividendAnnouncements"
+        }
+      },
+      "children": []
+    },
+    "corporate-actions-table": {
+      "type": "DataTable",
+      "props": {
+        "id": "corporate-actions-table",
+        "label": "股票分割事件清單 (紫色標記生效日)",
+        "columns": [
+          {
+            "field": "effectiveDate",
+            "label": "分割生效日",
+            "sortable": true,
+            "default_sort": "asc"
+          },
+          {
+            "field": "ticker",
+            "label": "標的代碼",
+            "sortable": false
+          },
+          {
+            "field": "actionType",
+            "label": "事件類型 (STOCK_SPLIT)",
+            "sortable": false
+          },
+          {
+            "field": "splitRatioNumerator",
+            "label": "分割分子",
+            "sortable": false
+          },
+          {
+            "field": "splitRatioDenominator",
+            "label": "分割分母",
+            "sortable": false
+          }
+        ],
+        "data": {
+          "$bindState": "/data/listCorporateActions"
+        }
+      },
+      "children": []
+    },
+    "watermark-detail-modal": {
+      "type": "Dialog",
+      "props": {
+        "title": "數據饋送水位監控詳情 (Watermark Detail)",
+        "description": null,
+        "openPath": "/modals/watermark-detail-modal"
+      },
+      "children": [
+        "watermark-modal-heading",
+        "watermark-table",
+        "close-watermark-modal-btn"
+      ],
+      "visible": {
+        "$state": "/modals/watermark-detail-modal"
+      }
+    },
+    "watermark-modal-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "數據饋送管線同步水位狀態",
+        "level": "h3"
+      },
+      "children": []
+    },
+    "watermark-table": {
+      "type": "DataTable",
+      "props": {
+        "id": "watermark-table",
+        "label": "各 Feed 同步水位表",
+        "columns": [
+          {
+            "field": "feedName",
+            "label": "資料來源 (Feed Name)",
+            "sortable": false
+          },
+          {
+            "field": "status",
+            "label": "同步狀態",
+            "sortable": true
+          },
+          {
+            "field": "latestRecordDate",
+            "label": "最新數據日期",
+            "sortable": true
+          },
+          {
+            "field": "recordsSyncedCount",
+            "label": "已同步筆數",
+            "sortable": true
+          },
+          {
+            "field": "lastSuccessfulSyncAt",
+            "label": "最後成功同步時間",
+            "sortable": true,
+            "default_sort": "desc"
+          },
+          {
+            "field": "updatedAt",
+            "label": "系統更新時間",
+            "sortable": false
+          }
+        ],
+        "data": {
+          "$bindState": "/data/listDataFeedWatermarks"
+        }
+      },
+      "children": []
+    },
+    "close-watermark-modal-btn": {
+      "type": "Button",
+      "props": {
+        "label": "關閉",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "closeModal",
+            "params": {
+              "id": "watermark-detail-modal"
+            }
+          }
+        ]
+      }
+    },
+    "pairwise-matrix-modal": {
+      "type": "Dialog",
+      "props": {
+        "title": "兩兩正交矩陣熱圖 (Pairwise Correlation & R² Matrix)",
+        "description": null,
+        "openPath": "/modals/pairwise-matrix-modal"
+      },
+      "children": [
+        "pairwise-modal-heading",
+        "pairwise-matrix-chart",
+        "close-pairwise-modal-btn"
+      ],
+      "visible": {
+        "$state": "/modals/pairwise-matrix-modal"
+      }
+    },
+    "pairwise-modal-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "兩兩資產共線性檢驗矩陣",
+        "level": "h3"
+      },
+      "children": []
+    },
+    "pairwise-matrix-chart": {
+      "type": "Chart",
+      "props": {
+        "id": "pairwise-matrix-chart",
+        "label": "兩兩相關係數與 R² 熱圖 (R² ≥ 0.50 標記共線排除)",
+        "data_ref": "listPairwiseMatrix"
+      },
+      "children": []
+    },
+    "close-pairwise-modal-btn": {
+      "type": "Button",
+      "props": {
+        "label": "關閉",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "closeModal",
+            "params": {
+              "id": "pairwise-matrix-modal"
+            }
+          }
+        ]
+      }
+    },
+    "asset-detail-drawer": {
+      "type": "Drawer",
+      "props": {
+        "title": "標的詳細資訊抽屜 (Asset Detail Drawer)",
+        "description": null,
+        "openPath": "/modals/asset-detail-drawer"
+      },
+      "children": [
+        "drawer-header-stack",
+        "drawer-meta-container",
+        "drawer-spider-radar-container",
+        "drawer-kline-container",
+        "drawer-dip-buy-container"
+      ],
+      "visible": {
+        "$state": "/modals/asset-detail-drawer"
+      }
+    },
+    "drawer-header-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": "between",
+        "className": null
+      },
+      "children": [
+        "drawer-heading",
+        "close-drawer-btn"
+      ]
+    },
+    "drawer-heading": {
+      "type": "Heading",
+      "props": {
+        "text": "標的深度檔案與超跌加碼分析",
+        "level": "h3"
+      },
+      "children": []
+    },
+    "close-drawer-btn": {
+      "type": "Button",
+      "props": {
+        "label": "關閉抽屜",
+        "variant": "secondary",
+        "disabled": null
+      },
+      "children": [],
+      "on": {
+        "press": [
+          {
+            "action": "closeModal",
+            "params": {
+              "id": "asset-detail-drawer"
+            }
+          }
+        ]
+      }
+    },
+    "drawer-meta-container": {
+      "type": "Card",
+      "props": {
+        "title": "基本檔案與配息政策",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "drawer-asset-metric-ticker",
+        "drawer-asset-metric-name",
+        "drawer-asset-metric-aum",
+        "drawer-asset-metric-freq"
+      ]
+    },
+    "drawer-asset-metric-ticker": {
+      "type": "MetricCard",
+      "props": {
+        "id": "drawer-asset-metric-ticker",
+        "label": "標的代碼",
+        "value": {
+          "$bindState": "/metrics/drawer-asset-metric-ticker"
+        },
+        "data_ref": "getGlobalAssetByTicker"
+      },
+      "children": []
+    },
+    "drawer-asset-metric-name": {
+      "type": "MetricCard",
+      "props": {
+        "id": "drawer-asset-metric-name",
+        "label": "標的名稱",
+        "value": {
+          "$bindState": "/metrics/drawer-asset-metric-name"
+        },
+        "data_ref": "getGlobalAssetByTicker"
+      },
+      "children": []
+    },
+    "drawer-asset-metric-aum": {
+      "type": "MetricCard",
+      "props": {
+        "id": "drawer-asset-metric-aum",
+        "label": "基金規模 (AUM)",
+        "value": {
+          "$bindState": "/metrics/drawer-asset-metric-aum"
+        },
+        "data_ref": "getGlobalAssetByTicker"
+      },
+      "children": []
+    },
+    "drawer-asset-metric-freq": {
+      "type": "MetricCard",
+      "props": {
+        "id": "drawer-asset-metric-freq",
+        "label": "法定配息週期",
+        "value": {
+          "$bindState": "/metrics/drawer-asset-metric-freq"
+        },
+        "data_ref": "getGlobalAssetByTicker"
+      },
+      "children": []
+    },
+    "drawer-spider-radar-container": {
+      "type": "Card",
+      "props": {
+        "title": "多因子得分拆解雷達圖",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "spider-radar-chart"
+      ]
+    },
+    "spider-radar-chart": {
+      "type": "Chart",
+      "props": {
+        "id": "spider-radar-chart",
+        "label": "因子百分位數雷達 (R² / DCA / AUM / MOM / KER / Sharpe / YTM)",
+        "data_ref": "getScoreByTicker"
+      },
+      "children": []
+    },
+    "drawer-kline-container": {
+      "type": "Card",
+      "props": {
+        "title": "歷史 Raw Close 日 K 線與均線系統",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "drawer-kline-toolbar-stack",
+        "kline-chart"
+      ]
+    },
+    "drawer-kline-toolbar-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": null,
+        "className": null
+      },
+      "children": [
+        "kline-window-selector",
+        "toggle-kline-ma-switch",
+        "toggle-kline-bb-switch",
+        "toggle-kline-fib-switch"
+      ]
+    },
+    "kline-window-selector": {
+      "type": "Radio",
+      "props": {
+        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
+        "name": "kline-window-selector",
+        "options": [
+          "1M",
+          "3M",
+          "6M",
+          "1Y"
+        ],
+        "value": {
+          "$bindState": "/filters/kline-window-selector"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "toggle-kline-ma-switch": {
+      "type": "Switch",
+      "props": {
+        "label": "四條均線開關 (20/60/120/240MA)",
+        "name": "toggle-kline-ma-switch",
+        "checked": {
+          "$bindState": "/filters/toggle-kline-ma-switch"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "toggle-kline-bb-switch": {
+      "type": "Switch",
+      "props": {
+        "label": "月線布林通道開關 (20MA ± 2σ)",
+        "name": "toggle-kline-bb-switch",
+        "checked": {
+          "$bindState": "/filters/toggle-kline-bb-switch"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "toggle-kline-fib-switch": {
+      "type": "Switch",
+      "props": {
+        "label": "黃金分割警戒線 (-23.6%, -38.2%, -50.0%, -61.8%, -76.4%)",
+        "name": "toggle-kline-fib-switch",
+        "checked": {
+          "$bindState": "/filters/toggle-kline-fib-switch"
+        },
+        "checks": null,
+        "validateOn": null
+      },
+      "children": []
+    },
+    "kline-chart": {
+      "type": "Chart",
+      "props": {
+        "id": "kline-chart",
+        "label": "原始收盤日 K 線 (預設 6M，20/60/120/240MA、月線布林通道、黃金分割 23.6%/38.2%/50%/61.8%/76.4%)",
+        "data_ref": "getQuoteTimeSeries"
+      },
+      "children": []
+    },
+    "drawer-dip-buy-container": {
+      "type": "Card",
+      "props": {
+        "title": "🎯 超跌加碼勝率評分卡片 (Dip-Buying Score)",
+        "description": null,
+        "maxWidth": null,
+        "centered": null,
+        "className": null
+      },
+      "children": [
+        "dip-buy-score-metric",
+        "dip-buy-star-metric",
+        "dip-buy-winrate-metric",
+        "dip-buy-action-text"
+      ]
+    },
+    "dip-buy-score-metric": {
+      "type": "MetricCard",
+      "props": {
+        "id": "dip-buy-score-metric",
+        "label": "超跌加碼綜合評分 (S_dip, 0 ~ 100 分)",
+        "value": {
+          "$bindState": "/metrics/dip-buy-score-metric"
+        },
+        "data_ref": "getDipBuyOpportunity"
+      },
+      "children": []
+    },
+    "dip-buy-star-metric": {
+      "type": "MetricCard",
+      "props": {
+        "id": "dip-buy-star-metric",
+        "label": "訊號燈與評級 (五星黃金坑 / 四星超跌區 / 三星平穩區 / 低星觀望區)",
+        "value": {
+          "$bindState": "/metrics/dip-buy-star-metric"
+        },
+        "data_ref": "getDipBuyOpportunity"
+      },
+      "children": []
+    },
+    "dip-buy-winrate-metric": {
+      "type": "MetricCard",
+      "props": {
+        "id": "dip-buy-winrate-metric",
+        "label": "歷史 1 年持有正報酬勝率",
+        "value": {
+          "$bindState": "/metrics/dip-buy-winrate-metric"
+        },
+        "data_ref": "getDipBuyOpportunity"
+      },
+      "children": []
+    },
+    "dip-buy-action-text": {
+      "type": "Text",
+      "props": {
+        "text": "系統建議動作 (果斷撈底產生單筆超跌工單 / 分批加碼 / 定額靜默扣款 / 嚴禁追高)",
+        "variant": null
+      },
+      "children": []
+    }
+  }
+}
