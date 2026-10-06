@@ -38,7 +38,7 @@ export default function MacroRegimeBanner({
   const yieldSnapshot =
     store?.get?.('/data/getLatestMacroYieldSnapshot') || {};
 
-  const rawState = String(regimeData.macroState || 'EXPANSION').toUpperCase();
+  const rawState = String(regimeData.macroState || 'HIGH_YIELD_ACCUMULATION').toUpperCase();
 
   let stateLabel = rawState;
   let stateIcon = '🟢';
@@ -60,11 +60,6 @@ export default function MacroRegimeBanner({
     stateIcon = '🟡';
     stateBadgeClass =
       'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800';
-  } else if (rawState.includes('EXPANSION')) {
-    stateLabel = '擴張繁榮期 (EXPANSION)';
-    stateIcon = '🟢';
-    stateBadgeClass =
-      'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
   }
 
   // Calculate allocation percentages
