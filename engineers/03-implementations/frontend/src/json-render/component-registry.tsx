@@ -44,7 +44,7 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
     // Intercept button press to auto-close modals and trigger toasts
     const customEmit = (eventName: string, ...args: any[]) => {
       if (eventName === 'press' && store) {
-        const id = element?.props?.id ?? '';
+        const id = element?.props?.id ?? element?.id ?? '';
         const label = element?.props?.label ?? '';
 
         // Auto-switch tabs when clicking tab buttons
@@ -90,13 +90,16 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
     let effectiveBindings = { ...(bindings ?? element?.bindings ?? {}) };
     let adaptedProps = { ...rawProps };
 
-    // Resolve two-way binding for Select, Radio, Input (value)
+    // Resolve two-way binding for Select, Radio, Input, Tabs (value)
     if (rawProps.value && typeof rawProps.value === 'object' && '$bindState' in rawProps.value) {
       const path = rawProps.value.$bindState;
       effectiveBindings.value = path;
       if (store) {
         const valFromStore = store.get(path);
-        adaptedProps.value = valFromStore !== undefined ? valFromStore : (rawProps.options ? rawProps.options[0] : '');
+        adaptedProps.value =
+          valFromStore && valFromStore !== 'all'
+            ? valFromStore
+            : (rawProps.defaultValue || rawProps.options?.[0] || rawProps.tabs?.[0]?.value || '');
       }
     }
 

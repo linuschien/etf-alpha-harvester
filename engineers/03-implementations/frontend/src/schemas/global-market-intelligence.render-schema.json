@@ -90,76 +90,28 @@
       ]
     },
     "tabs-nav-stack": {
-      "type": "Stack",
+      "type": "Tabs",
       "props": {
-        "direction": "horizontal",
-        "gap": "md",
-        "align": "center",
-        "justify": "between",
-        "className": null
-      },
-      "children": [
-        "tab-macro-trigger",
-        "tab-leaderboard-trigger",
-        "tab-dca-trigger"
-      ]
-    },
-    "tab-macro-trigger": {
-      "type": "Button",
-      "props": {
-        "label": "全球宏觀與情緒雷達",
-        "variant": "secondary",
-        "disabled": null
-      },
-      "children": [],
-      "on": {
-        "press": [
+        "tabs": [
           {
-            "action": "selectTab",
-            "params": {
-              "tab": "macro-sentiment-section"
-            }
-          }
-        ]
-      }
-    },
-    "tab-leaderboard-trigger": {
-      "type": "Button",
-      "props": {
-        "label": "合規標的天梯榜與正交雷達",
-        "variant": "secondary",
-        "disabled": null
-      },
-      "children": [],
-      "on": {
-        "press": [
+            "label": "全球宏觀與情緒雷達",
+            "value": "macro-sentiment-section"
+          },
           {
-            "action": "selectTab",
-            "params": {
-              "tab": "qualified-leaderboard-section"
-            }
-          }
-        ]
-      }
-    },
-    "tab-dca-trigger": {
-      "type": "Button",
-      "props": {
-        "label": "定期定額散戶人氣榜與除息月曆",
-        "variant": "secondary",
-        "disabled": null
-      },
-      "children": [],
-      "on": {
-        "press": [
+            "label": "合規標的天梯榜與正交雷達",
+            "value": "qualified-leaderboard-section"
+          },
           {
-            "action": "selectTab",
-            "params": {
-              "tab": "dca-calendar-section"
-            }
+            "label": "定期定額散戶人氣榜與除息月曆",
+            "value": "dca-calendar-section"
           }
-        ]
-      }
+        ],
+        "defaultValue": "macro-sentiment-section",
+        "value": {
+          "$bindState": "/activeTab"
+        }
+      },
+      "children": []
     },
     "macro-sentiment-section": {
       "type": "div",
@@ -175,79 +127,28 @@
       ]
     },
     "macro-subtabs-nav-stack": {
-      "type": "Stack",
+      "type": "Tabs",
       "props": {
-        "direction": "horizontal",
-        "gap": "md",
-        "align": "center",
-        "justify": null,
-        "className": "border-b pb-3 mb-2"
-      },
-      "children": [
-        "subtab-benchmark-trigger",
-        "subtab-panic-trigger",
-        "subtab-yield-trigger"
-      ]
-    },
-    "subtab-benchmark-trigger": {
-      "type": "Button",
-      "props": {
-        "id": "subtab-benchmark-trigger",
-        "label": "5 大全球核心基準指數近一日行情與走勢",
-        "variant": "default",
-        "disabled": null
-      },
-      "children": [],
-      "on": {
-        "press": [
+        "tabs": [
           {
-            "action": "selectSubTab",
-            "params": {
-              "subTab": "macro-subtab-benchmark"
-            }
-          }
-        ]
-      }
-    },
-    "subtab-panic-trigger": {
-      "type": "Button",
-      "props": {
-        "id": "subtab-panic-trigger",
-        "label": "四大恐慌情緒指標",
-        "variant": "outline",
-        "disabled": null
-      },
-      "children": [],
-      "on": {
-        "press": [
+            "label": "5 大全球核心基準指數近一日行情與走勢",
+            "value": "macro-subtab-benchmark"
+          },
           {
-            "action": "selectSubTab",
-            "params": {
-              "subTab": "macro-subtab-panic"
-            }
-          }
-        ]
-      }
-    },
-    "subtab-yield-trigger": {
-      "type": "Button",
-      "props": {
-        "id": "subtab-yield-trigger",
-        "label": "宏觀利率與殖利率曲線",
-        "variant": "outline",
-        "disabled": null
-      },
-      "children": [],
-      "on": {
-        "press": [
+            "label": "四大恐慌情緒指標",
+            "value": "macro-subtab-panic"
+          },
           {
-            "action": "selectSubTab",
-            "params": {
-              "subTab": "macro-subtab-yield"
-            }
+            "label": "宏觀利率與殖利率曲線",
+            "value": "macro-subtab-yield"
           }
-        ]
-      }
+        ],
+        "defaultValue": "macro-subtab-benchmark",
+        "value": {
+          "$bindState": "/activeSubTab"
+        }
+      },
+      "children": []
     },
     "macro-subtab-benchmark": {
       "type": "div",

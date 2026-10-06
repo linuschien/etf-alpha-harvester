@@ -80,14 +80,31 @@ describe('GlobalMarketIntelligencePage', () => {
       })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /全球宏觀與情緒雷達/i })
+      screen.getByRole('tab', { name: /全球宏觀與情緒雷達/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /合規標的天梯榜與正交雷達/i })
+      screen.getByRole('tab', { name: /合規標的天梯榜與正交雷達/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /定期定額散戶人氣榜與除息月曆/i })
+      screen.getByRole('tab', { name: /定期定額散戶人氣榜與除息月曆/i })
     ).toBeInTheDocument();
+  });
+
+  it('switches main tabs and updates activeTab in store', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const tab2 = screen.getByRole('tab', { name: /合規標的天梯榜與正交雷達/i });
+    await user.click(tab2);
+    expect(store.get('/activeTab')).toBe('qualified-leaderboard-section');
+
+    const tab3 = screen.getByRole('tab', { name: /定期定額散戶人氣榜與除息月曆/i });
+    await user.click(tab3);
+    expect(store.get('/activeTab')).toBe('dca-calendar-section');
+
+    const tab1 = screen.getByRole('tab', { name: /全球宏觀與情緒雷達/i });
+    await user.click(tab1);
+    expect(store.get('/activeTab')).toBe('macro-sentiment-section');
   });
 
   it('renders 3 sub-tabs under macro sentiment radar and switches sub-tabs', async () => {
@@ -95,13 +112,13 @@ describe('GlobalMarketIntelligencePage', () => {
     renderPage();
 
     // Verify all 3 sub-tab buttons are rendered
-    const subTab1 = await screen.findByRole('button', {
+    const subTab1 = await screen.findByRole('tab', {
       name: /5 大全球核心基準指數近一日行情與走勢/i,
     });
-    const subTab2 = screen.getByRole('button', {
+    const subTab2 = screen.getByRole('tab', {
       name: /四大恐慌情緒指標/i,
     });
-    const subTab3 = screen.getByRole('button', {
+    const subTab3 = screen.getByRole('tab', {
       name: /宏觀利率與殖利率曲線/i,
     });
 
