@@ -243,13 +243,13 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
         const latestQ = sorted[sorted.length - 1];
         let val = `${latestQ.closePrice.toFixed(2)}`;
         if (ticker === '^VIX') {
-          val += latestQ.closePrice >= 25 ? ' (⚠️ 警戒)' : ' (常態低波)';
+          val += latestQ.closePrice > 30 ? ' (⚠️ 過度恐慌)' : latestQ.closePrice < 15 ? ' (⚠️ 過度樂觀)' : ' (健康常態)';
         } else if (ticker === '^VXN') {
-          val += latestQ.closePrice >= 35 ? ' (⚠️ 警戒)' : ' (常態平穩)';
+          val += latestQ.closePrice > 30 ? ' (⚠️ 過度恐慌)' : latestQ.closePrice < 15 ? ' (⚠️ 過度樂觀)' : ' (健康常態)';
         } else if (ticker === 'FEAR_GREED') {
-          val += latestQ.closePrice < 25 ? ' (極度恐懼)' : latestQ.closePrice < 45 ? ' (恐懼區間)' : ' (常態平衡)';
+          val += latestQ.closePrice > 75 ? ' (⚠️ 過度樂觀)' : latestQ.closePrice < 25 ? ' (⚠️ 過度恐慌)' : ' (健康常態)';
         } else if (ticker === '^MOVE') {
-          val += latestQ.closePrice >= 120 ? ' (⚠️ 警戒)' : ' (債市平穩)';
+          val += latestQ.closePrice > 120 ? ' (⚠️ 過度恐慌)' : latestQ.closePrice < 60 ? ' (⚠️ 過度樂觀)' : ' (健康常態)';
         }
         const date = latestQ.tradeDate ? String(latestQ.tradeDate).slice(0, 10) : '';
         return { val, date };

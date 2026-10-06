@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import AlertDialog from './AlertDialog';
 import Breadcrumb from './Breadcrumb';
 import MetricCard from './MetricCard';
+import ChartComponent from './ChartComponent';
 import ChartPlaceholder from './ChartPlaceholder';
 import DataTable from './DataTable';
 import { api } from '@/lib/api-client';
@@ -166,5 +167,33 @@ describe('Custom JSON-render Components', () => {
     const scoreHeader = screen.getByText('評分');
     await user.click(scoreHeader);
     expect(scoreHeader).toBeInTheDocument();
+  });
+
+  it('renders ChartComponent with panic sparkline channel thresholds and status', () => {
+    const store = createStateStore({
+      data: {
+        quoteTimeSeries: {
+          fearGreed: [
+            { tradeDate: '2026-09-01', closePrice: 85 },
+            { tradeDate: '2026-09-02', closePrice: 20 },
+          ],
+          move: [
+            { tradeDate: '2026-09-01', closePrice: 50 },
+            { tradeDate: '2026-09-02', closePrice: 130 },
+          ],
+        },
+      },
+    });
+
+    render(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'chart-fear-greed-spark' }} />
+        <ChartComponent props={{ id: 'chart-move-spark' }} />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText('FEAR_GREED 恐懼貪婪指數 (CNN)')).toBeInTheDocument();
+    expect(screen.getByText('^MOVE 美債波動率指數 (美債期權)')).toBeInTheDocument();
+    expect(screen.getAllByText(/⚠️ 過度恐慌/i)).toHaveLength(2);
   });
 });

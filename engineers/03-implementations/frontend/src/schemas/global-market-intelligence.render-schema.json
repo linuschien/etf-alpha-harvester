@@ -266,13 +266,10 @@
       "children": []
     },
     "panic-sentiment-container": {
-      "type": "Card",
+      "type": "div",
       "props": {
-        "title": null,
-        "description": null,
-        "maxWidth": null,
-        "centered": null,
-        "className": null
+        "id": "panic-sentiment-container",
+        "className": "space-y-4"
       },
       "children": [
         "panic-sentiment-heading",
@@ -291,110 +288,21 @@
       "type": "Grid",
       "props": {
         "columns": 2,
-        "gap": "lg",
+        "gap": "md",
         "className": "grid-cols-1 md:grid-cols-2"
       },
       "children": [
-        "panic-card-vix",
-        "panic-card-vxn",
-        "panic-card-fear-greed",
-        "panic-card-move"
-      ]
-    },
-    "panic-card-vix": {
-      "type": "div",
-      "props": {
-        "className": "space-y-3"
-      },
-      "children": [
-        "metric-vix",
-        "chart-vix-spark"
-      ]
-    },
-    "panic-card-vxn": {
-      "type": "div",
-      "props": {
-        "className": "space-y-3"
-      },
-      "children": [
-        "metric-vxn",
-        "chart-vxn-spark"
-      ]
-    },
-    "panic-card-fear-greed": {
-      "type": "div",
-      "props": {
-        "className": "space-y-3"
-      },
-      "children": [
-        "metric-fear-greed",
-        "chart-fear-greed-spark"
-      ]
-    },
-    "panic-card-move": {
-      "type": "div",
-      "props": {
-        "className": "space-y-3"
-      },
-      "children": [
-        "metric-move",
+        "chart-vix-spark",
+        "chart-vxn-spark",
+        "chart-fear-greed-spark",
         "chart-move-spark"
       ]
     },
-    "metric-vix": {
-      "type": "MetricCard",
-      "props": {
-        "id": "metric-vix",
-        "label": "^VIX 波動率指數 (警戒線: 25.0 / 30.0)",
-        "value": {
-          "$bindState": "/metrics/metric-vix"
-        },
-        "data_ref": "listMarketDailyQuotes"
-      },
-      "children": []
-    },
-    "metric-vxn": {
-      "type": "MetricCard",
-      "props": {
-        "id": "metric-vxn",
-        "label": "^VXN 那指波動率指數 (警戒線: 35.0 / 40.0)",
-        "value": {
-          "$bindState": "/metrics/metric-vxn"
-        },
-        "data_ref": "listMarketDailyQuotes"
-      },
-      "children": []
-    },
-    "metric-fear-greed": {
-      "type": "MetricCard",
-      "props": {
-        "id": "metric-fear-greed",
-        "label": "FEAR_GREED 恐懼貪婪指數 (極度恐懼: <20 / 極度貪婪: >80)",
-        "value": {
-          "$bindState": "/metrics/metric-fear-greed"
-        },
-        "data_ref": "listMarketDailyQuotes"
-      },
-      "children": []
-    },
-    "metric-move": {
-      "type": "MetricCard",
-      "props": {
-        "id": "metric-move",
-        "label": "^MOVE 美債波動率指數 (警戒線: 120.0 / 140.0)",
-        "value": {
-          "$bindState": "/metrics/metric-move"
-        },
-        "data_ref": "listMarketDailyQuotes"
-      },
-      "children": []
-    },
-
     "chart-vix-spark": {
       "type": "Chart",
       "props": {
         "id": "chart-vix-spark",
-        "label": "^VIX 走勢圖 (預設 6M，水平警戒線: 25/30)",
+        "label": "^VIX 波動率指數 (常態通道: 15 ~ 30)",
         "data_ref": "getQuoteTimeSeries"
       },
       "children": []
@@ -403,7 +311,7 @@
       "type": "Chart",
       "props": {
         "id": "chart-vxn-spark",
-        "label": "^VXN 走勢圖 (預設 6M，水平警戒線: 35/40)",
+        "label": "^VXN 那指波動率指數 (常態通道: 15 ~ 30)",
         "data_ref": "getQuoteTimeSeries"
       },
       "children": []
@@ -412,7 +320,7 @@
       "type": "Chart",
       "props": {
         "id": "chart-fear-greed-spark",
-        "label": "FEAR_GREED 走勢圖 (預設 6M，水平警戒線: 20/80)",
+        "label": "FEAR_GREED 恐懼貪婪指數 (常態通道: 25 ~ 75)",
         "data_ref": "getQuoteTimeSeries"
       },
       "children": []
@@ -421,7 +329,7 @@
       "type": "Chart",
       "props": {
         "id": "chart-move-spark",
-        "label": "^MOVE 走勢圖 (預設 6M，水平警戒線: 120/140)",
+        "label": "^MOVE 美債波動率指數 (常態通道: 60 ~ 120)",
         "data_ref": "getQuoteTimeSeries"
       },
       "children": []

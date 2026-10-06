@@ -364,7 +364,9 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(dateElements.length).toBeGreaterThan(0);
 
     // Verify panic indicators
-    expect(screen.getAllByText(/16\.34/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/30\.83/i).length).toBeGreaterThanOrEqual(1);
+    await waitFor(() => {
+      expect(screen.getAllByText(/16\.34/i).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/30\.83/i).length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

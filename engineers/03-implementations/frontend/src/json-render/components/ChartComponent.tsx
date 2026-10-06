@@ -63,22 +63,23 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     }
   }, []);
 
-  // 1. Sparkline / Emotion Gauge Charts
+  // 1. Sparkline / Emotion Gauge Charts (Integrated Panic Sentiment Card)
   if (id.includes('vix') || id.includes('vxn') || id.includes('move') || id.includes('fear-greed')) {
     const isVix = id.includes('vix') && !id.includes('vxn');
     const isVxn = id.includes('vxn');
     const isFg = id.includes('fear-greed');
 
     const title = isVix
-      ? '^VIX 恐慌指數 (S&P 500 波動率)'
+      ? '^VIX 波動率指數 (S&P 500)'
       : isVxn
-      ? '^VXN 那斯達克波動指數'
+      ? '^VXN 那指波動率指數 (那斯達克)'
       : isFg
-      ? 'CNN Fear & Greed 雷達'
-      : '^MOVE 美國公債波動指數';
+      ? 'FEAR_GREED 恐懼貪婪指數 (CNN)'
+      : '^MOVE 美債波動率指數 (美債期權)';
 
-    const alert1 = isVix ? 25 : isVxn ? 35 : isFg ? 20 : 120;
-    const alert2 = isVix ? 30 : isVxn ? 40 : isFg ? 80 : 140;
+    // Golden Dual Threshold Channels
+    const lower = isVix ? 15 : isVxn ? 15 : isFg ? 25 : 60;
+    const upper = isVix ? 30 : isVxn ? 30 : isFg ? 75 : 120;
 
     const ticker = isVix ? '^VIX' : isVxn ? '^VXN' : isFg ? 'FEAR_GREED' : '^MOVE';
     const tickerKey = isVix ? 'vix' : isVxn ? 'vxn' : isFg ? 'fearGreed' : 'move';
@@ -89,111 +90,174 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
     if (!quoteSeries || quoteSeries.length === 0) {
       return (
-        <div className="w-full rounded-xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between animate-pulse">
-          <div className="flex items-center justify-between mb-2">
+        <div className="w-full rounded-xl border border-border bg-card p-5 shadow-sm flex flex-col justify-between space-y-3 animate-pulse">
+          <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-medium text-muted-foreground">{title}</div>
-              <div className="text-xl font-bold font-mono tracking-tight text-foreground flex items-center gap-2">
+              <div className="text-2xl font-bold font-mono tracking-tight text-foreground flex items-center gap-2 mt-1">
                 --
               </div>
             </div>
             <div className="text-right text-xs font-mono text-muted-foreground">
-              <div>警戒: {alert1}</div>
-              <div>恐慌: {alert2}</div>
+              <div className="text-[11px] text-muted-foreground/70">常態通道</div>
+              <div className="font-semibold text-foreground/80">{lower} ~ {upper}</div>
             </div>
           </div>
-          <div className="w-full h-28 bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
+          <div className="w-full h-32 bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
             載入走勢中...
           </div>
         </div>
       );
     }
 
-    const points = quoteSeries.map((q: any) => Number(q.closePrice));
+    const sortedSeries = [...quoteSeries].sort((a: any, b: any) =>
+      String(a.tradeDate || '').localeCompare(String(b.tradeDate || ''))
+    );
+    const points = sortedSeries.map((q: any) => Number(q.closePrice));
+    const dates = sortedSeries.map((q: any) => (q.tradeDate ? String(q.tradeDate).slice(0, 10) : ''));
     const currentVal = points[points.length - 1];
+    const latestDate = dates[dates.length - 1] || store?.get?.(`/metrics/${tickerKey}-date`) || '';
 
-    const min = Math.min(...points, alert1) * 0.85;
-    const max = Math.max(...points, alert2) * 1.15;
-    const width = 360;
-    const height = 140;
-    const padding = 20;
+    // Channel Status Evaluation
+    const isOverOptimistic = isFg ? currentVal > upper : currentVal < lower;
+    const isPanicAlert = isFg ? currentVal < lower : currentVal > upper;
+
+    const statusText = isPanicAlert
+      ? (isFg ? '⚠️ 過度恐慌 (極度恐懼)' : '⚠️ 過度恐慌')
+      : isOverOptimistic
+      ? (isFg ? '⚠️ 過度樂觀 (極度貪婪)' : '⚠️ 過度樂觀 (市場自滿)')
+      : '健康常態';
+
+    const badgeClass = isPanicAlert
+      ? 'bg-destructive/15 text-destructive border-destructive/30'
+      : isOverOptimistic
+      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+
+    // Chart Dimensions & Layout
+    const width = 500;
+    const height = 150;
+    const paddingX = 14;
+    const paddingTop = 12;
+    const paddingBottom = 26;
+
+    const min = Math.min(...points, lower) * 0.90;
+    const max = Math.max(...points, upper) * 1.10;
 
     const coords = points.map((val, idx) => {
-      const x = padding + (idx / (points.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((val - min) / (max - min)) * (height - padding * 2);
+      const x = paddingX + (idx / Math.max(1, points.length - 1)) * (width - paddingX * 2);
+      const y = height - paddingBottom - ((val - min) / (max - min)) * (height - paddingTop - paddingBottom);
       return { x, y, val };
     });
 
     const pathD = coords.reduce((acc, c, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${c.x} ${c.y}`, '');
-    const alert1Y = height - padding - ((alert1 - min) / (max - min)) * (height - padding * 2);
-    const alert2Y = height - padding - ((alert2 - min) / (max - min)) * (height - padding * 2);
+    const lowerY = height - paddingBottom - ((lower - min) / (max - min)) * (height - paddingTop - paddingBottom);
+    const upperY = height - paddingBottom - ((upper - min) / (max - min)) * (height - paddingTop - paddingBottom);
+
+    const startDate = (dates[0] || '').replace(/-/g, '/');
+    const midIdx = Math.floor((dates.length - 1) / 2);
+    const midDate = (dates[midIdx] || '').replace(/-/g, '/');
+    const endDate = (dates[dates.length - 1] || '').replace(/-/g, '/');
 
     return (
-      <div className="w-full rounded-xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between">
-        <div className="flex items-center justify-between mb-2">
+      <div className="w-full rounded-xl border border-border bg-card p-5 shadow-sm flex flex-col justify-between space-y-3">
+        {/* Header: Title, Date, Current Value, Badge, Channel Info */}
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <div className="text-xs font-medium text-muted-foreground">{title}</div>
-            <div className="text-xl font-bold font-mono tracking-tight text-foreground flex items-center gap-2">
-              {currentVal}
+            <div className="text-xs font-semibold text-muted-foreground tracking-wide flex items-center gap-2">
+              <span>{title}</span>
+              {latestDate && (
+                <span className="text-[11px] font-normal text-muted-foreground/80 font-mono">
+                  交易日: {latestDate}
+                </span>
+              )}
+            </div>
+            <div className="text-2xl font-bold font-mono tracking-tight text-foreground flex items-center gap-2.5 mt-1">
+              <span>{currentVal.toFixed(2)}</span>
               <span
-                className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                  currentVal > alert1
-                    ? 'bg-destructive/15 text-destructive'
-                    : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                }`}
+                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${badgeClass}`}
               >
-                {currentVal > alert1 ? '警戒區間' : '健康常態'}
+                {statusText}
               </span>
             </div>
           </div>
           <div className="text-right text-xs font-mono text-muted-foreground">
-            <div>警戒: {alert1}</div>
-            <div>恐慌: {alert2}</div>
+            <div className="text-[11px] text-muted-foreground/70">常態通道</div>
+            <div className="font-semibold text-foreground/80">{lower} ~ {upper}</div>
           </div>
         </div>
 
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-28 overflow-visible">
-          {/* Alert Threshold Lines */}
-          <line
-            x1={padding}
-            y1={alert1Y}
-            x2={width - padding}
-            y2={alert1Y}
-            stroke="#f59e0b"
-            strokeDasharray="4 4"
-            strokeWidth="1.2"
-          />
-          <line
-            x1={padding}
-            y1={alert2Y}
-            x2={width - padding}
-            y2={alert2Y}
-            stroke="#ef4444"
-            strokeDasharray="4 4"
-            strokeWidth="1.2"
-          />
-
-          {/* Area fill */}
-          <path
-            d={`${pathD} L ${coords[coords.length - 1].x} ${height - padding} L ${coords[0].x} ${
-              height - padding
-            } Z`}
-            fill={isFg ? 'url(#fg-grad)' : 'url(#spark-grad)'}
-            opacity="0.25"
-          />
-
+        {/* SVG Sparkline with Normal Channel band, dual threshold lines and X-axis dates */}
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32 overflow-visible">
           <defs>
-            <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="fg-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+            <linearGradient id={`grad-${tickerKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={isFg ? '#10b981' : '#3b82f6'} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={isFg ? '#10b981' : '#3b82f6'} stopOpacity="0.0" />
             </linearGradient>
           </defs>
 
-          {/* Curve */}
+          {/* Normal Channel Shaded Band */}
+          <rect
+            x={paddingX}
+            y={Math.min(upperY, lowerY)}
+            width={width - paddingX * 2}
+            height={Math.max(2, Math.abs(lowerY - upperY))}
+            fill="currentColor"
+            className="text-muted/10 dark:text-muted/15"
+            rx="3"
+          />
+
+          {/* Upper Threshold Line */}
+          <line
+            x1={paddingX}
+            y1={upperY}
+            x2={width - paddingX}
+            y2={upperY}
+            stroke={isFg ? '#f59e0b' : '#ef4444'}
+            strokeDasharray="4 4"
+            strokeWidth="1.2"
+            opacity="0.85"
+          />
+          <text
+            x={width - paddingX}
+            y={upperY - 3}
+            textAnchor="end"
+            fontSize="9"
+            className="fill-muted-foreground font-mono"
+          >
+            上限 {upper} ({isFg ? '過度樂觀' : '過度恐慌'})
+          </text>
+
+          {/* Lower Threshold Line */}
+          <line
+            x1={paddingX}
+            y1={lowerY}
+            x2={width - paddingX}
+            y2={lowerY}
+            stroke={isFg ? '#ef4444' : '#10b981'}
+            strokeDasharray="4 4"
+            strokeWidth="1.2"
+            opacity="0.85"
+          />
+          <text
+            x={width - paddingX}
+            y={lowerY + 10}
+            textAnchor="end"
+            fontSize="9"
+            className="fill-muted-foreground font-mono"
+          >
+            下限 {lower} ({isFg ? '過度恐慌' : '過度樂觀'})
+          </text>
+
+          {/* Area Fill */}
+          <path
+            d={`${pathD} L ${coords[coords.length - 1].x} ${height - paddingBottom} L ${coords[0].x} ${
+              height - paddingBottom
+            } Z`}
+            fill={`url(#grad-${tickerKey})`}
+          />
+
+          {/* Sparkline Stroke */}
           <path
             d={pathD}
             fill="none"
@@ -211,6 +275,19 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             fill={isFg ? '#10b981' : '#3b82f6'}
             className="animate-pulse"
           />
+
+          {/* X-Axis Date Ticks */}
+          <g className="text-[10px] fill-muted-foreground font-mono">
+            <text x={paddingX} y={height - 6} textAnchor="start">
+              {startDate}
+            </text>
+            <text x={width / 2} y={height - 6} textAnchor="middle">
+              {midDate}
+            </text>
+            <text x={width - paddingX} y={height - 6} textAnchor="end">
+              {endDate}
+            </text>
+          </g>
         </svg>
       </div>
     );
