@@ -295,7 +295,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
   // 2. Macro Yield Curves Chart
   if (id.includes('macro-yield-chart')) {
-    const width = 720;
+    const width = chartWidth || 860;
     const height = 280;
     const paddingLeft = 50;
     const paddingRight = 95;
@@ -411,7 +411,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const uniqueTickIndices = Array.from(new Set(tickIndices));
 
     return (
-      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
+      <div ref={containerRef} className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
           <div>
             <div className="flex items-center gap-2">
@@ -434,13 +434,39 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
         <svg
           viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
           className="w-full h-64 overflow-visible cursor-crosshair select-none"
           onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const clientX = e.clientX - rect.left;
-            const ratio = Math.max(0, Math.min(1, (clientX - paddingLeft) / (width - paddingLeft - paddingRight)));
-            const idx = Math.round(ratio * (pointsCount - 1));
-            setHoverIndex(idx);
+            const svg = e.currentTarget;
+            const chartAreaWidth = width - paddingLeft - paddingRight;
+            let svgX: number | null = null;
+
+            if (typeof svg.createSVGPoint === 'function' && typeof svg.getScreenCTM === 'function') {
+              const pt = svg.createSVGPoint();
+              pt.x = e.clientX;
+              pt.y = e.clientY;
+              const ctm = svg.getScreenCTM();
+              if (ctm) {
+                svgX = pt.matrixTransform(ctm.inverse()).x;
+              }
+            }
+
+            if (svgX === null) {
+              const rect = svg.getBoundingClientRect();
+              const domX = e.clientX - rect.left;
+              svgX = (domX / (rect.width || 1)) * width;
+            }
+
+            if (svgX >= paddingLeft - 20 && svgX <= width - paddingRight + 20) {
+              const ratio = Math.max(0, Math.min(1, (svgX - paddingLeft) / (chartAreaWidth || 1)));
+              const idx = Math.min(
+                pointsCount - 1,
+                Math.max(0, Math.round(ratio * (pointsCount - 1)))
+              );
+              setHoverIndex(idx);
+            } else {
+              setHoverIndex(null);
+            }
           }}
           onMouseLeave={() => setHoverIndex(null)}
         >
