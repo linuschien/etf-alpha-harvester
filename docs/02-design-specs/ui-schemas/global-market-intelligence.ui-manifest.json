@@ -246,13 +246,13 @@
                 "id": "panic-sentiment-container",
                 "abstract_type": "Container",
                 "semantic_variant": "card",
-                "label": "四大恐慌情緒指標 2x2 監控矩陣 (Panic Sentiment Matrix)",
+                "label": "跨市場恐慌風向球容器",
                 "behavior_ref": "visual-hierarchy:size",
                 "children": [
                   {
                     "id": "panic-sentiment-heading",
                     "abstract_type": "Heading",
-                    "label": "跨市場恐慌風向球 (2x2 同步監控，均值回歸水平警戒線)",
+                    "label": "跨市場恐慌風向球",
                     "behavior_ref": "visual-hierarchy:weight"
                   },
                   {

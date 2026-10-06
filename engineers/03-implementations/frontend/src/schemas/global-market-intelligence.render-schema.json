@@ -268,7 +268,7 @@
     "panic-sentiment-container": {
       "type": "Card",
       "props": {
-        "title": "四大恐慌情緒指標 2x2 監控矩陣 (Panic Sentiment Matrix)",
+        "title": null,
         "description": null,
         "maxWidth": null,
         "centered": null,
@@ -282,7 +282,7 @@
     "panic-sentiment-heading": {
       "type": "Heading",
       "props": {
-        "text": "跨市場恐慌風向球 (2x2 同步監控，均值回歸水平警戒線)",
+        "text": "跨市場恐慌風向球",
         "level": "h3"
       },
       "children": []
