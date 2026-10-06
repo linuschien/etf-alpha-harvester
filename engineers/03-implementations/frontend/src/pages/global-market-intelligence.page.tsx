@@ -150,23 +150,32 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     if (macroYield && syncedRef.current.macroYield !== macroYield) {
       syncedRef.current.macroYield = macroYield;
       store.set('/data/getLatestMacroYieldSnapshot', macroYield);
-      if (macroYield.us10YearTreasuryYield) {
+      const yieldDate = macroYield.recordDate ? String(macroYield.recordDate).slice(0, 10) : '';
+      if (macroYield.us10YearTreasuryYield !== undefined && macroYield.us10YearTreasuryYield !== null) {
         store.set('/metrics/metric-dgs10', `${macroYield.us10YearTreasuryYield}%`);
       }
-      if (macroYield.us20YearTreasuryYield) {
+      if (macroYield.us20YearTreasuryYield !== undefined && macroYield.us20YearTreasuryYield !== null) {
         store.set('/metrics/metric-dgs20', `${macroYield.us20YearTreasuryYield}%`);
       }
-      if (macroYield.yieldSpread10yMinus2y !== undefined) {
+      if (macroYield.yieldSpread10yMinus2y !== undefined && macroYield.yieldSpread10yMinus2y !== null) {
         const sign = macroYield.yieldSpread10yMinus2y >= 0 ? '+' : '';
         store.set('/metrics/metric-t10y2y', `${sign}${macroYield.yieldSpread10yMinus2y}%`);
       }
-      if (macroYield.usCorporateBondEffectiveYield) {
+      if (macroYield.usCorporateBondEffectiveYield !== undefined && macroYield.usCorporateBondEffectiveYield !== null) {
         store.set('/metrics/metric-corp-yield', `${macroYield.usCorporateBondEffectiveYield}%`);
+      }
+      if (yieldDate) {
+        store.set('/metrics/metric-dgs10-date', yieldDate);
+        store.set('/metrics/metric-dgs20-date', yieldDate);
+        store.set('/metrics/metric-t10y2y-date', yieldDate);
+        store.set('/metrics/metric-corp-yield-date', yieldDate);
       }
     }
 
     if (macroRegime && syncedRef.current.macroRegime !== macroRegime) {
       syncedRef.current.macroRegime = macroRegime;
+      store.set('/data/getMacroRegime', macroRegime);
+      store.set('/macroRegime', macroRegime);
       const regimeText = macroRegime.assessmentSummary
         ? `${macroRegime.macroState} (${macroRegime.assessmentSummary.slice(0, 16)}...)`
         : macroRegime.macroState;

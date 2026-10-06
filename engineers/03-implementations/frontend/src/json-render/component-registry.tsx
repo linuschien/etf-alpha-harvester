@@ -12,6 +12,7 @@ import MetricCard from './components/MetricCard';
 import ChartComponent from './components/ChartComponent';
 import EventCalendar from './components/EventCalendar';
 import SegmentedRadio from './components/SegmentedRadio';
+import MacroRegimeBanner from './components/MacroRegimeBanner';
 
 // ── Adapter: ComponentRenderProps → BaseComponentProps ──────────────────────
 export function adapt(Comp: ComponentType<any>): ComponentType<any> {
@@ -153,6 +154,7 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
   EventCalendar: EventCalendar, // ETF Dividend & Split Calendar
   Radio: adapt(SegmentedRadio), // Inline horizontal segmented radio button group
   SegmentedRadio: adapt(SegmentedRadio),
+  MacroRegimeBanner: MacroRegimeBanner,
 
   // ── 4. Chart wrappers (Real interactive SVG charts) ──────────────────────
   'Chart:bar': ChartComponent,

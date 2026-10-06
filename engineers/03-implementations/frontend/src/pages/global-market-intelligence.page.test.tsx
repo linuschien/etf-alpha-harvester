@@ -145,6 +145,39 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(screen.getByText(/\^MOVE 美債波動率指數/i)).toBeInTheDocument();
   });
 
+  it('renders macro yield sub-tab with MacroRegimeBanner and 4 rate cards with trade dates, without redundant title', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const subTab3 = await screen.findByRole('tab', {
+      name: /宏觀利率與殖利率曲線/i,
+    });
+    await user.click(subTab3);
+    expect(store.get('/activeSubTab')).toBe('macro-subtab-yield');
+
+    // Verify redundant title is NOT present
+    expect(
+      screen.queryByText(/宏觀利率與殖利率曲線單一整合走勢圖 \(Macro Yield & Spread\)/i)
+    ).not.toBeInTheDocument();
+
+    // Verify MacroRegimeBanner is rendered
+    expect(await screen.findByText('宏觀景氣循環與配置策略')).toBeInTheDocument();
+    expect(screen.getByText(/建議股票配置/i)).toBeInTheDocument();
+    expect(screen.getByText(/建議防禦債券配置/i)).toBeInTheDocument();
+
+    // Verify 4 yield metric cards are rendered
+    expect(screen.getByText(/10Y 美國公債殖利率 \(DGS10\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/20Y 美國公債殖利率 \(DGS20\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/10Y-2Y 殖利率利差 \(T10Y2Y\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/ICE BofA 企業債殖利率 \(BAMLC0A0CMEY\)/i)).toBeInTheDocument();
+
+    // Verify dates on cards
+    await waitFor(() => {
+      const dateElements = screen.getAllByText(/交易日: 2026-09-30/i);
+      expect(dateElements.length).toBeGreaterThanOrEqual(4);
+    });
+  });
+
   // ── Pattern 2 — Query (store-based table data) ───────────────────────────
   it('shows empty state when no store data is present', async () => {
     renderPage();

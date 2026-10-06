@@ -9,6 +9,7 @@ import MetricCard from './MetricCard';
 import ChartComponent from './ChartComponent';
 import ChartPlaceholder from './ChartPlaceholder';
 import DataTable from './DataTable';
+import MacroRegimeBanner from './MacroRegimeBanner';
 import { api } from '@/lib/api-client';
 
 describe('Custom JSON-render Components', () => {
@@ -195,5 +196,88 @@ describe('Custom JSON-render Components', () => {
     expect(screen.getByText('FEAR_GREED 恐懼貪婪指數 (CNN)')).toBeInTheDocument();
     expect(screen.getByText('^MOVE 美債波動率指數 (美債期權)')).toBeInTheDocument();
     expect(screen.getAllByText(/⚠️ 過度恐慌/i)).toHaveLength(2);
+  });
+
+  it('renders MacroRegimeBanner with HIGH_YIELD_ACCUMULATION and CRISIS_LEVEL_1', () => {
+    const store = createStateStore({
+      data: {
+        getMacroRegime: {
+          macroState: 'HIGH_YIELD_ACCUMULATION',
+          recommendedEquityRatio: 0.8,
+          recommendedBondRatio: 0.2,
+          assessmentSummary:
+            '目前處於【高利蓄水期】（公司債有效殖利率 5.97% > 5.0%），建議積極配置防禦債券蓄水，股債比率 80%:20%。',
+          crisisLevel: 'CRISIS_LEVEL_1',
+          effectiveDate: '2026-09-30',
+        },
+      },
+    });
+
+    render(
+      <JSONUIProvider store={store} registry={{}}>
+        <MacroRegimeBanner props={{ id: 'macro-regime-banner' }} />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText('宏觀景氣循環與配置策略')).toBeInTheDocument();
+    expect(screen.getByText('高利蓄水期 (HIGH_YIELD_ACCUMULATION)')).toBeInTheDocument();
+    expect(screen.getByText('80%')).toBeInTheDocument();
+    expect(screen.getByText('20%')).toBeInTheDocument();
+    expect(screen.getByText(/🚨 恐慌抄底 \(CRISIS_LEVEL_1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/評估基準日: 2026-09-30/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/目前處於【高利蓄水期】（公司債有效殖利率 5.97% > 5.0%）/i)
+    ).toBeInTheDocument();
+  });
+
+  it('renders MacroRegimeBanner with NORMAL_BALANCED, LOW_YIELD_HARVEST, and CRISIS_LEVEL_2', () => {
+    const store1 = createStateStore({
+      data: {
+        getMacroRegime: {
+          macroState: 'NORMAL_BALANCED',
+          recommendedEquityRatio: 85,
+          recommendedBondRatio: 15,
+          assessmentSummary: '常態平衡期測試摘要',
+          crisisLevel: 'CORRECTION',
+        },
+      },
+      data_snapshot: {
+        recordDate: '2026-10-01',
+      },
+    });
+
+    const { rerender } = render(
+      <JSONUIProvider store={store1} registry={{}}>
+        <MacroRegimeBanner />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText('常態平衡期 (NORMAL_BALANCED)')).toBeInTheDocument();
+    expect(screen.getByText(/⚠️ 修正期警示 \(CORRECTION\)/i)).toBeInTheDocument();
+    expect(screen.getByText('85%')).toBeInTheDocument();
+    expect(screen.getByText('15%')).toBeInTheDocument();
+
+    // Rerender with LOW_YIELD_HARVEST & CRISIS_LEVEL_2
+    const store2 = createStateStore({
+      data: {
+        getMacroRegime: {
+          macroState: 'LOW_YIELD_HARVEST',
+          recommendedEquityRatio: 0.95,
+          assessmentSummary: '低利收割期測試摘要',
+          crisisLevel: 'CRISIS_LEVEL_2',
+        },
+      },
+    });
+
+    rerender(
+      <JSONUIProvider store={store2} registry={{}}>
+        <MacroRegimeBanner />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText('低利收割期 (LOW_YIELD_HARVEST)')).toBeInTheDocument();
+    expect(screen.getByText(/🔥 黑天鵝救災 \(CRISIS_LEVEL_2\)/i)).toBeInTheDocument();
+    expect(screen.getByText('95%')).toBeInTheDocument();
+    expect(screen.getByText('5%')).toBeInTheDocument();
   });
 });

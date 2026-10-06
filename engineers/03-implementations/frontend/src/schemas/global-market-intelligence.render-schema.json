@@ -335,20 +335,26 @@
       "children": []
     },
     "macro-yield-container": {
-      "type": "Card",
+      "type": "div",
       "props": {
-        "title": "宏觀利率與殖利率曲線單一整合走勢圖 (Macro Yield & Spread)",
-        "description": null,
-        "maxWidth": null,
-        "centered": null,
-        "className": null
+        "id": "macro-yield-container",
+        "className": "space-y-6"
       },
       "children": [
+        "macro-regime-banner",
         "macro-yield-heading",
         "macro-yield-grid",
         "macro-yield-toolbar-stack",
         "macro-yield-chart"
       ]
+    },
+    "macro-regime-banner": {
+      "type": "MacroRegimeBanner",
+      "props": {
+        "id": "macro-regime-banner",
+        "data_ref": "getMacroRegime"
+      },
+      "children": []
     },
     "macro-yield-heading": {
       "type": "Heading",
@@ -361,16 +367,15 @@
     "macro-yield-grid": {
       "type": "Grid",
       "props": {
-        "columns": 5,
+        "columns": 4,
         "gap": "md",
-        "className": null
+        "className": "grid-cols-2 md:grid-cols-4"
       },
       "children": [
         "metric-dgs10",
         "metric-dgs20",
         "metric-t10y2y",
-        "metric-corp-yield",
-        "metric-macro-regime"
+        "metric-corp-yield"
       ]
     },
     "metric-dgs10": {

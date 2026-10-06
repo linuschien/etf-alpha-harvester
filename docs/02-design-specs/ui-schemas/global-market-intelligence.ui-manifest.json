@@ -343,9 +343,17 @@
                 "id": "macro-yield-container",
                 "abstract_type": "Container",
                 "semantic_variant": "card",
-                "label": "宏觀利率與殖利率曲線單一整合走勢圖 (Macro Yield & Spread)",
+                "label": "宏觀利率與殖利率曲線容器",
                 "behavior_ref": "visual-hierarchy:size",
                 "children": [
+                  {
+                    "id": "macro-regime-banner",
+                    "abstract_type": "Container",
+                    "semantic_variant": "card",
+                    "label": "宏觀景氣循環與配置策略",
+                    "data_ref": "getMacroRegime",
+                    "behavior_ref": "nielsen:recognition"
+                  },
                   {
                     "id": "macro-yield-heading",
                     "abstract_type": "Heading",
@@ -360,7 +368,7 @@
                     "data_ref": "getLatestMacroYieldSnapshot",
                     "behavior_ref": "visual-hierarchy:size",
                     "ux_hints": {
-                      "group_size_hint": 5
+                      "group_size_hint": 4
                     },
                     "children": [
                       {
@@ -390,13 +398,6 @@
                         "label": "ICE BofA 企業債殖利率 (BAMLC0A0CMEY)",
                         "data_ref": "getLatestMacroYieldSnapshot",
                         "behavior_ref": "nielsen:visibility"
-                      },
-                      {
-                        "id": "metric-macro-regime",
-                        "abstract_type": "Metric",
-                        "label": "宏觀景氣燈號 (Macro Regime)",
-                        "data_ref": "getMacroRegime",
-                        "behavior_ref": "nielsen:recognition"
                       }
                     ]
                   },
