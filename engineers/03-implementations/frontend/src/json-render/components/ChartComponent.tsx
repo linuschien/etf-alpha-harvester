@@ -297,10 +297,15 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
   if (id.includes('macro-yield-chart')) {
     const width = 720;
     const height = 280;
-    const padding = 45;
+    const paddingLeft = 50;
+    const paddingRight = 95;
+    const paddingTop = 30;
+    const paddingBottom = 40;
 
     const yieldHistory: any[] = store?.get?.('/data/listMacroYieldSnapshots') || [];
     const latestSnapshot: any = store?.get?.('/data/getLatestMacroYieldSnapshot') || null;
+    const selectedWindow: string =
+      store?.get?.('/filters/macro-yield-window-selector') || '6M';
 
     if (!yieldHistory || yieldHistory.length === 0) {
       return (
@@ -313,33 +318,109 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       );
     }
 
-    const months = yieldHistory.map((s: any) => String(s.recordDate || '').slice(2, 7));
-    const us10Y = yieldHistory.map((s: any) => Number(s.us10YearTreasuryYield));
-    const us20Y = yieldHistory.map((s: any) => Number(s.us20YearTreasuryYield));
-    const corpYield = yieldHistory.map((s: any) => Number(s.usCorporateBondEffectiveYield));
-    const spread10y2y = yieldHistory.map((s: any) => Number(s.yieldSpread10yMinus2y));
+    // Sort yields ascending by recordDate
+    const sortedYields = [...yieldHistory].sort((a: any, b: any) =>
+      String(a.recordDate || '').localeCompare(String(b.recordDate || ''))
+    );
 
-    const latest = latestSnapshot || yieldHistory[yieldHistory.length - 1];
-    const latestDate = latest?.recordDate ? String(latest.recordDate).slice(0, 10) : '--';
-    const subheaderText = `最新記錄: ${latestDate} (10Y: ${latest?.us10YearTreasuryYield ?? '--'}% | 20Y: ${latest?.us20YearTreasuryYield ?? '--'}% | 投資級公司債: ${latest?.usCorporateBondEffectiveYield ?? '--'}% | 利差: ${latest?.yieldSpread10yMinus2y !== undefined ? (latest.yieldSpread10yMinus2y >= 0 ? '+' : '') + latest.yieldSpread10yMinus2y + '%' : '--'})`;
+    // Filter by selected window (1M, 3M, 6M, 1Y, MAX)
+    let windowYields = sortedYields;
+    const latestRec = sortedYields[sortedYields.length - 1];
+    const latestTime = latestRec?.recordDate ? new Date(latestRec.recordDate).getTime() : NaN;
+
+    if (!isNaN(latestTime) && selectedWindow !== 'MAX') {
+      let dayRange = 183;
+      if (selectedWindow === '1M') dayRange = 31;
+      else if (selectedWindow === '3M') dayRange = 92;
+      else if (selectedWindow === '6M') dayRange = 183;
+      else if (selectedWindow === '1Y') dayRange = 366;
+      else if (selectedWindow === '3Y') dayRange = 365 * 3;
+      else if (selectedWindow === '5Y') dayRange = 365 * 5;
+
+      const cutoff = latestTime - dayRange * 24 * 60 * 60 * 1000;
+      const byDate = sortedYields.filter((s: any) => {
+        if (!s.recordDate) return false;
+        const t = new Date(s.recordDate).getTime();
+        return !isNaN(t) && t >= cutoff;
+      });
+
+      if (byDate.length >= 2) {
+        windowYields = byDate;
+      } else {
+        // Fallback to trading day count slicing if dates are sparse
+        if (selectedWindow === '1M') windowYields = sortedYields.slice(-22);
+        else if (selectedWindow === '3M') windowYields = sortedYields.slice(-66);
+        else if (selectedWindow === '6M') windowYields = sortedYields.slice(-132);
+        else if (selectedWindow === '1Y') windowYields = sortedYields.slice(-264);
+      }
+    } else if (selectedWindow !== 'MAX') {
+      if (selectedWindow === '1M') windowYields = sortedYields.slice(-22);
+      else if (selectedWindow === '3M') windowYields = sortedYields.slice(-66);
+      else if (selectedWindow === '6M') windowYields = sortedYields.slice(-132);
+      else if (selectedWindow === '1Y') windowYields = sortedYields.slice(-264);
+    }
+    if (windowYields.length === 0) windowYields = sortedYields;
+
+    const pointsCount = Math.max(1, windowYields.length);
+    const us10Y = windowYields.map((s: any) => Number(s.us10YearTreasuryYield));
+    const us20Y = windowYields.map((s: any) => Number(s.us20YearTreasuryYield));
+    const corpYield = windowYields.map((s: any) => Number(s.usCorporateBondEffectiveYield));
+    const spread10y2y = windowYields.map((s: any) => Number(s.yieldSpread10yMinus2y));
+
+    const activeIndex =
+      hoverIndex !== null && hoverIndex >= 0 && hoverIndex < pointsCount
+        ? hoverIndex
+        : null;
+    const activeItem =
+      activeIndex !== null
+        ? windowYields[activeIndex]
+        : (latestSnapshot || windowYields[windowYields.length - 1]);
+    const activeDate = activeItem?.recordDate
+      ? String(activeItem.recordDate).slice(0, 10)
+      : '--';
+    const isHovering = activeIndex !== null;
+    const prefix = isHovering ? '🔍 檢視日期' : '最新記錄';
+    const subheaderText = `${prefix}: ${activeDate} (10Y: ${activeItem?.us10YearTreasuryYield ?? '--'}% | 20Y: ${activeItem?.us20YearTreasuryYield ?? '--'}% | 投資級公司債: ${activeItem?.usCorporateBondEffectiveYield ?? '--'}% | 利差: ${activeItem?.yieldSpread10yMinus2y !== undefined ? (activeItem.yieldSpread10yMinus2y >= 0 ? '+' : '') + activeItem.yieldSpread10yMinus2y + '%' : '--'})`;
 
     const minY = -0.5;
     const maxY = 6.5;
 
     const scaleY = (v: number) =>
-      height - padding - ((v - minY) / (maxY - minY)) * (height - padding * 2);
+      paddingTop + ((maxY - v) / (maxY - minY)) * (height - paddingTop - paddingBottom);
     const scaleX = (idx: number) =>
-      padding + (idx / Math.max(1, months.length - 1)) * (width - padding * 2);
+      paddingLeft + (idx / Math.max(1, pointsCount - 1)) * (width - paddingLeft - paddingRight);
 
     const makePath = (arr: number[]) =>
-      arr.reduce((acc, v, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`, '');
+      arr.reduce(
+        (acc, v, idx) =>
+          isNaN(v) ? acc : `${acc} ${acc === '' ? 'M' : 'L'} ${scaleX(idx)} ${scaleY(v)}`,
+        ''
+      );
+
+    // Decimated clean Date ticks on X axis (4-5 labels max, evenly spaced, never overlapping)
+    const tickIndices =
+      pointsCount <= 5
+        ? Array.from({ length: pointsCount }, (_, i) => i)
+        : [
+            0,
+            Math.floor(pointsCount * 0.25),
+            Math.floor(pointsCount * 0.5),
+            Math.floor(pointsCount * 0.75),
+            pointsCount - 1,
+          ];
+    const uniqueTickIndices = Array.from(new Set(tickIndices));
 
     return (
       <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
           <div>
-            <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-            <div className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="text-base font-semibold tracking-tight text-foreground">{label}</span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-muted text-muted-foreground border border-border">
+                週期: {selectedWindow} ({windowYields.length} 筆)
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
               {subheaderText}
             </div>
           </div>
@@ -351,21 +432,32 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           </div>
         </div>
 
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 overflow-visible">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full h-64 overflow-visible cursor-crosshair select-none"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const clientX = e.clientX - rect.left;
+            const ratio = Math.max(0, Math.min(1, (clientX - paddingLeft) / (width - paddingLeft - paddingRight)));
+            const idx = Math.round(ratio * (pointsCount - 1));
+            setHoverIndex(idx);
+          }}
+          onMouseLeave={() => setHoverIndex(null)}
+        >
           {/* Grid lines */}
           {[0, 2, 3.5, 5, 6].map((tick) => (
             <g key={tick}>
               <line
-                x1={padding}
+                x1={paddingLeft}
                 y1={scaleY(tick)}
-                x2={width - padding}
+                x2={width - paddingRight}
                 y2={scaleY(tick)}
                 stroke="currentColor"
                 strokeOpacity="0.1"
                 strokeDasharray={tick === 3.5 || tick === 5.0 ? '4 4' : undefined}
               />
               <text
-                x={padding - 8}
+                x={paddingLeft - 8}
                 y={scaleY(tick) + 4}
                 textAnchor="end"
                 className="text-[10px] font-mono fill-muted-foreground"
@@ -377,59 +469,87 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
           {/* Reference Lines */}
           <line
-            x1={padding}
+            x1={paddingLeft}
             y1={scaleY(5.0)}
-            x2={width - padding}
+            x2={width - paddingRight}
             y2={scaleY(5.0)}
             stroke="#ef4444"
             strokeDasharray="4 4"
             strokeWidth="1.2"
           />
-          <text x={width - padding + 5} y={scaleY(5.0) + 3} className="text-[10px] fill-red-500 font-semibold">
+          <text x={width - paddingRight + 5} y={scaleY(5.0) + 3} className="text-[10px] fill-red-500 font-semibold">
             5.0% 蓄水線
           </text>
 
           <line
-            x1={padding}
+            x1={paddingLeft}
             y1={scaleY(3.5)}
-            x2={width - padding}
+            x2={width - paddingRight}
             y2={scaleY(3.5)}
             stroke="#10b981"
             strokeDasharray="4 4"
             strokeWidth="1.2"
           />
-          <text x={width - padding + 5} y={scaleY(3.5) + 3} className="text-[10px] fill-emerald-500 font-semibold">
+          <text x={width - paddingRight + 5} y={scaleY(3.5) + 3} className="text-[10px] fill-emerald-500 font-semibold">
             3.5% 收割線
           </text>
 
           <line
-            x1={padding}
+            x1={paddingLeft}
             y1={scaleY(0.0)}
-            x2={width - padding}
+            x2={width - paddingRight}
             y2={scaleY(0.0)}
             stroke="#6b7280"
             strokeDasharray="2 2"
             strokeWidth="1"
           />
 
-          {/* Month labels on X axis */}
-          {months.map((m, idx) => (
-            <text
-              key={m}
-              x={scaleX(idx)}
-              y={height - padding + 16}
-              textAnchor="middle"
-              className="text-[10px] font-mono fill-muted-foreground"
-            >
-              {m}
-            </text>
-          ))}
+          {/* Decimated Date labels on X axis */}
+          {uniqueTickIndices.map((idx, i) => {
+            const item = windowYields[idx];
+            if (!item) return null;
+            const raw = item.recordDate ? String(item.recordDate).slice(0, 10) : '';
+            if (!raw) return null;
+            const formatted = raw.replace(/-/g, '/');
+            const textAnchor =
+              i === 0 ? 'start' : i === uniqueTickIndices.length - 1 ? 'end' : 'middle';
+            return (
+              <text
+                key={`macro-x-tick-${idx}-${raw}`}
+                x={scaleX(idx)}
+                y={height - paddingBottom + 18}
+                textAnchor={textAnchor}
+                className="text-[10px] font-mono fill-muted-foreground"
+              >
+                {formatted}
+              </text>
+            );
+          })}
 
           {/* Lines */}
           <path d={makePath(corpYield)} fill="none" stroke="#10b981" strokeWidth="2.5" />
           <path d={makePath(us20Y)} fill="none" stroke="#8b5cf6" strokeWidth="2.5" />
           <path d={makePath(us10Y)} fill="none" stroke="#3b82f6" strokeWidth="2.5" />
           <path d={makePath(spread10y2y)} fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="3 3" />
+
+          {/* Interactive Hover Crosshair and Dots */}
+          {isHovering && activeIndex !== null && (
+            <g>
+              <line
+                x1={scaleX(activeIndex)}
+                y1={paddingTop}
+                x2={scaleX(activeIndex)}
+                y2={height - paddingBottom}
+                stroke="#94a3b8"
+                strokeWidth="1.2"
+                strokeDasharray="3 3"
+              />
+              <circle cx={scaleX(activeIndex)} cy={scaleY(corpYield[activeIndex])} r="4" fill="#10b981" stroke="#fff" strokeWidth="2" />
+              <circle cx={scaleX(activeIndex)} cy={scaleY(us20Y[activeIndex])} r="4" fill="#8b5cf6" stroke="#fff" strokeWidth="2" />
+              <circle cx={scaleX(activeIndex)} cy={scaleY(us10Y[activeIndex])} r="4" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+              <circle cx={scaleX(activeIndex)} cy={scaleY(spread10y2y[activeIndex])} r="4" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
+            </g>
+          )}
         </svg>
       </div>
     );

@@ -178,6 +178,34 @@ describe('GlobalMarketIntelligencePage', () => {
     });
   });
 
+  it('switches time window on macro yield chart when clicking window selector buttons', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const subTab3 = await screen.findByRole('tab', {
+      name: /宏觀利率與殖利率曲線/i,
+    });
+    await user.click(subTab3);
+
+    // Initial default window is 6M
+    expect(screen.getByText(/週期: 6M/i)).toBeInTheDocument();
+
+    const yieldToolbar = screen.getByText(/時間視窗切換 \(1M \/ 3M \/ 6M \(預設\) \/ 1Y\)/i).closest('div');
+    expect(yieldToolbar).not.toBeNull();
+
+    // Click 1M button within yield toolbar
+    const btn1M = within(yieldToolbar!).getByRole('button', { name: '1M' });
+    await user.click(btn1M);
+    expect(store.get('/filters/macro-yield-window-selector')).toBe('1M');
+    expect(screen.getByText(/週期: 1M/i)).toBeInTheDocument();
+
+    // Click 1Y button within yield toolbar
+    const btn1Y = within(yieldToolbar!).getByRole('button', { name: '1Y' });
+    await user.click(btn1Y);
+    expect(store.get('/filters/macro-yield-window-selector')).toBe('1Y');
+    expect(screen.getByText(/週期: 1Y/i)).toBeInTheDocument();
+  });
+
   // ── Pattern 2 — Query (store-based table data) ───────────────────────────
   it('shows empty state when no store data is present', async () => {
     renderPage();

@@ -280,4 +280,57 @@ describe('Custom JSON-render Components', () => {
     expect(screen.getByText('95%')).toBeInTheDocument();
     expect(screen.getByText('5%')).toBeInTheDocument();
   });
+
+  it('renders ChartComponent macro-yield-chart with time window filtering and decimated X-axis date labels', async () => {
+    // Generate 60 daily records from 2026-08-01 to 2026-09-30
+    const sampleHistory = Array.from({ length: 60 }, (_, i) => {
+      const day = i + 1;
+      const month = day <= 31 ? '08' : '09';
+      const dateNum = day <= 31 ? day : day - 31;
+      const dateStr = `2026-${month}-${String(dateNum).padStart(2, '0')}`;
+      return {
+        recordDate: dateStr,
+        us10YearTreasuryYield: 3.8 + (i % 5) * 0.1,
+        us20YearTreasuryYield: 4.1 + (i % 4) * 0.1,
+        usCorporateBondEffectiveYield: 5.2 + (i % 3) * 0.1,
+        yieldSpread10yMinus2y: 0.2 + (i % 4) * 0.05,
+      };
+    });
+
+    const store = createStateStore({
+      data: {
+        listMacroYieldSnapshots: sampleHistory,
+        getLatestMacroYieldSnapshot: sampleHistory[sampleHistory.length - 1],
+      },
+      filters: {
+        'macro-yield-window-selector': '1M',
+      },
+    });
+
+    const { rerender } = render(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'macro-yield-chart', label: '利率走勢圖' }} />
+      </JSONUIProvider>
+    );
+
+    // Verify 1M window badge
+    expect(screen.getByText(/週期: 1M/i)).toBeInTheDocument();
+
+    // Verify X-axis ticks: should NOT be 60 labels, but at most 5 unique ticks!
+    const ticks1M = screen.getAllByText(/^2026\/\d{2}\/\d{2}$/);
+    expect(ticks1M.length).toBeLessThanOrEqual(5);
+    expect(ticks1M.length).toBeGreaterThanOrEqual(2);
+
+    // Switch window to 1Y
+    store.set('/filters/macro-yield-window-selector', '1Y');
+    rerender(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'macro-yield-chart', label: '利率走勢圖' }} />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText(/週期: 1Y/i)).toBeInTheDocument();
+    const ticks1Y = screen.getAllByText(/^2026\/\d{2}\/\d{2}$/);
+    expect(ticks1Y.length).toBeLessThanOrEqual(5);
+  });
 });

@@ -454,8 +454,10 @@
     "macro-yield-window-selector": {
       "type": "Radio",
       "props": {
+        "id": "macro-yield-window-selector",
         "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y)",
         "name": "macro-yield-window-selector",
+        "defaultValue": "6M",
         "options": [
           "1M",
           "3M",
