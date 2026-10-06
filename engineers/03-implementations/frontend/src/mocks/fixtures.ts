@@ -358,13 +358,14 @@ export const mockMacroYieldSnapshot = {
 };
 
 export const mockMacroRegime = {
-  macroState: 'EXPANSION',
-  recommendedEquityRatio: 0.7,
-  recommendedBondRatio: 0.3,
+  macroState: 'HIGH_YIELD_ACCUMULATION',
+  recommendedEquityRatio: 0.8,
+  recommendedBondRatio: 0.2,
   usCorporateBondYield: 5.97,
   crisisLevel: 'NORMAL',
-  assessmentSummary: '經濟基本面穩定擴張，長短天期利差正常化 (+0.41%)，高收益與投資級信用利差維持低位。',
-  currentRegime: '擴張期 (EXPANSION)',
+  assessmentSummary:
+    '目前處於【高利蓄水期】（公司債有效殖利率 5.97% > 5.0%），建議積極配置防禦債券蓄水，股債比率 80%:20%。',
+  currentRegime: '高利蓄水期 (HIGH_YIELD_ACCUMULATION)',
   confidenceScore: 0.92,
   effectiveDate: '2026-09-30',
 };
