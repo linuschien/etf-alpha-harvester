@@ -118,7 +118,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   );
   const { data: watermarks } = useListDataFeedWatermarks();
   const { data: macroYield } = useGetLatestMacroYieldSnapshot({ enabled: isYield });
-  const { data: macroRegime } = useGetMacroRegime({ enabled: isYield || isTab2 });
+  const { data: macroRegime } = useGetMacroRegime({ enabled: isYield });
   const { data: topDca } = useGetTop20DcaRanks(2026, 8, { enabled: isTab3 });
   const { data: dividendAnnouncements } = useListDividendAnnouncements(undefined, { enabled: isTab3 });
   const { data: corporateActions } = useListCorporateActions(undefined, { enabled: isTab3 });
