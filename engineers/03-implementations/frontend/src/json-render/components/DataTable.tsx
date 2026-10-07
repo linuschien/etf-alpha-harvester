@@ -231,6 +231,64 @@ export default function DataTable({
     return String(val);
   };
 
+  const hasToggle = columns.some((c) => c.field === 'isSingleton' || c.field === 'clusterId');
+
+  // Sticky columns calculation: freeze columns up to and including 'name'
+  const getStickyProps = (field: string | 'toggle') => {
+    const stickyOrder = hasToggle
+      ? [
+          { field: 'clusterId', width: 75 },
+          { field: 'isSingleton', width: 105 },
+          { field: 'classRank', width: 70 },
+          { field: 'ticker', width: 85 },
+          { field: 'name', width: 145 },
+        ]
+      : [
+          { field: 'classRank', width: 70 },
+          { field: 'orthogonalStatus', width: 95 },
+          { field: 'ticker', width: 85 },
+          { field: 'name', width: 145 },
+        ];
+
+    let currentLeft = 0;
+    if (hasToggle) {
+      if (field === 'toggle') {
+        return {
+          isSticky: true,
+          left: 0,
+          width: 40,
+          isLastSticky: false,
+        };
+      }
+      currentLeft = 40;
+    }
+
+    const activeStickyFields = stickyOrder.filter((item) =>
+      columns.some((c) => c.field === item.field)
+    );
+    const lastActiveField =
+      activeStickyFields.length > 0
+        ? activeStickyFields[activeStickyFields.length - 1].field
+        : null;
+
+    for (const item of stickyOrder) {
+      if (!columns.some((c) => c.field === item.field)) {
+        continue;
+      }
+      if (item.field === field) {
+        return {
+          isSticky: true,
+          left: currentLeft,
+          width: item.width,
+          isLastSticky: item.field === lastActiveField,
+        };
+      }
+      currentLeft += item.width;
+    }
+
+    return { isSticky: false, left: 0, width: undefined, isLastSticky: false };
+  };
+
   return (
     <div className={`w-full space-y-3 ${props.className ?? ''}`}>
       {props.label && (
@@ -238,45 +296,68 @@ export default function DataTable({
       )}
 
       <div className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden">
-        <div className="overflow-auto max-h-[620px] relative">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-xs text-muted-foreground text-xs font-medium border-b shadow-2xs">
+        <div className="overflow-auto max-h-[480px] relative">
+          <table className="w-full text-left text-sm border-separate border-spacing-0">
+            <thead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-xs text-muted-foreground text-xs font-medium shadow-2xs">
               <tr>
                 {/* Column for expand toggle if clustering table */}
-                {columns.some((c) => c.field === 'isSingleton' || c.field === 'clusterId') && (
-                  <th className="py-3 px-3 w-10 text-center">折疊</th>
-                )}
-                {columns.map((col) => (
+                {hasToggle && (
                   <th
-                    key={col.field}
-                    className={`py-3 px-4 whitespace-nowrap ${
-                      col.sortable ? 'cursor-pointer select-none hover:text-foreground' : ''
-                    }`}
-                    onClick={() => col.sortable && handleSort(col.field)}
+                    style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }}
+                    className="py-3 px-3 w-10 text-center sticky top-0 left-0 z-30 bg-muted border-b border-border"
                   >
-                    <div className="flex items-center gap-1.5">
-                      <span>{col.label}</span>
-                      {col.sortable && (
-                        <span className="text-xs">
-                          {sortField === col.field
-                            ? sortDirection === 'asc'
-                              ? '▲'
-                              : '▼'
-                            : '⇅'}
-                        </span>
-                      )}
-                    </div>
+                    折疊
                   </th>
-                ))}
-                {children && <th className="py-3 px-4 text-right">操作</th>}
+                )}
+                {columns.map((col) => {
+                  const sticky = getStickyProps(col.field);
+                  const stickyStyle = sticky.isSticky
+                    ? {
+                        left: `${sticky.left}px`,
+                        minWidth: `${sticky.width}px`,
+                        maxWidth: `${sticky.width}px`,
+                        width: `${sticky.width}px`,
+                      }
+                    : {};
+                  return (
+                    <th
+                      key={col.field}
+                      style={stickyStyle}
+                      className={`py-3 px-4 whitespace-nowrap sticky top-0 border-b border-border ${
+                        sticky.isSticky
+                          ? `z-30 bg-muted ${
+                              sticky.isLastSticky
+                                ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)]'
+                                : ''
+                            }`
+                          : 'z-20 bg-muted/95 backdrop-blur-xs'
+                      } ${col.sortable ? 'cursor-pointer select-none hover:text-foreground' : ''}`}
+                      onClick={() => col.sortable && handleSort(col.field)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>{col.label}</span>
+                        {col.sortable && (
+                          <span className="text-xs">
+                            {sortField === col.field
+                              ? sortDirection === 'asc'
+                                ? '▲'
+                                : '▼'
+                              : '⇅'}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
+                {children && <th className="py-3 px-4 text-right sticky top-0 z-20 bg-muted/95 border-b border-border">操作</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody>
               {sortedData.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length + 2}
-                    className="py-12 text-center text-muted-foreground font-medium"
+                    className="py-12 text-center text-muted-foreground font-medium border-b border-border"
                   >
                     (沒有資料)
                   </td>
@@ -298,11 +379,10 @@ export default function DataTable({
                         onClick={() => handleRowClick(mainRow)}
                         className="hover:bg-muted/50 cursor-pointer transition-colors group"
                       >
-                        {columns.some(
-                          (c) => c.field === 'isSingleton' || c.field === 'clusterId'
-                        ) && (
+                        {hasToggle && (
                           <td
-                            className="py-3 px-3 text-center"
+                            style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }}
+                            className="py-3 px-3 text-center sticky left-0 z-10 bg-card group-hover:bg-muted/60 border-b border-border transition-colors"
                             onClick={(e) => hasAlts && toggleExpand(rowKey, e)}
                           >
                             {hasAlts ? (
@@ -319,17 +399,37 @@ export default function DataTable({
                             )}
                           </td>
                         )}
-                        {columns.map((col) => (
-                          <td
-                            key={col.field}
-                            className="py-3 px-4 whitespace-nowrap font-medium text-foreground"
-                          >
-                            {renderCellContent(col, mainRow, false)}
-                          </td>
-                        ))}
+                        {columns.map((col) => {
+                          const sticky = getStickyProps(col.field);
+                          const stickyStyle = sticky.isSticky
+                            ? {
+                                left: `${sticky.left}px`,
+                                minWidth: `${sticky.width}px`,
+                                maxWidth: `${sticky.width}px`,
+                                width: `${sticky.width}px`,
+                              }
+                            : {};
+                          return (
+                            <td
+                              key={col.field}
+                              style={stickyStyle}
+                              className={`py-3 px-4 whitespace-nowrap font-medium text-foreground border-b border-border ${
+                                sticky.isSticky
+                                  ? `sticky z-10 bg-card group-hover:bg-muted/60 transition-colors ${
+                                      sticky.isLastSticky
+                                        ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)]'
+                                        : ''
+                                    }`
+                                  : ''
+                              }`}
+                            >
+                              {renderCellContent(col, mainRow, false)}
+                            </td>
+                          );
+                        })}
                         {children && (
                           <td
-                            className="py-3 px-4 text-right whitespace-nowrap"
+                            className="py-3 px-4 text-right whitespace-nowrap border-b border-border"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {children}
@@ -354,17 +454,38 @@ export default function DataTable({
                             <tr
                               key={altKey}
                               onClick={() => handleRowClick(alt)}
-                              className="bg-muted/30 hover:bg-muted/60 cursor-pointer transition-colors text-muted-foreground hover:text-foreground"
+                              className="bg-muted/30 hover:bg-muted/60 cursor-pointer transition-colors text-muted-foreground hover:text-foreground group"
                             >
-                              <td className="py-2.5 px-3 text-center text-xs text-muted-foreground">
+                              <td
+                                style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }}
+                                className="py-2.5 px-3 text-center text-xs text-muted-foreground sticky left-0 z-10 bg-muted/40 group-hover:bg-muted/70 border-b border-border transition-colors"
+                              >
                                 ↳
                               </td>
                               {columns.map((col) => {
+                                const sticky = getStickyProps(col.field);
+                                const stickyStyle = sticky.isSticky
+                                  ? {
+                                      left: `${sticky.left}px`,
+                                      minWidth: `${sticky.width}px`,
+                                      maxWidth: `${sticky.width}px`,
+                                      width: `${sticky.width}px`,
+                                    }
+                                  : {};
+                                const stickyClass = sticky.isSticky
+                                  ? `sticky z-10 bg-muted/40 group-hover:bg-muted/70 transition-colors ${
+                                      sticky.isLastSticky
+                                        ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)]'
+                                        : ''
+                                    }`
+                                  : '';
+
                                 if (col.field === 'ticker') {
                                   return (
                                     <td
                                       key={col.field}
-                                      className="py-2.5 px-4 whitespace-nowrap font-medium text-foreground"
+                                      style={stickyStyle}
+                                      className={`py-2.5 px-4 whitespace-nowrap font-medium text-foreground border-b border-border ${stickyClass}`}
                                     >
                                       <div className="flex items-center gap-2">
                                         <span className="text-primary font-bold">
@@ -383,7 +504,8 @@ export default function DataTable({
                                   return (
                                     <td
                                       key={col.field}
-                                      className="py-2.5 px-4 whitespace-nowrap text-xs text-muted-foreground font-mono"
+                                      style={stickyStyle}
+                                      className={`py-2.5 px-4 whitespace-nowrap text-xs text-muted-foreground font-mono border-b border-border ${stickyClass}`}
                                     >
                                       族群 {clusterId}
                                     </td>
@@ -392,13 +514,14 @@ export default function DataTable({
                                 return (
                                   <td
                                     key={col.field}
-                                    className="py-2.5 px-4 whitespace-nowrap"
+                                    style={stickyStyle}
+                                    className={`py-2.5 px-4 whitespace-nowrap border-b border-border ${stickyClass}`}
                                   >
                                     {renderCellContent(col, alt, true)}
                                   </td>
                                 );
                               })}
-                              {children && <td className="py-2.5 px-4" />}
+                              {children && <td className="py-2.5 px-4 border-b border-border" />}
                             </tr>
                           );
                         })}
