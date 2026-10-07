@@ -135,11 +135,11 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
 
     // Chart Dimensions & Layout
-    const width = 500;
-    const height = 150;
+    const width = chartWidth && chartWidth > 200 ? chartWidth - 40 : 540;
+    const height = 175;
     const paddingX = 14;
-    const paddingTop = 12;
-    const paddingBottom = 26;
+    const paddingTop = 18;
+    const paddingBottom = 32;
 
     const min = Math.min(...points, lower) * 0.90;
     const max = Math.max(...points, upper) * 1.10;
@@ -160,14 +160,14 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     const endDate = (dates[dates.length - 1] || '').replace(/-/g, '/');
 
     return (
-      <div className="w-full rounded-xl border border-border bg-card p-5 shadow-sm flex flex-col justify-between space-y-3">
+      <div ref={containerRef} className="w-full rounded-xl border border-border bg-card p-5 shadow-sm flex flex-col justify-between space-y-3">
         {/* Header: Title, Date, Current Value, Badge, Channel Info */}
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <div className="text-xs font-semibold text-muted-foreground tracking-wide flex items-center gap-2">
+            <div className="text-sm font-semibold text-muted-foreground tracking-wide flex items-center gap-2">
               <span>{title}</span>
               {latestDate && (
-                <span className="text-[11px] font-normal text-muted-foreground/80 font-mono">
+                <span className="text-xs font-normal text-muted-foreground/80 font-mono">
                   交易日: {latestDate}
                 </span>
               )}
@@ -182,13 +182,13 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             </div>
           </div>
           <div className="text-right text-xs font-mono text-muted-foreground">
-            <div className="text-[11px] text-muted-foreground/70">常態通道</div>
-            <div className="font-semibold text-foreground/80">{lower} ~ {upper}</div>
+            <div className="text-xs text-muted-foreground/70">常態通道</div>
+            <div className="text-sm font-bold font-mono text-foreground">{lower} ~ {upper}</div>
           </div>
         </div>
 
         {/* SVG Sparkline with Normal Channel band, dual threshold lines and X-axis dates */}
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32 overflow-visible">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-44 overflow-visible">
           <defs>
             <linearGradient id={`grad-${tickerKey}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={isFg ? '#10b981' : '#3b82f6'} stopOpacity="0.35" />
@@ -220,10 +220,12 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           />
           <text
             x={width - paddingX}
-            y={upperY - 3}
+            y={Math.max(paddingTop - 2, upperY - 5)}
             textAnchor="end"
-            fontSize="9"
-            className="fill-muted-foreground font-mono"
+            fontSize="13.5"
+            fontWeight="600"
+            fill={isFg ? '#d97706' : '#e11d48'}
+            className="font-mono"
           >
             上限 {upper} ({isFg ? '過度樂觀' : '過度恐慌'})
           </text>
@@ -241,10 +243,12 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           />
           <text
             x={width - paddingX}
-            y={lowerY + 10}
+            y={Math.min(height - paddingBottom + 12, lowerY + 16)}
             textAnchor="end"
-            fontSize="9"
-            className="fill-muted-foreground font-mono"
+            fontSize="13.5"
+            fontWeight="600"
+            fill={isFg ? '#e11d48' : '#059669'}
+            className="font-mono"
           >
             下限 {lower} ({isFg ? '過度恐慌' : '過度樂觀'})
           </text>
@@ -277,14 +281,14 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           />
 
           {/* X-Axis Date Ticks */}
-          <g className="text-[10px] fill-muted-foreground font-mono">
-            <text x={paddingX} y={height - 6} textAnchor="start">
+          <g fontSize="13" fontWeight="500" className="fill-muted-foreground font-mono">
+            <text x={paddingX} y={height - 8} textAnchor="start">
               {startDate}
             </text>
-            <text x={width / 2} y={height - 6} textAnchor="middle">
+            <text x={width / 2} y={height - 8} textAnchor="middle">
               {midDate}
             </text>
-            <text x={width - paddingX} y={height - 6} textAnchor="end">
+            <text x={width - paddingX} y={height - 8} textAnchor="end">
               {endDate}
             </text>
           </g>
@@ -885,13 +889,6 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             </div>
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
               <span>最新指數點數: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{latestPrice.toLocaleString()} 點</strong></span>
-              {hoverQuote && hoverPrice !== null && (
-                <span className="bg-primary/10 text-primary px-2.5 py-0.5 rounded font-mono font-semibold flex items-center gap-2 border border-primary/25">
-                  <span>📅 {hoverDate}</span>
-                  <span>游標點數: <strong className="text-foreground">{hoverPrice.toLocaleString()} 點</strong></span>
-                  <span>回撤: <strong className="text-rose-600 dark:text-rose-400">{hoverDD !== null ? (hoverDD === 0 ? '0.0% (頂部)' : `${hoverDD}%`) : ''}</strong></span>
-                </span>
-              )}
               <span>視窗頂部 (0.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMax.toLocaleString()} 點</strong></span>
               <span>視窗地板 (-100.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMin.toLocaleString()} 點</strong></span>
               <span>當前黃金分割回撤: <strong className="text-rose-600 dark:text-rose-400 font-mono font-bold">{currentFibDD}%</strong></span>
@@ -945,6 +942,34 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           </div>
           <span className="font-mono text-[11px] text-muted-foreground">
             52W Peak: {formatPoints(peak52W)} | 視窗區間: {formatPoints(windowPriceMin)} ~ {formatPoints(windowPriceMax)}
+          </span>
+        </div>
+
+        {/* Interactive Hover Inspection Strip - Positioned Directly Above Chart Canvas */}
+        <div className="min-h-[38px] flex items-center justify-between px-3.5 py-1.5 rounded-lg bg-muted/40 border border-border text-xs">
+          {hoverQuote && hoverPrice !== null ? (
+            <div className="flex flex-wrap items-center gap-3 font-mono">
+              <span className="px-2 py-0.5 rounded bg-primary text-primary-foreground text-[11px] font-bold flex items-center gap-1 shadow-sm">
+                📍 游標檢視
+              </span>
+              <span className="font-semibold text-foreground">📅 {hoverDate}</span>
+              <span className="text-muted-foreground/50">|</span>
+              <span>
+                游標點數: <strong className="text-rose-600 dark:text-rose-400 font-bold text-sm">{hoverPrice.toLocaleString()} 點</strong>
+              </span>
+              <span className="text-muted-foreground/50">|</span>
+              <span>
+                回撤幅度: <strong className="text-foreground font-bold">{hoverDD !== null ? (hoverDD === 0 ? '0.0% (頂部)' : `${hoverDD}%`) : '0.0%'}</strong>
+              </span>
+            </div>
+          ) : (
+            <div className="text-muted-foreground flex items-center gap-2 font-mono text-[11px]">
+              <span className="text-primary font-bold">💡 互動反饋:</span>
+              <span>滑鼠移動於圖表上方時，此處即時回傳歷史點位、收盤點數與黃金分割回撤幅度</span>
+            </div>
+          )}
+          <span className="font-mono text-[11px] text-muted-foreground hidden sm:inline-block">
+            {hoverQuote ? `${selectedBenchmark} 錨點` : `視窗資料共 ${pointsCount} 筆`}
           </span>
         </div>
 
