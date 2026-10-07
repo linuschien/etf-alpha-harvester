@@ -448,11 +448,20 @@ public class GlobalAssetQueryService {
             } catch (Exception ignored) {}
         }
 
-        return Mono.zip(metaMono, quotesMono, divsMono)
+        Mono<List<CorporateAction>> splitsMono = Mono.just(Collections.emptyList());
+        if (corporateActionRepository != null) {
+            try {
+                var res = corporateActionRepository.findByTickerOrderByEffectiveDateDesc(ticker);
+                if (res != null) splitsMono = res.collectList();
+            } catch (Exception ignored) {}
+        }
+
+        return Mono.zip(metaMono, quotesMono, divsMono, splitsMono)
                 .map(tuple -> {
                     GlobalAssetMetadata meta = tuple.getT1();
-                    List<MarketDailyQuote> quotes = tuple.getT2();
+                    List<MarketDailyQuote> rawQuotes = tuple.getT2();
                     List<DividendAnnouncement> divs = tuple.getT3();
+                    List<CorporateAction> splits = tuple.getT4();
 
                     if (meta != null && meta.getName() != null) {
                         score.setName(meta.getName());
@@ -467,7 +476,15 @@ public class GlobalAssetQueryService {
                             divs, listingDate, now);
                     score.setDistributionFrequency(freq);
 
-                    if (quotes != null && !quotes.isEmpty()) {
+                    if (rawQuotes != null && !rawQuotes.isEmpty()) {
+                        LocalDateTime latestTradeDate = rawQuotes.get(0).getTradeDate();
+                        List<CorporateAction> effectiveSplits = (splits != null) ? splits.stream()
+                                .filter(s -> s != null && s.getEffectiveDate() != null
+                                        && (latestTradeDate == null || !s.getEffectiveDate().isAfter(latestTradeDate)))
+                                .toList() : Collections.emptyList();
+
+                        List<MarketDailyQuote> quotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
+
                         MarketDailyQuote latest = quotes.get(0);
                         score.setClosePrice(latest.getClosePrice());
 
@@ -483,17 +500,17 @@ public class GlobalAssetQueryService {
                             }
                         }
 
-                        score.setReturn1m(calculatePeriodReturn(quotes, divs, latest, Period.ofMonths(1)));
-                        score.setReturn3m(calculatePeriodReturn(quotes, divs, latest, Period.ofMonths(3)));
-                        score.setReturn6m(calculatePeriodReturn(quotes, divs, latest, Period.ofMonths(6)));
-                        score.setReturn1y(calculatePeriodReturn(quotes, divs, latest, Period.ofYears(1)));
+                        score.setReturn1m(calculatePeriodReturn(quotes, divs, effectiveSplits, latest, Period.ofMonths(1)));
+                        score.setReturn3m(calculatePeriodReturn(quotes, divs, effectiveSplits, latest, Period.ofMonths(3)));
+                        score.setReturn6m(calculatePeriodReturn(quotes, divs, effectiveSplits, latest, Period.ofMonths(6)));
+                        score.setReturn1y(calculatePeriodReturn(quotes, divs, effectiveSplits, latest, Period.ofYears(1)));
                     }
 
                     return score;
                 });
     }
 
-    private BigDecimal calculatePeriodReturn(List<MarketDailyQuote> quotes, List<DividendAnnouncement> divs, MarketDailyQuote latest, Period period) {
+    private BigDecimal calculatePeriodReturn(List<MarketDailyQuote> quotes, List<DividendAnnouncement> divs, List<CorporateAction> splits, MarketDailyQuote latest, Period period) {
         if (quotes == null || quotes.isEmpty() || latest == null || latest.getClosePrice() == null || latest.getTradeDate() == null) {
             return null;
         }
@@ -516,12 +533,28 @@ public class GlobalAssetQueryService {
         LocalDateTime startDate = past.getTradeDate();
         LocalDateTime endDate = latest.getTradeDate();
 
+        List<CorporateAction> validSplits = (splits != null) ? splits.stream()
+                .filter(s -> s != null && s.getEffectiveDate() != null
+                        && s.getSplitFromShares() != null && s.getSplitToShares() != null
+                        && s.getSplitToShares() > 0)
+                .toList() : Collections.emptyList();
+
         BigDecimal divSum = BigDecimal.ZERO;
         if (divs != null) {
             for (DividendAnnouncement d : divs) {
                 if (d != null && d.getExDate() != null && !d.getExDate().isBefore(startDate) && !d.getExDate().isAfter(endDate)) {
                     if (d.getDividendPerShare() != null) {
-                        divSum = divSum.add(d.getDividendPerShare());
+                        BigDecimal divAmount = d.getDividendPerShare();
+                        LocalDate exDate = d.getExDate().toLocalDate();
+                        for (CorporateAction s : validSplits) {
+                            LocalDate splitDate = s.getEffectiveDate().toLocalDate();
+                            if (exDate.isBefore(splitDate)) {
+                                BigDecimal splitRatio = BigDecimal.valueOf(s.getSplitFromShares())
+                                        .divide(BigDecimal.valueOf(s.getSplitToShares()), 8, RoundingMode.HALF_UP);
+                                divAmount = divAmount.multiply(splitRatio);
+                            }
+                        }
+                        divSum = divSum.add(divAmount);
                     }
                 }
             }

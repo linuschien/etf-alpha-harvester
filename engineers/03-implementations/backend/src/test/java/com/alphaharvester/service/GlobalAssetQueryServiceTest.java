@@ -286,6 +286,69 @@ class GlobalAssetQueryServiceTest {
     }
 
     @Test
+    @DisplayName("Should enrich GlobalAssetScore with split-adjusted returns for 0052 (7-to-1 split)")
+    void shouldEnrichGlobalAssetScoreWithSplitAdjustedReturns() {
+        UUID id = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+
+        GlobalAssetScore score = new GlobalAssetScore(id, id, "0052", now, CandidateAssetClass.SATELLITE, 1,
+                new BigDecimal("98.0"), new BigDecimal("30000000000"));
+
+        when(scoreRepository.findByAssetClassAndEvaluationDateOrderByClassRankAsc(CandidateAssetClass.SATELLITE, now))
+                .thenReturn(Flux.just(score));
+
+        GlobalAssetMetadata meta = new GlobalAssetMetadata();
+        meta.setName("富邦科技");
+        meta.setListingDate(now.minusYears(5));
+        when(metadataRepository.findByTicker("0052")).thenReturn(Mono.just(meta));
+
+        // 7:1 split effective 2 months ago
+        CorporateAction split = new CorporateAction(id, id, "0052", CorporateActionType.SPLIT, now.minusMonths(2), 7, 1);
+        when(corporateActionRepository.findByTickerOrderByEffectiveDateDesc("0052"))
+                .thenReturn(Flux.just(split));
+
+        // Quotes: today (post-split 61.50), prev (post-split 60.00), 1m ago (post-split 55.00), 1y ago (pre-split 190.00)
+        MarketDailyQuote qToday = new MarketDailyQuote(id, id, null, "0052", now,
+                new BigDecimal("60.0"), new BigDecimal("62.0"), new BigDecimal("59.5"),
+                new BigDecimal("61.50"), 2000000L, new BigDecimal("123000000"));
+        MarketDailyQuote qPrev = new MarketDailyQuote(id, id, null, "0052", now.minusDays(1),
+                new BigDecimal("59.0"), new BigDecimal("60.5"), new BigDecimal("58.5"),
+                new BigDecimal("60.00"), 2000000L, new BigDecimal("120000000"));
+        MarketDailyQuote q1m = new MarketDailyQuote(id, id, null, "0052", now.minusMonths(1),
+                new BigDecimal("54.0"), new BigDecimal("56.0"), new BigDecimal("53.5"),
+                new BigDecimal("55.00"), 2000000L, new BigDecimal("110000000"));
+        MarketDailyQuote q1y = new MarketDailyQuote(id, id, null, "0052", now.minusYears(1),
+                new BigDecimal("185.0"), new BigDecimal("192.0"), new BigDecimal("184.0"),
+                new BigDecimal("190.00"), 500000L, new BigDecimal("95000000"));
+
+        when(quoteRepository.findByTickerAndTradeDateGreaterThanEqualOrderByTradeDateDesc(eq("0052"), any()))
+                .thenReturn(Flux.just(qToday, qPrev, q1m, q1y));
+
+        // Pre-split dividend: 7.00 per pre-split share (ex-date 5 months ago, before split)
+        DividendAnnouncement divPre = new DividendAnnouncement(id, id, "0052", now.minusMonths(5), now,
+                new BigDecimal("7.00"), TaxTag.DOMESTIC_54C);
+        when(dividendRepository.findByTickerOrderByExDateDesc("0052"))
+                .thenReturn(Flux.just(divPre));
+
+        StepVerifier.create(queryService.getScoresByAssetClass(CandidateAssetClass.SATELLITE, now.toString()))
+                .assertNext(s -> {
+                    assertThat(s.getName()).isEqualTo("富邦科技");
+                    assertThat(s.getClosePrice()).isEqualTo(new BigDecimal("61.50"));
+                    // Daily change: (61.50 - 60.00) / 60.00 = +2.50%
+                    assertThat(s.getChangePct()).isEqualTo(new BigDecimal("2.50"));
+                    // 1m return (both post-split, no div): (61.50 - 55.00) / 55.00 = +11.82%
+                    assertThat(s.getReturn1m()).isEqualTo(new BigDecimal("11.82"));
+                    // 1y return:
+                    // q1y adjusted close: 190.00 * (1/7) = 27.1429
+                    // div adjusted: 7.00 * (1/7) = 1.0000
+                    // gain: 61.50 - 27.1429 + 1.0000 = 35.3571
+                    // return1y: 35.3571 / 27.1429 = +130.26% (positive, not -70.9%!)
+                    assertThat(s.getReturn1y()).isEqualTo(new BigDecimal("130.26"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("Should group candidates into clusters using Greedy Leader-Follower Star Topology")
     void shouldClusterCandidatesUsingStarTopology() {
         UUID id1 = UUID.randomUUID();
