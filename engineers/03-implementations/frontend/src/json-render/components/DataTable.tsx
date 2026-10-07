@@ -115,9 +115,19 @@ export default function DataTable({
       const isSingleton = row.isSingleton;
       const hasAlts = Array.isArray(row.alternatives) && row.alternatives.length > 0;
       if (isSubRow) {
+        const r2 = row.rSquaredWithLeader ?? row.rSquared;
+        const r2Text =
+          typeof r2 === 'number'
+            ? ` ${(r2 * 100).toFixed(1)}%`
+            : '';
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground whitespace-nowrap">
-            ↳ 替代
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground whitespace-nowrap">
+            <span>↳ 替代</span>
+            {r2Text && (
+              <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400 font-semibold">
+                (R²: {r2Text.trim()})
+              </span>
+            )}
           </span>
         );
       }
@@ -238,9 +248,9 @@ export default function DataTable({
     const stickyOrder = hasToggle
       ? [
           { field: 'clusterId', width: 105 },
-          { field: 'isSingleton', width: 140 },
+          { field: 'isSingleton', width: 150 },
           { field: 'classRank', width: 105 },
-          { field: 'ticker', width: 125 },
+          { field: 'ticker', width: 100 },
           { field: 'name', width: 180 },
         ]
       : [
@@ -491,16 +501,9 @@ export default function DataTable({
                                       style={stickyStyle}
                                       className={`py-2.5 px-3 whitespace-nowrap font-medium text-foreground border-b border-border ${stickyClass}`}
                                     >
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-primary font-bold">
-                                          {alt.ticker}
-                                        </span>
-                                        {alt.rSquaredWithLeader !== undefined && (
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                            R²: {(alt.rSquaredWithLeader * 100).toFixed(1)}%
-                                          </span>
-                                        )}
-                                      </div>
+                                      <span className="text-primary font-bold">
+                                        {alt.ticker}
+                                      </span>
                                     </td>
                                   );
                                 }
