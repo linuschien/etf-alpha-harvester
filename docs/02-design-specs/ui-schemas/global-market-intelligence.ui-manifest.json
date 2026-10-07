@@ -52,7 +52,7 @@
                 "id": "data-freshness-trigger",
                 "abstract_type": "Trigger",
                 "semantic_variant": "secondary",
-                "label": "數據新鮮度監控",
+                "label": "資料同步狀態",
                 "data_ref": "listDataFeedWatermarks",
                 "behavior_ref": "nielsen:visibility",
                 "ux_hints": {
@@ -603,7 +603,7 @@
                     "id": "open-pairwise-matrix-btn",
                     "abstract_type": "Trigger",
                     "semantic_variant": "secondary",
-                    "label": "查看兩兩正交矩陣 (Pairwise Matrix)",
+                    "label": "檢視相關性矩陣",
                     "behavior_ref": "nielsen:recognition",
                     "ux_hints": {
                       "principles": [
@@ -996,7 +996,7 @@
         "id": "watermark-detail-modal",
         "abstract_type": "Overlay",
         "semantic_variant": "modal",
-        "label": "數據饋送水位監控詳情 (Watermark Detail)",
+        "label": "市場資料同步狀態",
         "behavior_ref": "nielsen:visibility",
         "ux_hints": {
           "principles": [
@@ -1006,16 +1006,10 @@
         },
         "children": [
           {
-            "id": "watermark-modal-heading",
-            "abstract_type": "Heading",
-            "label": "數據饋送管線同步水位狀態",
-            "behavior_ref": "visual-hierarchy:weight"
-          },
-          {
             "id": "watermark-table",
             "abstract_type": "Table",
             "semantic_variant": "summary-table",
-            "label": "各 Feed 同步水位表",
+            "label": "",
             "data_ref": "listDataFeedWatermarks",
             "behavior_ref": "nielsen:visibility",
             "columns": [
@@ -1066,7 +1060,7 @@
         "id": "pairwise-matrix-modal",
         "abstract_type": "Overlay",
         "semantic_variant": "modal",
-        "label": "兩兩正交矩陣熱圖 (Pairwise Correlation & R² Matrix)",
+        "label": "ETF 相關係數矩陣",
         "behavior_ref": "nielsen:recognition",
         "ux_hints": {
           "principles": [
@@ -1076,15 +1070,9 @@
         },
         "children": [
           {
-            "id": "pairwise-modal-heading",
-            "abstract_type": "Heading",
-            "label": "兩兩資產共線性檢驗矩陣",
-            "behavior_ref": "visual-hierarchy:weight"
-          },
-          {
             "id": "pairwise-matrix-chart",
             "abstract_type": "Chart",
-            "label": "兩兩相關係數與 R² 熱圖 (R² ≥ 0.50 標記共線排除)",
+            "label": "相關性判定熱圖",
             "data_ref": "listPairwiseMatrix",
             "behavior_ref": "visual-hierarchy:size"
           },

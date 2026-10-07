@@ -591,7 +591,7 @@ describe('Custom JSON-render Components', () => {
 
     render(
       <JSONUIProvider store={store} registry={{}}>
-        <ChartComponent props={{ id: 'pairwise-matrix-chart', label: '兩兩相關係數與 R² 熱圖' }} />
+        <ChartComponent props={{ id: 'pairwise-matrix-chart', label: '相關性判定熱圖' }} />
       </JSONUIProvider>
     );
 
@@ -622,7 +622,7 @@ describe('Custom JSON-render Components', () => {
 
     render(
       <JSONUIProvider store={store} registry={{}}>
-        <ChartComponent props={{ id: 'pairwise-matrix-chart', label: '兩兩相關係數與 R² 熱圖' }} />
+        <ChartComponent props={{ id: 'pairwise-matrix-chart', label: '相關性判定熱圖' }} />
       </JSONUIProvider>
     );
 

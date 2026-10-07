@@ -310,7 +310,7 @@ describe('GlobalMarketIntelligencePage', () => {
     renderPage();
 
     const triggerBtn = await screen.findByRole('button', {
-      name: /數據新鮮度監控/i,
+      name: /資料同步狀態/i,
     });
     await user.click(triggerBtn);
 

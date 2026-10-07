@@ -70,7 +70,7 @@
     "data-freshness-trigger": {
       "type": "Button",
       "props": {
-        "label": "數據新鮮度監控",
+        "label": "資料同步狀態",
         "variant": "secondary",
         "disabled": null
       },
@@ -706,7 +706,7 @@
     "open-pairwise-matrix-btn": {
       "type": "Button",
       "props": {
-        "label": "查看兩兩正交矩陣 (Pairwise Matrix)",
+        "label": "檢視相關性矩陣",
         "variant": "secondary",
         "disabled": null
       },
@@ -1096,12 +1096,11 @@
     "watermark-detail-modal": {
       "type": "Dialog",
       "props": {
-        "title": "數據饋送水位監控詳情 (Watermark Detail)",
+        "title": "市場資料同步狀態",
         "description": null,
         "openPath": "/modals/watermark-detail-modal"
       },
       "children": [
-        "watermark-modal-heading",
         "watermark-table",
         "close-watermark-modal-btn"
       ],
@@ -1121,7 +1120,7 @@
       "type": "DataTable",
       "props": {
         "id": "watermark-table",
-        "label": "各 Feed 同步水位表",
+        "label": null,
         "columns": [
           {
             "field": "feedName",
@@ -1177,12 +1176,11 @@
     "pairwise-matrix-modal": {
       "type": "Dialog",
       "props": {
-        "title": "兩兩正交矩陣熱圖 (Pairwise Correlation & R² Matrix)",
+        "title": "ETF 相關係數矩陣",
         "description": null,
         "openPath": "/modals/pairwise-matrix-modal"
       },
       "children": [
-        "pairwise-modal-heading",
         "pairwise-matrix-chart",
         "close-pairwise-modal-btn"
       ],
@@ -1202,7 +1200,7 @@
       "type": "Chart",
       "props": {
         "id": "pairwise-matrix-chart",
-        "label": "兩兩相關係數與 R² 熱圖 (R² ≥ 0.50 標記共線排除)",
+        "label": "相關性判定熱圖",
         "data_ref": "listPairwiseMatrix"
       },
       "children": []
