@@ -61,6 +61,27 @@
     max-height: 90vh !important;
     overflow-y: auto !important;
   }
+  /* Enhance secondary button visual affordance: card background, border, and elevation */
+  button[data-slot="button"][data-variant="secondary"],
+  button[data-slot="button"][class*="bg-secondary"] {
+    background-color: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    color: hsl(var(--foreground)) !important;
+    font-weight: 500;
+    transition: all 0.15s ease-in-out;
+  }
+  button[data-slot="button"][data-variant="secondary"]:hover,
+  button[data-slot="button"][class*="bg-secondary"]:hover {
+    background-color: hsl(var(--accent)) !important;
+    border-color: hsl(214.3 31.8% 80%) !important;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
+  }
+  button[data-slot="button"][data-variant="secondary"]:active,
+  button[data-slot="button"][class*="bg-secondary"]:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
   /* Expand DialogContent when containing the watermark table */
   [data-slot="dialog-content"]:has(#watermark-table) {
     max-width: min(92vw, 920px) !important;
