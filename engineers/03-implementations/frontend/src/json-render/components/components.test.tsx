@@ -225,6 +225,42 @@ describe('Custom JSON-render Components', () => {
     expect(screen.getByText('季配')).toBeInTheDocument();
     expect(screen.getByText('月配')).toBeInTheDocument();
     expect(screen.getByText('--')).toBeInTheDocument();
+    expect(screen.queryByText('操作')).not.toBeInTheDocument();
+  });
+
+  it('switches anchor seed and stops propagation when clicking orthogonalStatus badge', async () => {
+    const user = userEvent.setup();
+    const store = createStateStore({ filters: {} });
+    const rows = [
+      { classRank: 1, ticker: '0050', orthogonalStatus: 'ACCEPTED' },
+      { classRank: 2, ticker: '00713', orthogonalStatus: 'ACCEPTED' },
+    ];
+    let rowClicked = false;
+    render(
+      <JSONUIProvider store={store} registry={{}}>
+        <DataTable
+          props={{
+            id: 'anchor-test-table',
+            columns: [
+              { field: 'ticker', label: '代碼' },
+              { field: 'orthogonalStatus', label: '正交狀態' },
+            ],
+            data: rows,
+            onRowClick: () => {
+              rowClicked = true;
+            },
+          }}
+        />
+      </JSONUIProvider>
+    );
+
+    const badge00713 = screen.getByText('正交合規');
+    await user.click(badge00713);
+
+    // Anchor updated in store
+    expect(store.get('/filters/seedTicker')).toBe('00713');
+    // Propagation stopped: onRowClick not triggered
+    expect(rowClicked).toBe(false);
   });
 
   it('truncates long ETF name and sets title attribute', () => {

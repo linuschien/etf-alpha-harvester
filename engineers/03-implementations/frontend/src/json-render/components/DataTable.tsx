@@ -165,10 +165,15 @@ export default function DataTable({
     }
 
     if (col.field === 'orthogonalStatus') {
-      const isSeed = row.classRank === 1 || val === 'SEED' || val === '錨定種子';
+      const currentSeed = store?.get?.('/filters/seedTicker');
+      const isSeed = (currentSeed && row.ticker === currentSeed) ||
+        (!currentSeed && (row.classRank === 1 || val === 'SEED' || val === '錨定種子' || row.collisionDetail?.includes('Seed')));
       if (isSeed) {
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-primary text-primary-foreground">
+          <span
+            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold bg-primary text-primary-foreground select-none"
+            title="當前夏農錨定種子 (去共線基準標的)"
+          >
             ⚓ 錨定種子
           </span>
         );
@@ -176,16 +181,31 @@ export default function DataTable({
       const isAccepted = val === 'ACCEPTED' || val === 'ORTHOGONAL' || val === '正交合規' || val === '合規';
       const isRejected = val === 'REJECTED_COLLINEAR' || val === '共線剔除';
       const label = isAccepted ? '正交合規' : isRejected ? '共線剔除' : (val || '正交合規');
+      const collisionInfo = row.collisionDetail ? `: ${row.collisionDetail}` : '';
+      const tooltip = isAccepted
+        ? '正交合規 (點擊設為夏農錨點)'
+        : `共線剔除${collisionInfo} (點擊設為夏農錨點)`;
+
+      const handleSetAnchor = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (store && row.ticker) {
+          store.set('/filters/seedTicker', row.ticker);
+        }
+      };
+
       return (
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+        <button
+          type="button"
+          onClick={handleSetAnchor}
+          title={tooltip}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium cursor-pointer transition-all hover:ring-1 hover:ring-current ${
             isAccepted
-              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25'
+              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 hover:bg-rose-500/25'
           }`}
         >
-          {label}
-        </span>
+          <span>{label}</span>
+        </button>
       );
     }
 
@@ -242,6 +262,7 @@ export default function DataTable({
   };
 
   const hasToggle = columns.some((c) => c.field === 'isSingleton' || c.field === 'clusterId');
+  const hasActions = React.Children.count(children) > 0;
 
   // Sticky columns calculation: freeze columns up to and including 'name'
   const getStickyProps = (field: string | 'toggle') => {
@@ -361,14 +382,14 @@ export default function DataTable({
                     </th>
                   );
                 })}
-                {children && <th className="py-3 px-4 text-right sticky top-0 z-20 bg-muted border-b border-border">操作</th>}
+                {hasActions && <th className="py-3 px-4 text-right sticky top-0 z-20 bg-muted border-b border-border">操作</th>}
               </tr>
             </thead>
             <tbody>
               {sortedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={columns.length + (hasToggle ? 1 : 0) + (children ? 1 : 0)}
+                    colSpan={columns.length + (hasToggle ? 1 : 0) + (hasActions ? 1 : 0)}
                     className="py-12 text-center text-muted-foreground font-medium border-b border-border bg-card"
                   >
                     (沒有資料)
@@ -441,7 +462,7 @@ export default function DataTable({
                             </td>
                           );
                         })}
-                        {children && (
+                        {hasActions && (
                           <td
                             className="py-3 px-4 text-right whitespace-nowrap border-b border-border"
                             onClick={(e) => e.stopPropagation()}
@@ -530,7 +551,7 @@ export default function DataTable({
                                   </td>
                                 );
                               })}
-                              {children && <td className="py-2.5 px-4 border-b border-border" />}
+                              {hasActions && <td className="py-2.5 px-4 border-b border-border" />}
                             </tr>
                           );
                         })}

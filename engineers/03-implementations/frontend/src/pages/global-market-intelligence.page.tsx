@@ -47,6 +47,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const storePerspectiveMode = useStateValue<string>('/filters/perspective-mode-selector');
   const storeAssetClass = useStateValue<string>('/filters/asset-class-selector');
   const storeEvaluationDate = useStateValue<string>('/filters/leaderboard-evaluation-date');
+  const storeSeedTicker = useStateValue<string>('/filters/seedTicker');
 
   // Active tab state: default to 'all' in test mode for testing-library assertions, and 'macro-sentiment-section' in dev/prod
   const activeTab =
@@ -96,10 +97,21 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     },
     { enabled: isTab2 }
   );
+  // Reset seedTicker when asset class changes
+  const prevAssetClassRef = useRef(effectiveAssetClass);
+  useEffect(() => {
+    if (prevAssetClassRef.current !== effectiveAssetClass) {
+      prevAssetClassRef.current = effectiveAssetClass;
+      if (store) {
+        store.set('/filters/seedTicker', null);
+      }
+    }
+  }, [effectiveAssetClass, store]);
+
   const { data: orthogonalCandidates } = useGetOrthogonalCandidates(
     {
       assetClass: effectiveAssetClass,
-      seedTicker: '0050',
+      seedTicker: storeSeedTicker || undefined,
       evaluationDate: effectiveEvaluationDate,
     },
     { enabled: isTab2 }

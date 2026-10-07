@@ -12,6 +12,7 @@ export interface GlobalAssetScore {
   classRank?: number;
   distributionFrequency?: string;
   orthogonalStatus?: string;
+  collisionDetail?: string;
   closePrice?: number;
   changePct?: number;
   return1m?: number;
@@ -64,6 +65,7 @@ export function useGetOrthogonalCandidates(
               compositeScore
               rSquared
               orthogonalStatus
+              collisionDetail
               closePrice
               changePct
               return1m
