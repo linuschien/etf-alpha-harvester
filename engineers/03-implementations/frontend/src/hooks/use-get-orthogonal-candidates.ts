@@ -10,6 +10,7 @@ export interface GlobalAssetScore {
   ticker: string;
   name?: string;
   classRank?: number;
+  distributionFrequency?: string;
   orthogonalStatus?: string;
   closePrice?: number;
   changePct?: number;
@@ -38,10 +39,13 @@ export function useGetOrthogonalCandidates(
   },
   options?: { enabled?: boolean }
 ) {
+  const now = new Date();
+  const defaultEvalDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
   const effectiveFilter = {
     assetClass: 'CORE',
     seedTicker: '0050',
-    evaluationDate: '2026-09-01',
+    evaluationDate: defaultEvalDate,
     ...(filter ?? {}),
   };
 
@@ -56,6 +60,7 @@ export function useGetOrthogonalCandidates(
               ticker
               name
               classRank
+              distributionFrequency
               compositeScore
               rSquared
               orthogonalStatus

@@ -32,16 +32,29 @@ export default function MonthStepper({
       : null) ||
     '/filters/leaderboard-evaluation-date';
 
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const defaultCurrentDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+
   const parseYearMonth = (val?: string) => {
-    if (!val) return { year: 2026, month: 9 };
+    if (!val) return { year: currentYear, month: currentMonth };
     const parts = val.split('-');
-    const y = parseInt(parts[0], 10) || 2026;
-    const m = parseInt(parts[1], 10) || 9;
+    const y = parseInt(parts[0], 10) || currentYear;
+    const m = parseInt(parts[1], 10) || currentMonth;
     return { year: y, month: m };
   };
 
-  const initialVal = (store?.get?.(bindPath) as string) || props.defaultValue || '2026-09-01';
+  const initialVal =
+    (store?.get?.(bindPath) as string) ||
+    (props.defaultValue && props.defaultValue !== '2026-09-01' ? props.defaultValue : defaultCurrentDate);
   const [{ year, month }, setYm] = useState(() => parseYearMonth(initialVal));
+
+  useEffect(() => {
+    if (store && bindPath && !store.get(bindPath)) {
+      store.set(bindPath, defaultCurrentDate);
+    }
+  }, [store, bindPath, defaultCurrentDate]);
 
   useEffect(() => {
     if (!bindPath || !store?.subscribe) return;
@@ -57,8 +70,8 @@ export default function MonthStepper({
   }, [store, bindPath]);
 
   const updateMonth = (newY: number, newM: number) => {
-    if (newY < 2025) return;
-    if (newY > 2026 || (newY === 2026 && newM > 9)) return; // Max out at latest month (2026/09)
+    if (newY < 2020) return;
+    if (newY > currentYear || (newY === currentYear && newM > currentMonth)) return; // Max out at latest month
     setYm({ year: newY, month: newM });
     const formattedDate = `${newY}-${String(newM).padStart(2, '0')}-01`;
     if (store && bindPath) {
@@ -89,7 +102,7 @@ export default function MonthStepper({
     updateMonth(newY, newM);
   };
 
-  const isLatest = year === 2026 && month === 9;
+  const isLatest = year === currentYear && month === currentMonth;
 
   return (
     <div className={`flex items-center gap-2 py-1 ${props.className ?? ''}`}>

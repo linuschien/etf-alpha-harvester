@@ -339,13 +339,28 @@ describe('GlobalMarketIntelligencePage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(await screen.findByText(/2026 年 9 月 \(最新\)/i)).toBeInTheDocument();
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    let prevMonth = curMonth - 1;
+    let prevYear = curYear;
+    if (prevMonth < 1) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+    const expectedPrevDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+
+    expect(
+      await screen.findByText(new RegExp(`${curYear}\\s*年\\s*${curMonth}\\s*月\\s*\\(最新\\)`, 'i'))
+    ).toBeInTheDocument();
 
     const prevMonthBtn = screen.getByRole('button', { name: '上個月' });
     await user.click(prevMonthBtn);
 
-    expect(store.get('/filters/leaderboard-evaluation-date')).toBe('2026-08-01');
-    expect(screen.getByText(/2026 年 8 月/i)).toBeInTheDocument();
+    expect(store.get('/filters/leaderboard-evaluation-date')).toBe(expectedPrevDate);
+    expect(
+      screen.getByText(new RegExp(`${prevYear}\\s*年\\s*${prevMonth}\\s*月`, 'i'))
+    ).toBeInTheDocument();
   });
 
   it('switches perspective mode between Shannon orthogonal and hierarchical clustering tables', async () => {

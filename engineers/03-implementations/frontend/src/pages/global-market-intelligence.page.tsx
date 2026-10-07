@@ -22,6 +22,11 @@ import { useListPairwiseMatrix } from '@/hooks/use-list-pairwise-matrix';
 import { useBenchmarkQuotes, usePanicQuotes } from '@/hooks/use-benchmark-quotes';
 import { useListMacroYieldSnapshots } from '@/hooks/use-list-macro-yield-snapshots';
 
+const getDefaultEvaluationDate = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+};
+
 export interface PageProps {
   initialPerspectiveMode?: string;
 }
@@ -63,7 +68,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   };
 
   const effectiveAssetClass = parseAssetClass(storeAssetClass);
-  const effectiveEvaluationDate = storeEvaluationDate || '2026-09-01';
+  const effectiveEvaluationDate = storeEvaluationDate || getDefaultEvaluationDate();
 
   const isTab1 = isTest || activeTab === 'all' || activeTab === 'macro-sentiment-section';
   const isTab2 = isTest || activeTab === 'all' || activeTab === 'qualified-leaderboard-section';
@@ -319,7 +324,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       store.set('/filters/asset-class-selector', 'CORE');
     }
     if (!store.get('/filters/leaderboard-evaluation-date')) {
-      store.set('/filters/leaderboard-evaluation-date', '2026-09-01');
+      store.set('/filters/leaderboard-evaluation-date', getDefaultEvaluationDate());
     }
     if (!store.get('/filters/drawdown-benchmark-selector')) {
       store.set('/filters/drawdown-benchmark-selector', '^TWII');
@@ -391,8 +396,8 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     const isClusteringActive = currentPerspectiveMode.includes('分群');
     if (cloned.elements?.['qualified-leaderboard-section']) {
       cloned.elements['qualified-leaderboard-section'].children = [
-        'leaderboard-heading',
         'asset-class-selector',
+        'leaderboard-heading',
         'orthogonal-control-bar',
         isClusteringActive
           ? 'clustering-leaderboard-table'
@@ -434,7 +439,7 @@ const defaultStore = createStateStore({
   filters: {
     'perspective-mode-selector': '⚡ 夏農幾何收割',
     'asset-class-selector': 'CORE',
-    'leaderboard-evaluation-date': '2026-09-01',
+    'leaderboard-evaluation-date': getDefaultEvaluationDate(),
     'freq-filter-selector': '全部',
     'drawdown-benchmark-selector': '^TWII',
     'drawdown-window-selector': '6M',

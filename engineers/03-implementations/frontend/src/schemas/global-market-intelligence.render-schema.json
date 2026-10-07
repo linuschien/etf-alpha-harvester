@@ -607,8 +607,8 @@
         "className": "space-y-6"
       },
       "children": [
-        "leaderboard-heading",
         "asset-class-selector",
+        "leaderboard-heading",
         "orthogonal-control-bar",
         "qualified-leaderboard-table",
         "clustering-leaderboard-table"
@@ -642,7 +642,6 @@
       "props": {
         "id": "leaderboard-month-stepper",
         "label": "評估月份",
-        "defaultValue": "2026-09-01",
         "value": {
           "$bindState": "/filters/leaderboard-evaluation-date"
         }

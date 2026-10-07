@@ -539,12 +539,6 @@
             },
             "children": [
               {
-                "id": "leaderboard-heading",
-                "abstract_type": "Heading",
-                "label": "ETF投資清單篩選",
-                "behavior_ref": "visual-hierarchy:weight"
-              },
-              {
                 "id": "asset-class-selector",
                 "abstract_type": "Selection",
                 "semantic_variant": "segmented",
@@ -560,6 +554,12 @@
                     "behavior_ref": "nielsen:feedback"
                   }
                 ]
+              },
+              {
+                "id": "leaderboard-heading",
+                "abstract_type": "Heading",
+                "label": "ETF投資清單篩選",
+                "behavior_ref": "visual-hierarchy:weight"
               },
               {
                 "id": "orthogonal-control-bar",

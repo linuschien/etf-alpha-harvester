@@ -9,6 +9,7 @@ import MetricCard from './MetricCard';
 import ChartComponent from './ChartComponent';
 import ChartPlaceholder from './ChartPlaceholder';
 import DataTable from './DataTable';
+import MonthStepper from './MonthStepper';
 import MacroRegimeBanner from './MacroRegimeBanner';
 import { api } from '@/lib/api-client';
 
@@ -168,6 +169,90 @@ describe('Custom JSON-render Components', () => {
     const scoreHeader = screen.getByText('評分');
     await user.click(scoreHeader);
     expect(scoreHeader).toBeInTheDocument();
+  });
+
+  it('tests DataTable orthogonalStatus and distributionFrequency badges and formatting', () => {
+    const rows = [
+      {
+        classRank: 1,
+        ticker: '0050',
+        orthogonalStatus: 'ACCEPTED',
+        distributionFrequency: 'SEMI_ANNUAL',
+      },
+      {
+        classRank: 2,
+        ticker: '00713',
+        orthogonalStatus: 'ACCEPTED',
+        distributionFrequency: 'QUARTERLY',
+      },
+      {
+        classRank: 3,
+        ticker: '006208',
+        orthogonalStatus: 'REJECTED_COLLINEAR',
+        distributionFrequency: 'MONTHLY',
+      },
+      {
+        classRank: 4,
+        ticker: '00878',
+        orthogonalStatus: 'ACCEPTED',
+        distributionFrequency: null,
+      },
+    ];
+
+    render(
+      <DataTable
+        props={{
+          id: 'status-freq-table',
+          columns: [
+            { field: 'classRank', label: '排名' },
+            { field: 'ticker', label: '代碼' },
+            { field: 'orthogonalStatus', label: '正交狀態' },
+            { field: 'distributionFrequency', label: '配息頻率' },
+          ],
+          data: rows,
+        }}
+      />
+    );
+
+    expect(screen.getByText('⚓ 錨定種子')).toBeInTheDocument();
+    expect(screen.getAllByText('正交合規')).toHaveLength(2);
+    expect(screen.getByText('共線剔除')).toBeInTheDocument();
+    expect(screen.getByText('半年配')).toBeInTheDocument();
+    expect(screen.getByText('季配')).toBeInTheDocument();
+    expect(screen.getByText('月配')).toBeInTheDocument();
+    expect(screen.getByText('--')).toBeInTheDocument();
+  });
+
+  it('renders MonthStepper and operates month stepping', async () => {
+    const user = userEvent.setup();
+    const store = createStateStore({
+      filters: {
+        'test-month': '2026-05-01',
+      },
+    });
+
+    render(
+      <JSONUIProvider store={store} registry={{}}>
+        <MonthStepper
+          props={{
+            label: '評估月份',
+            value: { $bindState: '/filters/test-month' },
+          }}
+        />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText('評估月份：')).toBeInTheDocument();
+    expect(screen.getByText(/2026\s*年\s*5\s*月/)).toBeInTheDocument();
+
+    const prevBtn = screen.getByRole('button', { name: '上個月' });
+    await user.click(prevBtn);
+    expect(store.get('/filters/test-month')).toBe('2026-04-01');
+    expect(screen.getByText(/2026\s*年\s*4\s*月/)).toBeInTheDocument();
+
+    const nextBtn = screen.getByRole('button', { name: '下個月' });
+    await user.click(nextBtn);
+    expect(store.get('/filters/test-month')).toBe('2026-05-01');
   });
 
   it('renders ChartComponent with panic sparkline channel thresholds and status', () => {

@@ -10,6 +10,7 @@ export interface ClusterAlternative {
   ticker: string;
   name: string;
   underlyingIndex?: string;
+  distributionFrequency?: string;
   rSquaredWithLeader: number;
   compositeScoreGap: number;
   closePrice?: number;
@@ -47,10 +48,13 @@ export function useGetClusteredCandidates(
   },
   options?: { enabled?: boolean }
 ) {
+  const now = new Date();
+  const defaultEvalDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
   const effectiveFilter = {
     assetClass: 'CORE',
     threshold: 0.8,
-    evaluationDate: '2026-09-01',
+    evaluationDate: defaultEvalDate,
     ...(filter ?? {}),
   };
 
@@ -68,6 +72,7 @@ export function useGetClusteredCandidates(
                 ticker
                 name
                 underlyingIndex
+                distributionFrequency
                 closePrice
                 changePct
                 return1m
@@ -83,6 +88,7 @@ export function useGetClusteredCandidates(
                   ticker
                   name
                   underlyingIndex
+                  distributionFrequency
                   closePrice
                   changePct
                   return1m

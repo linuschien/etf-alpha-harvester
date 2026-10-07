@@ -136,8 +136,7 @@ export default function DataTable({
     }
 
     if (col.field === 'orthogonalStatus') {
-      const isOrthogonal = val === 'ORTHOGONAL' || val === '錨定種子' || val === '正交合規';
-      const isSeed = val === 'SEED' || val === '錨定種子';
+      const isSeed = row.classRank === 1 || val === 'SEED' || val === '錨定種子';
       if (isSeed) {
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-primary text-primary-foreground">
@@ -145,16 +144,35 @@ export default function DataTable({
           </span>
         );
       }
+      const isAccepted = val === 'ACCEPTED' || val === 'ORTHOGONAL' || val === '正交合規' || val === '合規';
+      const isRejected = val === 'REJECTED_COLLINEAR' || val === '共線剔除';
+      const label = isAccepted ? '正交合規' : isRejected ? '共線剔除' : (val || '正交合規');
       return (
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-            isOrthogonal
+            isAccepted
               ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
               : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
           }`}
         >
-          {val || '合規'}
+          {label}
         </span>
+      );
+    }
+
+    if (col.field === 'distributionFrequency') {
+      const freqMap: Record<string, string> = {
+        MONTHLY: '月配',
+        QUARTERLY: '季配',
+        SEMI_ANNUAL: '半年配',
+        ANNUAL: '年配',
+        NONE: '不配息',
+      };
+      const display = (val && freqMap[val]) ? freqMap[val] : val;
+      return display ? (
+        <span>{display}</span>
+      ) : (
+        <span className="text-muted-foreground text-xs">--</span>
       );
     }
 
