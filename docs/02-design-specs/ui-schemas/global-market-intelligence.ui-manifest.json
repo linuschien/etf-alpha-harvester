@@ -720,7 +720,7 @@
                   },
                   {
                     "field": "isSingleton",
-                    "label": "賽道角色/折疊指示",
+                    "label": "賽道角色",
                     "sortable": true
                   },
                   {

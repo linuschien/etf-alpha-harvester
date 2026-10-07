@@ -116,20 +116,20 @@ export default function DataTable({
       const hasAlts = Array.isArray(row.alternatives) && row.alternatives.length > 0;
       if (isSubRow) {
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground whitespace-nowrap">
             ↳ 替代
           </span>
         );
       }
       if (isSingleton) {
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground whitespace-nowrap">
             單兵獨立
           </span>
         );
       }
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 whitespace-nowrap">
           👑 領頭羊 {hasAlts && `(${row.alternatives.length} 替代)`}
         </span>
       );
@@ -146,7 +146,7 @@ export default function DataTable({
       const full = String(val || '');
       return (
         <span
-          className="max-w-[130px] md:max-w-[160px] truncate block font-medium"
+          className="max-w-[150px] truncate block font-medium"
           title={full}
         >
           {full || '--'}
@@ -237,17 +237,17 @@ export default function DataTable({
   const getStickyProps = (field: string | 'toggle') => {
     const stickyOrder = hasToggle
       ? [
-          { field: 'clusterId', width: 75 },
-          { field: 'isSingleton', width: 105 },
-          { field: 'classRank', width: 70 },
-          { field: 'ticker', width: 85 },
-          { field: 'name', width: 145 },
+          { field: 'clusterId', width: 105 },
+          { field: 'isSingleton', width: 140 },
+          { field: 'classRank', width: 105 },
+          { field: 'ticker', width: 125 },
+          { field: 'name', width: 180 },
         ]
       : [
-          { field: 'classRank', width: 70 },
-          { field: 'orthogonalStatus', width: 95 },
-          { field: 'ticker', width: 85 },
-          { field: 'name', width: 145 },
+          { field: 'classRank', width: 105 },
+          { field: 'orthogonalStatus', width: 130 },
+          { field: 'ticker', width: 100 },
+          { field: 'name', width: 180 },
         ];
 
     let currentLeft = 0;
@@ -256,11 +256,11 @@ export default function DataTable({
         return {
           isSticky: true,
           left: 0,
-          width: 40,
+          width: 44,
           isLastSticky: false,
         };
       }
-      currentLeft = 40;
+      currentLeft = 44;
     }
 
     const activeStickyFields = stickyOrder.filter((item) =>
@@ -298,15 +298,15 @@ export default function DataTable({
       <div className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden">
         <div className="overflow-auto max-h-[480px] relative">
           <table className="w-full text-left text-sm border-separate border-spacing-0">
-            <thead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-xs text-muted-foreground text-xs font-medium shadow-2xs">
+            <thead className="sticky top-0 z-20 bg-muted text-muted-foreground text-xs font-medium shadow-2xs">
               <tr>
                 {/* Column for expand toggle if clustering table */}
                 {hasToggle && (
                   <th
-                    style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }}
-                    className="py-3 px-3 w-10 text-center sticky top-0 left-0 z-30 bg-muted border-b border-border"
+                    style={{ left: 0, width: 44, minWidth: 44, maxWidth: 44 }}
+                    className="py-3 px-3 w-11 text-center sticky top-0 left-0 z-30 bg-muted border-b border-border"
                   >
-                    折疊
+                    <span className="sr-only">展開折疊</span>
                   </th>
                 )}
                 {columns.map((col) => {
@@ -323,21 +323,23 @@ export default function DataTable({
                     <th
                       key={col.field}
                       style={stickyStyle}
-                      className={`py-3 px-4 whitespace-nowrap sticky top-0 border-b border-border ${
+                      className={`py-3 ${
+                        sticky.isSticky ? 'px-3' : 'px-4'
+                      } whitespace-nowrap sticky top-0 border-b border-border ${
                         sticky.isSticky
                           ? `z-30 bg-muted ${
                               sticky.isLastSticky
-                                ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)]'
+                                ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_8px_-3px_rgba(0,0,0,0.5)]'
                                 : ''
                             }`
-                          : 'z-20 bg-muted/95 backdrop-blur-xs'
+                          : 'z-20 bg-muted'
                       } ${col.sortable ? 'cursor-pointer select-none hover:text-foreground' : ''}`}
                       onClick={() => col.sortable && handleSort(col.field)}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
                         <span>{col.label}</span>
                         {col.sortable && (
-                          <span className="text-xs">
+                          <span className="text-xs shrink-0">
                             {sortField === col.field
                               ? sortDirection === 'asc'
                                 ? '▲'
@@ -349,15 +351,15 @@ export default function DataTable({
                     </th>
                   );
                 })}
-                {children && <th className="py-3 px-4 text-right sticky top-0 z-20 bg-muted/95 border-b border-border">操作</th>}
+                {children && <th className="py-3 px-4 text-right sticky top-0 z-20 bg-muted border-b border-border">操作</th>}
               </tr>
             </thead>
             <tbody>
               {sortedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={columns.length + 2}
-                    className="py-12 text-center text-muted-foreground font-medium border-b border-border"
+                    colSpan={columns.length + (hasToggle ? 1 : 0) + (children ? 1 : 0)}
+                    className="py-12 text-center text-muted-foreground font-medium border-b border-border bg-card"
                   >
                     (沒有資料)
                   </td>
@@ -377,12 +379,12 @@ export default function DataTable({
                       {/* Main / Leader Row */}
                       <tr
                         onClick={() => handleRowClick(mainRow)}
-                        className="hover:bg-muted/50 cursor-pointer transition-colors group"
+                        className="bg-card hover:bg-muted/80 cursor-pointer transition-colors group"
                       >
                         {hasToggle && (
                           <td
-                            style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }}
-                            className="py-3 px-3 text-center sticky left-0 z-10 bg-card group-hover:bg-muted/60 border-b border-border transition-colors"
+                            style={{ left: 0, width: 44, minWidth: 44, maxWidth: 44 }}
+                            className="py-3 px-3 text-center sticky left-0 z-10 bg-card group-hover:bg-muted border-b border-border transition-colors"
                             onClick={(e) => hasAlts && toggleExpand(rowKey, e)}
                           >
                             {hasAlts ? (
@@ -413,11 +415,13 @@ export default function DataTable({
                             <td
                               key={col.field}
                               style={stickyStyle}
-                              className={`py-3 px-4 whitespace-nowrap font-medium text-foreground border-b border-border ${
+                              className={`py-3 ${
+                                sticky.isSticky ? 'px-3' : 'px-4'
+                              } whitespace-nowrap font-medium text-foreground border-b border-border ${
                                 sticky.isSticky
-                                  ? `sticky z-10 bg-card group-hover:bg-muted/60 transition-colors ${
+                                  ? `sticky z-10 bg-card group-hover:bg-muted transition-colors ${
                                       sticky.isLastSticky
-                                        ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)]'
+                                        ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_8px_-3px_rgba(0,0,0,0.5)]'
                                         : ''
                                     }`
                                   : ''
@@ -454,11 +458,11 @@ export default function DataTable({
                             <tr
                               key={altKey}
                               onClick={() => handleRowClick(alt)}
-                              className="bg-muted/30 hover:bg-muted/60 cursor-pointer transition-colors text-muted-foreground hover:text-foreground group"
+                              className="bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors text-muted-foreground hover:text-foreground group"
                             >
                               <td
-                                style={{ left: 0, width: 40, minWidth: 40, maxWidth: 40 }}
-                                className="py-2.5 px-3 text-center text-xs text-muted-foreground sticky left-0 z-10 bg-muted/40 group-hover:bg-muted/70 border-b border-border transition-colors"
+                                style={{ left: 0, width: 44, minWidth: 44, maxWidth: 44 }}
+                                className="py-2.5 px-3 text-center text-xs text-muted-foreground sticky left-0 z-10 bg-slate-50 dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 border-b border-border transition-colors"
                               >
                                 ↳
                               </td>
@@ -473,9 +477,9 @@ export default function DataTable({
                                     }
                                   : {};
                                 const stickyClass = sticky.isSticky
-                                  ? `sticky z-10 bg-muted/40 group-hover:bg-muted/70 transition-colors ${
+                                  ? `sticky z-10 bg-slate-50 dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 transition-colors ${
                                       sticky.isLastSticky
-                                        ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)]'
+                                        ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_8px_-3px_rgba(0,0,0,0.5)]'
                                         : ''
                                     }`
                                   : '';
@@ -485,9 +489,9 @@ export default function DataTable({
                                     <td
                                       key={col.field}
                                       style={stickyStyle}
-                                      className={`py-2.5 px-4 whitespace-nowrap font-medium text-foreground border-b border-border ${stickyClass}`}
+                                      className={`py-2.5 px-3 whitespace-nowrap font-medium text-foreground border-b border-border ${stickyClass}`}
                                     >
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1.5">
                                         <span className="text-primary font-bold">
                                           {alt.ticker}
                                         </span>
@@ -505,7 +509,7 @@ export default function DataTable({
                                     <td
                                       key={col.field}
                                       style={stickyStyle}
-                                      className={`py-2.5 px-4 whitespace-nowrap text-xs text-muted-foreground font-mono border-b border-border ${stickyClass}`}
+                                      className={`py-2.5 px-3 whitespace-nowrap text-xs text-muted-foreground font-mono border-b border-border ${stickyClass}`}
                                     >
                                       族群 {clusterId}
                                     </td>
@@ -515,7 +519,9 @@ export default function DataTable({
                                   <td
                                     key={col.field}
                                     style={stickyStyle}
-                                    className={`py-2.5 px-4 whitespace-nowrap border-b border-border ${stickyClass}`}
+                                    className={`py-2.5 ${
+                                      sticky.isSticky ? 'px-3' : 'px-4'
+                                    } whitespace-nowrap border-b border-border ${stickyClass}`}
                                   >
                                     {renderCellContent(col, alt, true)}
                                   </td>
