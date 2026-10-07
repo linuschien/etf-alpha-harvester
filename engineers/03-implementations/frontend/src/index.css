@@ -36,6 +36,24 @@
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
   }
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="switch"]:not([aria-disabled="true"]),
+  [data-slot="tabs-trigger"]:not([disabled]),
+  [data-slot="button"]:not([disabled]),
+  [data-slot="switch"]:not([disabled]),
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  [role="tab"][aria-disabled="true"],
+  [data-slot="tabs-trigger"][disabled],
+  [data-slot="button"]:disabled {
+    cursor: not-allowed;
+  }
   :root {
     --background: 220 20% 97%;
     --foreground: 222.2 84% 4.9%;
