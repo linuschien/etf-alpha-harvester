@@ -458,11 +458,11 @@ export default function DataTable({
                             <tr
                               key={altKey}
                               onClick={() => handleRowClick(alt)}
-                              className="bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors text-muted-foreground hover:text-foreground group"
+                              className="bg-muted/40 hover:bg-muted/70 cursor-pointer transition-colors text-foreground group"
                             >
                               <td
                                 style={{ left: 0, width: 44, minWidth: 44, maxWidth: 44 }}
-                                className="py-2.5 px-3 text-center text-xs text-muted-foreground sticky left-0 z-10 bg-slate-50 dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 border-b border-border transition-colors"
+                                className="py-2.5 px-3 text-center text-xs text-muted-foreground sticky left-0 z-10 bg-muted group-hover:bg-muted border-b border-border transition-colors"
                               >
                                 ↳
                               </td>
@@ -477,7 +477,7 @@ export default function DataTable({
                                     }
                                   : {};
                                 const stickyClass = sticky.isSticky
-                                  ? `sticky z-10 bg-slate-50 dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 transition-colors ${
+                                  ? `sticky z-10 bg-muted group-hover:bg-muted transition-colors ${
                                       sticky.isLastSticky
                                         ? 'border-r border-border shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)] dark:shadow-[4px_0_8px_-3px_rgba(0,0,0,0.5)]'
                                         : ''
