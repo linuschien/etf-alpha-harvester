@@ -54,6 +54,13 @@
   [data-slot="button"]:disabled {
     cursor: not-allowed;
   }
+  /* Expand DialogContent when containing the pairwise matrix chart */
+  [data-slot="dialog-content"]:has(#pairwise-matrix-chart) {
+    max-width: min(96vw, 1320px) !important;
+    width: min(96vw, 1320px) !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
   :root {
     --background: 220 20% 97%;
     --foreground: 222.2 84% 4.9%;

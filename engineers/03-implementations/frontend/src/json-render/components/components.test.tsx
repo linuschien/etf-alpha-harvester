@@ -581,4 +581,88 @@ describe('Custom JSON-render Components', () => {
     fireEvent.mouseLeave(svg!);
     expect(screen.queryByText(/游標點數:/)).not.toBeInTheDocument();
   });
+
+  it('renders PairwiseMatrixHeatmap empty state when no data exists', () => {
+    const store = createStateStore({
+      data: {
+        listPairwiseMatrix: [],
+      },
+    });
+
+    render(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'pairwise-matrix-chart', label: '兩兩相關係數與 R² 熱圖' }} />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText('尚無兩兩正交檢驗矩陣資料')).toBeInTheDocument();
+  });
+
+  it('renders PairwiseMatrixHeatmap with interactive scope switching, search highlighting, and cell inspection', async () => {
+    // Generate 25 tickers to test Top 10, Top 20, and All
+    const tickers = Array.from({ length: 25 }, (_, i) => `00${50 + i}`);
+    const matrixData: any[] = [];
+    for (let i = 0; i < tickers.length; i++) {
+      for (let j = i + 1; j < tickers.length; j++) {
+        const isCollinear = (i + j) % 3 === 0;
+        matrixData.push({
+          baseTicker: tickers[i],
+          targetTicker: tickers[j],
+          rSquared: isCollinear ? 0.65 : 0.25,
+          correlationCoefficient: isCollinear ? 0.81 : 0.50,
+        });
+      }
+    }
+
+    const store = createStateStore({
+      data: {
+        listPairwiseMatrix: matrixData,
+      },
+    });
+
+    render(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'pairwise-matrix-chart', label: '兩兩相關係數與 R² 熱圖' }} />
+      </JSONUIProvider>
+    );
+
+    // Initial state: default to Top 10
+    expect(screen.getByText('10 × 10 維度')).toBeInTheDocument();
+    expect(screen.getByText('前 10 檔 (Top 10)')).toBeInTheDocument();
+    expect(screen.getByText('前 20 檔 (Top 20)')).toBeInTheDocument();
+    expect(screen.getByText('全部標的 (25 檔)')).toBeInTheDocument();
+
+    // Switch to Top 20
+    const top20Btn = screen.getByRole('button', { name: '前 20 檔 (Top 20)' });
+    fireEvent.click(top20Btn);
+    expect(screen.getByText('20 × 20 維度')).toBeInTheDocument();
+
+    // Switch to All
+    const allBtn = screen.getByRole('button', { name: '全部標的 (25 檔)' });
+    fireEvent.click(allBtn);
+    expect(screen.getByText('25 × 25 維度')).toBeInTheDocument();
+
+    // Search for a ticker
+    const searchInput = screen.getByPlaceholderText('搜尋標的代碼 (如 0052)...');
+    fireEvent.change(searchInput, { target: { value: '0052' } });
+    expect(screen.getByText('✕ 清除')).toBeInTheDocument();
+
+    // Clear search
+    fireEvent.click(screen.getByText('✕ 清除'));
+    expect(searchInput).toHaveValue('');
+
+    // Hover inspection
+    const cells = screen.getAllByRole('cell');
+    // Find a non-header cell with text
+    const sampleCell = cells.find((c) => c.textContent?.includes('0.'));
+    expect(sampleCell).toBeDefined();
+
+    if (sampleCell) {
+      fireEvent.mouseEnter(sampleCell);
+      expect(screen.getByText(/判定係數 R²:/)).toBeInTheDocument();
+
+      fireEvent.mouseLeave(sampleCell);
+      expect(screen.getByText(/滑鼠懸停於任一交叉格/)).toBeInTheDocument();
+    }
+  });
 });

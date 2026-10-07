@@ -1273,91 +1273,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
   // 4. Pairwise Matrix Heatmap Chart
   if (id.includes('pairwise-matrix-chart')) {
     const rawMatrix: any[] = store?.get?.('/data/listPairwiseMatrix') || [];
-
-    if (!rawMatrix || rawMatrix.length === 0) {
-      return (
-        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-          <div className="h-48 w-full bg-muted/15 border border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-6">
-            <span className="text-base">📊</span>
-            <span className="font-medium text-foreground">尚無兩兩正交檢驗矩陣資料</span>
-            <span className="text-[11px] text-muted-foreground">
-              （債券防禦型標的無需共線剔除；若為核心大盤或動能衛星，請確認評估月份數據是否已同步）
-            </span>
-          </div>
-        </div>
-      );
-    }
-
-    const tickerSet = new Set<string>();
-    rawMatrix.forEach((m: any) => {
-      if (m.baseTicker) tickerSet.add(m.baseTicker);
-      if (m.targetTicker) tickerSet.add(m.targetTicker);
-    });
-    const tickers = Array.from(tickerSet).slice(0, 10);
-    const r2Lookup = new Map<string, number>();
-    rawMatrix.forEach((m: any) => {
-      r2Lookup.set(`${m.baseTicker}-${m.targetTicker}`, Number(m.rSquared));
-      r2Lookup.set(`${m.targetTicker}-${m.baseTicker}`, Number(m.rSquared));
-    });
-    const r2Matrix = tickers.map((t1) =>
-      tickers.map((t2) => (t1 === t2 ? 1.0 : (r2Lookup.get(`${t1}-${t2}`) ?? 0.5)))
-    );
-
-    return (
-      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-border pb-3">
-          <div>
-            <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-            <div className="text-xs text-muted-foreground">
-              兩兩資產 R² 判定矩陣（R² ≥ 0.50 判定為共線冗餘，綠色為正交獨立）
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-xs font-medium">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500"></span> 正交獨立 (R²&lt;0.5)</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500"></span> 共線冗餘 (R²≥0.5)</span>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-center text-sm font-mono border-collapse">
-            <thead>
-              <tr>
-                <th className="p-2 border border-border bg-muted/40 font-semibold text-xs">基準 \ 目標</th>
-                {tickers.map((t) => (
-                  <th key={t} className="p-2 border border-border bg-muted/40 font-bold text-xs">{t}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tickers.map((rowTicker, rIdx) => (
-                <tr key={rowTicker}>
-                  <td className="p-2 border border-border bg-muted/20 font-bold text-xs">{rowTicker}</td>
-                  {tickers.map((colTicker, cIdx) => {
-                    const r2 = r2Matrix[rIdx][cIdx];
-                    const isSelf = rIdx === cIdx;
-                    const isHigh = r2 >= 0.50 && !isSelf;
-
-                    const bgColor = isSelf
-                      ? 'bg-muted/30 text-muted-foreground'
-                      : isHigh
-                      ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold'
-                      : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium';
-
-                    return (
-                      <td key={colTicker} className={`p-3 border border-border ${bgColor}`}>
-                        {r2.toFixed(3)}
-                        {isHigh && <div className="text-[9px] text-destructive">共線</div>}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
+    return <PairwiseMatrixHeatmap label={label} rawMatrix={rawMatrix} store={store} />;
   }
 
   // 5. Spider / Radar Chart
@@ -1567,6 +1483,374 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col items-center justify-center text-center space-y-2">
       <div className="text-xl font-bold font-mono text-foreground">{label}</div>
       <div className="text-xs text-muted-foreground">數據流來源: {props.data_ref || '自動整合指標'}</div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Pairwise Matrix Heatmap Component
+// ============================================================================
+export interface PairwiseMatrixHeatmapProps {
+  label: string;
+  rawMatrix: any[];
+  store?: any;
+}
+
+export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatrixHeatmapProps) {
+  const [scope, setScope] = useState<'top10' | 'top20' | 'all'>('top10');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [hoveredCell, setHoveredCell] = useState<{
+    base: string;
+    target: string;
+    r2: number;
+    collinear: boolean;
+    corr?: number;
+  } | null>(null);
+
+  if (!rawMatrix || rawMatrix.length === 0) {
+    return (
+      <div id="pairwise-matrix-chart" className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
+        <div className="h-48 w-full bg-muted/15 border border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-6">
+          <span className="text-base">📊</span>
+          <span className="font-medium text-foreground">尚無兩兩正交檢驗矩陣資料</span>
+          <span className="text-[11px] text-muted-foreground">
+            （債券防禦型標的無需共線剔除；若為核心大盤或動能衛星，請確認評估月份數據是否已同步）
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract unique tickers
+  const tickerSet = new Set<string>();
+  rawMatrix.forEach((m: any) => {
+    if (m.baseTicker) tickerSet.add(m.baseTicker);
+    if (m.targetTicker) tickerSet.add(m.targetTicker);
+  });
+
+  // Preserve rank order from candidate store if available
+  const rankedCandidates: any[] =
+    store?.get?.('/data/getOrthogonalCandidates') ||
+    store?.get?.('/data/getClusteredCandidates') ||
+    [];
+  const rankedTickers = rankedCandidates
+    .map((c: any) => c.ticker)
+    .filter((t: string) => tickerSet.has(t));
+
+  const allTickers = rankedTickers.length > 0
+    ? [...rankedTickers, ...Array.from(tickerSet).filter((t) => !rankedTickers.includes(t))]
+    : Array.from(tickerSet).sort();
+
+  // If total tickers <= 10, lock to 'all'
+  const isLargeSet = allTickers.length > 10;
+  const activeScope = !isLargeSet ? 'all' : scope;
+
+  const displayedTickers =
+    activeScope === 'top10'
+      ? allTickers.slice(0, 10)
+      : activeScope === 'top20'
+      ? allTickers.slice(0, 20)
+      : allTickers;
+
+  const r2Lookup = new Map<string, { r2: number; corr?: number }>();
+  rawMatrix.forEach((m: any) => {
+    const r2 = Number(m.rSquared ?? 0);
+    const corr =
+      m.correlationCoefficient != null
+        ? Number(m.correlationCoefficient)
+        : m.correlationCoeff != null
+        ? Number(m.correlationCoeff)
+        : undefined;
+    r2Lookup.set(`${m.baseTicker}-${m.targetTicker}`, { r2, corr });
+    r2Lookup.set(`${m.targetTicker}-${m.baseTicker}`, { r2, corr });
+  });
+
+  // Stats calculation
+  const totalPairs = (displayedTickers.length * (displayedTickers.length - 1)) / 2;
+  let collinearCount = 0;
+  let orthogonalCount = 0;
+  for (let i = 0; i < displayedTickers.length; i++) {
+    for (let j = i + 1; j < displayedTickers.length; j++) {
+      const p = r2Lookup.get(`${displayedTickers[i]}-${displayedTickers[j]}`);
+      if (p && p.r2 >= 0.50) {
+        collinearCount++;
+      } else {
+        orthogonalCount++;
+      }
+    }
+  }
+
+  const query = searchQuery.trim().toUpperCase();
+
+  const cellSizeClass =
+    displayedTickers.length > 20
+      ? 'min-w-[48px] h-8 text-[11px] p-1'
+      : displayedTickers.length > 10
+      ? 'min-w-[56px] h-9 text-xs p-1.5'
+      : 'min-w-[64px] h-10 text-xs p-2';
+
+  const headerCellSizeClass =
+    displayedTickers.length > 20
+      ? 'min-w-[48px] text-[11px] p-1'
+      : displayedTickers.length > 10
+      ? 'min-w-[56px] text-xs p-1.5'
+      : 'min-w-[64px] text-xs p-2';
+
+  return (
+    <div id="pairwise-matrix-chart" className="w-full rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
+      {/* Header Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border pb-3">
+        <div>
+          <div className="text-base font-bold tracking-tight text-foreground flex items-center gap-2">
+            <span>{label}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono font-semibold">
+              {displayedTickers.length} × {displayedTickers.length} 維度
+            </span>
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            兩兩資產判定係數 R² 檢驗（夏農幾何篩選門檻：R² ≥ 0.50 為共線冗餘剔除，R² &lt; 0.50 為正交獨立保留）
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-3 text-xs font-medium">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-emerald-500"></span>
+            正交獨立 (R² &lt; 0.50)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-purple-500"></span>
+            共線冗餘 (R² ≥ 0.50)
+          </span>
+        </div>
+      </div>
+
+      {/* Controls Bar: Scope Selector & Search Filter */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-muted/30 p-2.5 rounded-lg border border-border/60">
+        {/* Scope Selector */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold text-muted-foreground mr-1">顯示範圍:</span>
+          {isLargeSet ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setScope('top10')}
+                className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-colors border ${
+                  activeScope === 'top10'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                    : 'bg-background hover:bg-muted text-foreground border-border'
+                }`}
+              >
+                前 10 檔 (Top 10)
+              </button>
+              {allTickers.length > 10 && (
+                <button
+                  type="button"
+                  onClick={() => setScope('top20')}
+                  className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-colors border ${
+                    activeScope === 'top20'
+                      ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                      : 'bg-background hover:bg-muted text-foreground border-border'
+                  }`}
+                >
+                  前 20 檔 (Top 20)
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setScope('all')}
+                className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-colors border ${
+                  activeScope === 'all'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                    : 'bg-background hover:bg-muted text-foreground border-border'
+                }`}
+              >
+                全部標的 ({allTickers.length} 檔)
+              </button>
+            </>
+          ) : (
+            <span className="text-xs font-semibold text-foreground px-2 py-0.5 rounded bg-background border border-border">
+              全數顯示 (共 {allTickers.length} 檔)
+            </span>
+          )}
+        </div>
+
+        {/* Search / Highlight Input */}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜尋標的代碼 (如 0052)..."
+            className="text-xs px-2.5 py-1 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring w-44 font-mono"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="text-xs text-muted-foreground hover:text-foreground px-1"
+            >
+              ✕ 清除
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary KPI Badges */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div className="p-2 rounded-md bg-muted/20 border border-border flex flex-col">
+          <span className="text-muted-foreground text-[11px]">當前矩陣標的</span>
+          <span className="font-bold font-mono text-sm text-foreground">{displayedTickers.length} 檔</span>
+        </div>
+        <div className="p-2 rounded-md bg-muted/20 border border-border flex flex-col">
+          <span className="text-muted-foreground text-[11px]">交叉檢驗組合</span>
+          <span className="font-bold font-mono text-sm text-foreground">{totalPairs} 對</span>
+        </div>
+        <div className="p-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex flex-col">
+          <span className="text-emerald-700 dark:text-emerald-300 text-[11px]">正交獨立組合</span>
+          <span className="font-bold font-mono text-sm text-emerald-700 dark:text-emerald-300">
+            {orthogonalCount} 對 ({totalPairs > 0 ? ((orthogonalCount / totalPairs) * 100).toFixed(0) : 0}%)
+          </span>
+        </div>
+        <div className="p-2 rounded-md bg-purple-500/10 border border-purple-500/20 flex flex-col">
+          <span className="text-purple-700 dark:text-purple-300 text-[11px]">共線剔除組合</span>
+          <span className="font-bold font-mono text-sm text-purple-700 dark:text-purple-300">
+            {collinearCount} 對 ({totalPairs > 0 ? ((collinearCount / totalPairs) * 100).toFixed(0) : 0}%)
+          </span>
+        </div>
+      </div>
+
+      {/* Matrix Table with Sticky Frozen Panes */}
+      <div className="overflow-auto max-h-[55vh] border border-border rounded-lg relative">
+        <table className="text-center font-mono border-collapse w-max min-w-full">
+          <thead>
+            <tr>
+              {/* Top-Left intersection frozen corner */}
+              <th className="sticky top-0 left-0 z-30 p-2.5 border border-border bg-muted font-bold text-xs text-foreground min-w-[76px] shadow-xs">
+                基準 \ 目標
+              </th>
+              {displayedTickers.map((t) => {
+                const isMatch = query && t.toUpperCase().includes(query);
+                return (
+                  <th
+                    key={t}
+                    className={`sticky top-0 z-20 font-bold shadow-xs border border-border ${headerCellSizeClass} ${
+                      isMatch
+                        ? 'bg-primary text-primary-foreground font-black'
+                        : 'bg-muted/95 text-foreground'
+                    }`}
+                  >
+                    {t}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {displayedTickers.map((rowTicker, rIdx) => {
+              const rowMatch = query && rowTicker.toUpperCase().includes(query);
+              return (
+                <tr key={rowTicker}>
+                  {/* Left Column Frozen Header */}
+                  <td
+                    className={`sticky left-0 z-20 font-bold shadow-xs border border-border min-w-[76px] p-2 text-xs ${
+                      rowMatch
+                        ? 'bg-primary text-primary-foreground font-black'
+                        : 'bg-muted/95 text-foreground'
+                    }`}
+                  >
+                    {rowTicker}
+                  </td>
+                  {displayedTickers.map((colTicker, cIdx) => {
+                    const isSelf = rIdx === cIdx;
+                    const pairData = r2Lookup.get(`${rowTicker}-${colTicker}`);
+                    const r2 = isSelf ? 1.0 : pairData?.r2 ?? 0.5;
+                    const corr = isSelf ? 1.0 : pairData?.corr;
+                    const isHigh = r2 >= 0.50 && !isSelf;
+
+                    const cellMatch =
+                      query && (rowMatch || colTicker.toUpperCase().includes(query));
+
+                    const bgColor = isSelf
+                      ? 'bg-muted/40 text-muted-foreground/60'
+                      : isHigh
+                      ? 'bg-purple-500/20 hover:bg-purple-500/35 text-purple-700 dark:text-purple-300 font-bold'
+                      : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 font-medium';
+
+                    return (
+                      <td
+                        key={colTicker}
+                        onMouseEnter={() =>
+                          setHoveredCell({
+                            base: rowTicker,
+                            target: colTicker,
+                            r2,
+                            collinear: isHigh,
+                            corr,
+                          })
+                        }
+                        onMouseLeave={() => setHoveredCell(null)}
+                        className={`border border-border transition-colors cursor-crosshair font-mono ${cellSizeClass} ${bgColor} ${
+                          cellMatch ? 'ring-2 ring-primary ring-inset font-black' : ''
+                        }`}
+                      >
+                        <div className="leading-tight">{r2.toFixed(2)}</div>
+                        {isHigh && (
+                          <div className="text-[9px] text-destructive leading-tight font-sans">
+                            共線
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Inspector / Hover Details Card */}
+      <div className="p-3 rounded-lg border border-border bg-muted/20 text-xs">
+        {hoveredCell ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-foreground">
+                <span className="font-mono text-primary">{hoveredCell.base}</span>
+                <span className="text-muted-foreground mx-1.5">⟷</span>
+                <span className="font-mono text-primary">{hoveredCell.target}</span>
+              </span>
+              <span className="font-mono text-muted-foreground">
+                判定係數 R²: <strong className="text-foreground">{hoveredCell.r2.toFixed(3)}</strong>
+              </span>
+              {hoveredCell.corr != null && (
+                <span className="font-mono text-muted-foreground">
+                  相關係數 ρ: <strong className="text-foreground">{hoveredCell.corr.toFixed(3)}</strong>
+                </span>
+              )}
+            </div>
+            <div>
+              {hoveredCell.base === hoveredCell.target ? (
+                <span className="text-muted-foreground font-medium">同一標的自相關 (R² = 1.0)</span>
+              ) : hoveredCell.collinear ? (
+                <span className="px-2 py-0.5 rounded font-semibold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                  ⚠️ 共線冗餘 (R² ≥ 0.50) — 觸發夏農正交剔除，兩者動能重複
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                  ✅ 正交獨立 (R² &lt; 0.50) — 保留互補特性，降低投組集中度
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="text-muted-foreground flex items-center gap-1.5">
+            <span>💡</span>
+            <span>滑鼠懸停於任一交叉格，可即時查看雙標的代碼、相關係數與夏農正交判定詳情。</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
