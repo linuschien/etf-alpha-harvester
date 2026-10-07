@@ -33,15 +33,28 @@
         "className": null
       },
       "children": [
-        "page-title-heading",
-        "page-subtitle-text",
+        "header-title-group",
         "data-freshness-trigger"
+      ]
+    },
+    "header-title-group": {
+      "type": "Stack",
+      "props": {
+        "direction": "vertical",
+        "gap": "sm",
+        "align": "start",
+        "justify": "start",
+        "className": null
+      },
+      "children": [
+        "page-title-heading",
+        "page-subtitle-text"
       ]
     },
     "page-title-heading": {
       "type": "Heading",
       "props": {
-        "text": "全球市場情報 (Global Market Intelligence)",
+        "text": "台股 ETF 量化收割戰情室 (ETF Alpha Harvester)",
         "level": "h1"
       },
       "children": []
@@ -49,8 +62,8 @@
     "page-subtitle-text": {
       "type": "Text",
       "props": {
-        "text": "跨週期主動收割引擎 (Adaptive Cross-Cycle Harvest Engine)",
-        "variant": null
+        "text": "台股 ETF 量化篩選 · 波動收割 · 景氣動態配置",
+        "variant": "muted"
       },
       "children": []
     },

@@ -8,7 +8,7 @@ describe('App component', () => {
     render(<App />);
     expect(
       await screen.findByRole('heading', {
-        name: /全球市場情報/i,
+        name: /台股 ETF 量化收割戰情室/i,
       })
     ).toBeInTheDocument();
   });

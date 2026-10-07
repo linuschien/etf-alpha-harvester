@@ -39,13 +39,13 @@
               {
                 "id": "page-title-heading",
                 "abstract_type": "Heading",
-                "label": "全球市場情報 (Global Market Intelligence)",
+                "label": "台股 ETF 量化收割戰情室 (ETF Alpha Harvester)",
                 "behavior_ref": "visual-hierarchy:weight"
               },
               {
                 "id": "page-subtitle-text",
                 "abstract_type": "Text",
-                "label": "跨週期主動收割引擎 (Adaptive Cross-Cycle Harvest Engine)",
+                "label": "台股 ETF 量化篩選 · 波動收割 · 景氣動態配置",
                 "behavior_ref": "visual-hierarchy:color"
               },
               {

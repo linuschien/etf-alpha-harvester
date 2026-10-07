@@ -77,7 +77,11 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(
       await screen.findByRole('heading', {
         name: /全球市場情報/i,
+        name: /台股 ETF 量化收割戰情室/i,
       })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/台股 ETF 量化篩選 · 波動收割 · 景氣動態配置/i)
     ).toBeInTheDocument();
     expect(
       screen.getByRole('tab', { name: /全球指數雷達/i })
