@@ -1027,23 +1027,22 @@
               {
                 "field": "status",
                 "label": "同步狀態",
-                "sortable": true
+                "sortable": false
               },
               {
                 "field": "latestRecordDate",
                 "label": "最新數據日期",
-                "sortable": true
+                "sortable": false
               },
               {
                 "field": "recordsSyncedCount",
                 "label": "已同步筆數",
-                "sortable": true
+                "sortable": false
               },
               {
                 "field": "lastSuccessfulSyncAt",
                 "label": "最後成功同步時間",
-                "sortable": true,
-                "default_sort": "desc"
+                "sortable": false
               }
             ]
           },
