@@ -1276,10 +1276,14 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
     if (!rawMatrix || rawMatrix.length === 0) {
       return (
-        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-pulse">
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
           <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-          <div className="h-64 w-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
-            正交相關性矩陣載入中...
+          <div className="h-48 w-full bg-muted/15 border border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-6">
+            <span className="text-base">📊</span>
+            <span className="font-medium text-foreground">尚無兩兩正交檢驗矩陣資料</span>
+            <span className="text-[11px] text-muted-foreground">
+              （債券防禦型標的無需共線剔除；若為核心大盤或動能衛星，請確認評估月份數據是否已同步）
+            </span>
           </div>
         </div>
       );
@@ -1290,7 +1294,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       if (m.baseTicker) tickerSet.add(m.baseTicker);
       if (m.targetTicker) tickerSet.add(m.targetTicker);
     });
-    const tickers = Array.from(tickerSet).slice(0, 6);
+    const tickers = Array.from(tickerSet).slice(0, 10);
     const r2Lookup = new Map<string, number>();
     rawMatrix.forEach((m: any) => {
       r2Lookup.set(`${m.baseTicker}-${m.targetTicker}`, Number(m.rSquared));

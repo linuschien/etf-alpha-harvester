@@ -9,7 +9,8 @@ import { api } from '@/lib/api-client';
 export interface GlobalAssetPairwiseMatrix {
   baseTicker: string;
   targetTicker: string;
-  correlationCoeff: number;
+  correlationCoefficient: number;
+  correlationCoeff?: number;
   rSquared: number;
   [key: string]: unknown;
 }
@@ -45,7 +46,7 @@ export function useListPairwiseMatrix(
             listPairwiseMatrix(assetClass: $assetClass, evaluationDate: $evaluationDate) {
               baseTicker
               targetTicker
-              correlationCoeff
+              correlationCoefficient
               rSquared
             }
           }`,
