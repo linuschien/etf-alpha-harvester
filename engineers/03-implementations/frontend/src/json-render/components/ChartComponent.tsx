@@ -883,8 +883,15 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                 視窗: {selectedWindow}
               </span>
             </div>
-            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
               <span>最新指數點數: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{latestPrice.toLocaleString()} 點</strong></span>
+              {hoverQuote && hoverPrice !== null && (
+                <span className="bg-primary/10 text-primary px-2.5 py-0.5 rounded font-mono font-semibold flex items-center gap-2 border border-primary/25">
+                  <span>📅 {hoverDate}</span>
+                  <span>游標點數: <strong className="text-foreground">{hoverPrice.toLocaleString()} 點</strong></span>
+                  <span>回撤: <strong className="text-rose-600 dark:text-rose-400">{hoverDD !== null ? (hoverDD === 0 ? '0.0% (頂部)' : `${hoverDD}%`) : ''}</strong></span>
+                </span>
+              )}
               <span>視窗頂部 (0.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMax.toLocaleString()} 點</strong></span>
               <span>視窗地板 (-100.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMin.toLocaleString()} 點</strong></span>
               <span>當前黃金分割回撤: <strong className="text-rose-600 dark:text-rose-400 font-mono font-bold">{currentFibDD}%</strong></span>
@@ -1100,7 +1107,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             strokeWidth="2"
           />
 
-          {/* Interactive Hover Crosshair with Date & Exact Price Tooltip */}
+          {/* Interactive Hover Crosshair with Non-Obtrusive TradingView-Style Axis Badges */}
           {hoverIndex !== null && hoverQuote && hoverPrice !== null && (
             <g>
               {/* Vertical Crosshair Line */}
@@ -1127,41 +1134,87 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
               <circle
                 cx={scaleX(hoverIndex)}
                 cy={scaleY(hoverPrice)}
-                r="5"
+                r="4.5"
                 fill="#3b82f6"
                 stroke="#ffffff"
                 strokeWidth="2"
               />
-              {/* Floating Tooltip Box */}
+
+              {/* Left Y-axis Price Axis Pill (TradingView-style) */}
+              <g>
+                <rect
+                  x={paddingLeft - 82}
+                  y={scaleY(hoverPrice) - 10}
+                  width="74"
+                  height="20"
+                  rx="4"
+                  fill="#0f172a"
+                  stroke="#3b82f6"
+                  strokeWidth="1"
+                />
+                <text
+                  x={paddingLeft - 45}
+                  y={scaleY(hoverPrice) + 4}
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  className="text-[10px] font-mono font-bold"
+                >
+                  {formatPoints(hoverPrice)}
+                </text>
+              </g>
+
+              {/* Right Y-axis Drawdown Axis Pill (TradingView-style) */}
+              {hoverDD !== null && (
+                <g>
+                  <rect
+                    x={width - paddingRight + 8}
+                    y={scaleY(hoverPrice) - 10}
+                    width="64"
+                    height="20"
+                    rx="4"
+                    fill="#0f172a"
+                    stroke="#ef4444"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={width - paddingRight + 40}
+                    y={scaleY(hoverPrice) + 4}
+                    textAnchor="middle"
+                    fill="#f87171"
+                    className="text-[10px] font-mono font-bold"
+                  >
+                    {hoverDD === 0 ? '0.0%' : `${hoverDD}%`}
+                  </text>
+                </g>
+              )}
+
+              {/* Bottom X-axis Date Axis Pill (TradingView-style) */}
               {(() => {
-                const boxW = 195;
-                const boxH = 46;
-                const rawX = scaleX(hoverIndex) - boxW / 2;
-                const clampX = Math.max(paddingLeft + 5, Math.min(rawX, width - paddingRight - boxW - 5));
-                const boxY = Math.max(paddingTop + 5, scaleY(hoverPrice) - boxH - 12);
+                const pillW = 80;
+                const pillX = Math.max(
+                  paddingLeft,
+                  Math.min(width - paddingRight - pillW, scaleX(hoverIndex) - pillW / 2)
+                );
                 return (
                   <g>
                     <rect
-                      x={clampX}
-                      y={boxY}
-                      width={boxW}
-                      height={boxH}
-                      rx="6"
-                      className="fill-popover/95 stroke-border stroke shadow-xl"
+                      x={pillX}
+                      y={height - paddingBottom + 3}
+                      width={pillW}
+                      height="20"
+                      rx="4"
+                      fill="#0f172a"
+                      stroke="#3b82f6"
+                      strokeWidth="1"
                     />
                     <text
-                      x={clampX + 12}
-                      y={boxY + 18}
-                      className="text-[11px] font-mono font-bold fill-foreground"
+                      x={pillX + pillW / 2}
+                      y={height - paddingBottom + 17}
+                      textAnchor="middle"
+                      fill="#ffffff"
+                      className="text-[10px] font-mono font-semibold"
                     >
-                      📅 {hoverDate}
-                    </text>
-                    <text
-                      x={clampX + 12}
-                      y={boxY + 35}
-                      className="text-[11px] font-mono font-semibold fill-rose-600 dark:fill-rose-400"
-                    >
-                      📈 {formatPoints(hoverPrice)} {hoverDD !== null ? (hoverDD === 0 ? '(0.0% 頂部)' : `(回撤 ${hoverDD}%)`) : ''}
+                      {hoverDate}
                     </text>
                   </g>
                 );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { JSONUIProvider, createStateStore } from '@json-render/react';
 import { describe, it, expect, vi } from 'vitest';
@@ -332,5 +332,59 @@ describe('Custom JSON-render Components', () => {
     expect(screen.getByText(/週期: 1Y/i)).toBeInTheDocument();
     const ticks1Y = screen.getAllByText(/^2026\/\d{2}\/\d{2}$/);
     expect(ticks1Y.length).toBeLessThanOrEqual(5);
+  });
+
+  it('renders ChartComponent drawdown-radar-chart and verifies TradingView-style crosshair axis badges on hover', () => {
+    // Mock SVG methods in JSDOM
+    SVGSVGElement.prototype.createSVGPoint = () =>
+      ({
+        x: 0,
+        y: 0,
+        matrixTransform: () => ({ x: 300, y: 150 }),
+      } as any);
+    SVGSVGElement.prototype.getScreenCTM = () =>
+      ({
+        inverse: () => ({} as any),
+      } as any);
+
+    const sampleQuotes = [
+      { tradeDate: '2026-09-01', closePrice: 20000, ma20: 19800, ma60: 19500, ma120: 19000, ma240: 18500, bbUpper: 20500, bbLower: 19500 },
+      { tradeDate: '2026-09-02', closePrice: 20500, ma20: 19900, ma60: 19550, ma120: 19050, ma240: 18550, bbUpper: 20800, bbLower: 19600 },
+      { tradeDate: '2026-09-03', closePrice: 21000, ma20: 20100, ma60: 19600, ma120: 19100, ma240: 18600, bbUpper: 21200, bbLower: 19800 },
+    ];
+
+    const store = createStateStore({
+      data: {
+        quoteTimeSeries: {
+          twii: sampleQuotes,
+        },
+      },
+      filters: {
+        'drawdown-benchmark-selector': '^TWII',
+        'drawdown-window-selector': '6M',
+      },
+    });
+
+    const { container } = render(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'drawdown-radar-chart', label: '52 週高點回撤走勢圖' }} />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText(/台股加權指數 \(\^TWII\) 52 週回撤雷達/)).toBeInTheDocument();
+    expect(screen.getByText(/最新指數點數/)).toBeInTheDocument();
+
+    const svg = container.querySelector('svg.cursor-crosshair');
+    expect(svg).toBeInTheDocument();
+
+    // Trigger hover
+    fireEvent.mouseMove(svg!, { clientX: 300, clientY: 150 });
+
+    // Live inspection badge in header
+    expect(screen.getByText(/游標點數:/)).toBeInTheDocument();
+
+    // Mouse leave
+    fireEvent.mouseLeave(svg!);
+    expect(screen.queryByText(/游標點數:/)).not.toBeInTheDocument();
   });
 });
