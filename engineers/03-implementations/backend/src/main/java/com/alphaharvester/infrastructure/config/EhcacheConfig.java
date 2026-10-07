@@ -52,7 +52,7 @@ public class EhcacheConfig {
         return cacheManager;
     }
 
-    @Bean
+    @Bean(destroyMethod = "")
     public Cache<String, MonthlyQuoteCacheEntry> monthlyQuoteCache(PersistentCacheManager persistentCacheManager) {
         return persistentCacheManager.getCache("monthlyQuoteCache", String.class, MonthlyQuoteCacheEntry.class);
     }
