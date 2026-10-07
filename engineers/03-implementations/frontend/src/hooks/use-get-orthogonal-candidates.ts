@@ -45,7 +45,6 @@ export function useGetOrthogonalCandidates(
 
   const effectiveFilter = {
     assetClass: 'CORE',
-    seedTicker: '0050',
     evaluationDate: defaultEvalDate,
     ...(filter ?? {}),
   };
