@@ -246,6 +246,56 @@ describe('Custom JSON-render Components', () => {
     expect(el).toHaveClass('truncate');
   });
 
+  it('formats return rates and changePct with +/- signs, %, and red/green colors', () => {
+    const rows = [
+      {
+        ticker: '0050',
+        changePct: 1.25,
+        return1m: 3.2,
+        return3m: -2.15,
+        return6m: 0,
+        return1y: 35.4,
+      },
+    ];
+
+    render(
+      <DataTable
+        props={{
+          id: 'return-test-table',
+          columns: [
+            { field: 'ticker', label: '代碼' },
+            { field: 'changePct', label: '單日漲跌' },
+            { field: 'return1m', label: '1個月' },
+            { field: 'return3m', label: '3個月' },
+            { field: 'return6m', label: '6個月' },
+            { field: 'return1y', label: '1年' },
+          ],
+          data: rows,
+        }}
+      />
+    );
+
+    const posChange = screen.getByText('+1.25%');
+    expect(posChange).toBeInTheDocument();
+    expect(posChange).toHaveClass('text-emerald-600');
+
+    const posReturn1m = screen.getByText('+3.20%');
+    expect(posReturn1m).toBeInTheDocument();
+    expect(posReturn1m).toHaveClass('text-emerald-600');
+
+    const negReturn3m = screen.getByText('-2.15%');
+    expect(negReturn3m).toBeInTheDocument();
+    expect(negReturn3m).toHaveClass('text-rose-600');
+
+    const zeroReturn6m = screen.getByText('0.00%');
+    expect(zeroReturn6m).toBeInTheDocument();
+    expect(zeroReturn6m).toHaveClass('text-muted-foreground');
+
+    const posReturn1y = screen.getByText('+35.40%');
+    expect(posReturn1y).toBeInTheDocument();
+    expect(posReturn1y).toHaveClass('text-emerald-600');
+  });
+
   it('renders MonthStepper and operates month stepping', async () => {
     const user = userEvent.setup();
     const store = createStateStore({

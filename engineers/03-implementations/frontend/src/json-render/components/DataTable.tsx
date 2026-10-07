@@ -205,7 +205,10 @@ export default function DataTable({
       );
     }
 
-    if (col.field === 'changePct' && typeof val === 'number') {
+    if (
+      (col.field === 'changePct' || col.field.startsWith('return')) &&
+      typeof val === 'number'
+    ) {
       const isPos = val > 0;
       const isNeg = val < 0;
       return (
@@ -223,10 +226,7 @@ export default function DataTable({
       );
     }
 
-    if (
-      (col.field.startsWith('return') || col.field === 'compositeScore') &&
-      typeof val === 'number'
-    ) {
+    if (col.field === 'compositeScore' && typeof val === 'number') {
       return <span>{val.toFixed(2)}</span>;
     }
 
