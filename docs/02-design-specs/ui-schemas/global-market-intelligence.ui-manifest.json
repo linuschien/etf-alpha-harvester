@@ -100,7 +100,7 @@
                 "id": "tab-macro-trigger",
                 "abstract_type": "Trigger",
                 "semantic_variant": "secondary",
-                "label": "全球宏觀與情緒雷達",
+                "label": "全球指數雷達",
                 "behavior_ref": "nielsen:control",
                 "interactions": [
                   {
@@ -114,7 +114,7 @@
                 "id": "tab-leaderboard-trigger",
                 "abstract_type": "Trigger",
                 "semantic_variant": "secondary",
-                "label": "合規標的天梯榜與正交雷達",
+                "label": "ETF排行榜",
                 "behavior_ref": "nielsen:control",
                 "interactions": [
                   {
@@ -128,7 +128,7 @@
                 "id": "tab-dca-trigger",
                 "abstract_type": "Trigger",
                 "semantic_variant": "secondary",
-                "label": "定期定額散戶人氣榜與除息月曆",
+                "label": "ETF定期定額排行榜與除權息月曆",
                 "behavior_ref": "nielsen:control",
                 "interactions": [
                   {

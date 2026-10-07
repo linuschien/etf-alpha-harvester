@@ -80,13 +80,13 @@ describe('GlobalMarketIntelligencePage', () => {
       })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('tab', { name: /全球宏觀與情緒雷達/i })
+      screen.getByRole('tab', { name: /全球指數雷達/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('tab', { name: /合規標的天梯榜與正交雷達/i })
+      screen.getByRole('tab', { name: /ETF排行榜/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('tab', { name: /定期定額散戶人氣榜與除息月曆/i })
+      screen.getByRole('tab', { name: /ETF定期定額排行榜與除權息月曆/i })
     ).toBeInTheDocument();
   });
 
@@ -94,15 +94,15 @@ describe('GlobalMarketIntelligencePage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    const tab2 = screen.getByRole('tab', { name: /合規標的天梯榜與正交雷達/i });
+    const tab2 = screen.getByRole('tab', { name: /ETF排行榜/i });
     await user.click(tab2);
     expect(store.get('/activeTab')).toBe('qualified-leaderboard-section');
 
-    const tab3 = screen.getByRole('tab', { name: /定期定額散戶人氣榜與除息月曆/i });
+    const tab3 = screen.getByRole('tab', { name: /ETF定期定額排行榜與除權息月曆/i });
     await user.click(tab3);
     expect(store.get('/activeTab')).toBe('dca-calendar-section');
 
-    const tab1 = screen.getByRole('tab', { name: /全球宏觀與情緒雷達/i });
+    const tab1 = screen.getByRole('tab', { name: /全球指數雷達/i });
     await user.click(tab1);
     expect(store.get('/activeTab')).toBe('macro-sentiment-section');
   });

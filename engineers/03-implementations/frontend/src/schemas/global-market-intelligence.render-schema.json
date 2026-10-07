@@ -94,15 +94,15 @@
       "props": {
         "tabs": [
           {
-            "label": "全球宏觀與情緒雷達",
+            "label": "全球指數雷達",
             "value": "macro-sentiment-section"
           },
           {
-            "label": "合規標的天梯榜與正交雷達",
+            "label": "ETF排行榜",
             "value": "qualified-leaderboard-section"
           },
           {
-            "label": "定期定額散戶人氣榜與除息月曆",
+            "label": "ETF定期定額排行榜與除權息月曆",
             "value": "dca-calendar-section"
           }
         ],
