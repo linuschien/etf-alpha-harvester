@@ -135,6 +135,25 @@ export default function DataTable({
       );
     }
 
+    if (col.field === 'classRank') {
+      if (val === undefined || val === null || val === '') {
+        return <span className="text-muted-foreground text-xs">--</span>;
+      }
+      return <span className="font-mono font-semibold text-foreground">#{val}</span>;
+    }
+
+    if (col.field === 'name') {
+      const full = String(val || '');
+      return (
+        <span
+          className="max-w-[130px] md:max-w-[160px] truncate block font-medium"
+          title={full}
+        >
+          {full || '--'}
+        </span>
+      );
+    }
+
     if (col.field === 'orthogonalStatus') {
       const isSeed = row.classRank === 1 || val === 'SEED' || val === '錨定種子';
       if (isSeed) {
@@ -219,9 +238,9 @@ export default function DataTable({
       )}
 
       <div className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[620px] relative">
           <table className="w-full text-left text-sm border-collapse">
-            <thead className="bg-muted/60 text-muted-foreground text-xs font-medium border-b">
+            <thead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-xs text-muted-foreground text-xs font-medium border-b shadow-2xs">
               <tr>
                 {/* Column for expand toggle if clustering table */}
                 {columns.some((c) => c.field === 'isSingleton' || c.field === 'clusterId') && (

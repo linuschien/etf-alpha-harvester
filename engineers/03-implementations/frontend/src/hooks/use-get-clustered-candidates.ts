@@ -9,6 +9,7 @@ import { api } from '@/lib/api-client';
 export interface ClusterAlternative {
   ticker: string;
   name: string;
+  classRank?: number;
   underlyingIndex?: string;
   distributionFrequency?: string;
   rSquaredWithLeader: number;
@@ -71,6 +72,7 @@ export function useGetClusteredCandidates(
               leader {
                 ticker
                 name
+                classRank
                 underlyingIndex
                 distributionFrequency
                 closePrice
@@ -87,6 +89,7 @@ export function useGetClusteredCandidates(
                 score {
                   ticker
                   name
+                  classRank
                   underlyingIndex
                   distributionFrequency
                   closePrice

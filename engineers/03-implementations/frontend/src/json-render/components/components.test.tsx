@@ -214,6 +214,10 @@ describe('Custom JSON-render Components', () => {
       />
     );
 
+    expect(screen.getByText('#1')).toBeInTheDocument();
+    expect(screen.getByText('#2')).toBeInTheDocument();
+    expect(screen.getByText('#3')).toBeInTheDocument();
+    expect(screen.getByText('#4')).toBeInTheDocument();
     expect(screen.getByText('⚓ 錨定種子')).toBeInTheDocument();
     expect(screen.getAllByText('正交合規')).toHaveLength(2);
     expect(screen.getByText('共線剔除')).toBeInTheDocument();
@@ -221,6 +225,25 @@ describe('Custom JSON-render Components', () => {
     expect(screen.getByText('季配')).toBeInTheDocument();
     expect(screen.getByText('月配')).toBeInTheDocument();
     expect(screen.getByText('--')).toBeInTheDocument();
+  });
+
+  it('truncates long ETF name and sets title attribute', () => {
+    const longName = '元大美國政府20年期(以上)債券ETF傘型證券投資信託基金之元大美國政府20年期(以上)債券證券投資信託基金';
+    render(
+      <DataTable
+        props={{
+          id: 'long-name-table',
+          columns: [
+            { field: 'ticker', label: '代碼' },
+            { field: 'name', label: '名稱' },
+          ],
+          data: [{ ticker: '00679B', name: longName }],
+        }}
+      />
+    );
+    const el = screen.getByTitle(longName);
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveClass('truncate');
   });
 
   it('renders MonthStepper and operates month stepping', async () => {

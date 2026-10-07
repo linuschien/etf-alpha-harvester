@@ -717,7 +717,7 @@
         "columns": [
           {
             "field": "classRank",
-            "label": "組內排名",
+            "label": "原始排名",
             "sortable": true,
             "default_sort": "asc"
           },
@@ -806,6 +806,11 @@
             "sortable": true
           },
           {
+            "field": "classRank",
+            "label": "原始排名",
+            "sortable": true
+          },
+          {
             "field": "ticker",
             "label": "標的代碼",
             "sortable": false
@@ -816,8 +821,8 @@
             "sortable": false
           },
           {
-            "field": "underlyingIndex",
-            "label": "追蹤指數名稱",
+            "field": "distributionFrequency",
+            "label": "配息週期",
             "sortable": false
           },
           {

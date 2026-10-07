@@ -7,6 +7,8 @@ export const mockClusteredCandidates: any[] = [
     leader: {
       ticker: '0050',
       name: '元大台灣50',
+      classRank: 1,
+      distributionFrequency: '半年配',
       underlyingIndex: '富時臺灣證券交易所臺灣50指數',
       closePrice: 198.5,
       changePct: 0.85,
@@ -21,6 +23,8 @@ export const mockClusteredCandidates: any[] = [
       {
         ticker: '006208',
         name: '富邦台50',
+        classRank: 2,
+        distributionFrequency: '半年配',
         underlyingIndex: '富時臺灣證券交易所臺灣50指數',
         rSquaredWithLeader: 0.998,
         rSquared: 0.998,
@@ -36,6 +40,8 @@ export const mockClusteredCandidates: any[] = [
         score: {
           ticker: '006208',
           name: '富邦台50',
+          classRank: 2,
+          distributionFrequency: '半年配',
           underlyingIndex: '富時臺灣證券交易所臺灣50指數',
           closePrice: 115.2,
           changePct: 0.82,
@@ -55,6 +61,8 @@ export const mockClusteredCandidates: any[] = [
     leader: {
       ticker: '0056',
       name: '元大高股息',
+      classRank: 20,
+      distributionFrequency: '季配',
       underlyingIndex: '臺灣高股息指數',
       closePrice: 38.6,
       changePct: -0.25,
