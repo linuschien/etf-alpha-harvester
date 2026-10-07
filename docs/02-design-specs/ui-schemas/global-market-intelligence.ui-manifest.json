@@ -156,7 +156,7 @@
               {
                 "id": "benchmark-quotes-heading",
                 "abstract_type": "Heading",
-                "label": "5 大全球核心基準指數近一日行情",
+                "label": "5 大指數近一日行情",
                 "behavior_ref": "visual-hierarchy:weight"
               },
               {
@@ -252,7 +252,7 @@
                   {
                     "id": "panic-sentiment-heading",
                     "abstract_type": "Heading",
-                    "label": "跨市場恐慌風向球",
+                    "label": "4 大情緒指數",
                     "behavior_ref": "visual-hierarchy:weight"
                   },
                   {
@@ -357,7 +357,7 @@
                   {
                     "id": "macro-yield-heading",
                     "abstract_type": "Heading",
-                    "label": "長短天期美債殖利率、企業債殖利率與 10Y-2Y 倒掛利差",
+                    "label": "債券殖利率",
                     "behavior_ref": "visual-hierarchy:weight"
                   },
                   {

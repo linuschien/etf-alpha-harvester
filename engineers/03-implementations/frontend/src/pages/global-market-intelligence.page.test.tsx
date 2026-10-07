@@ -113,13 +113,13 @@ describe('GlobalMarketIntelligencePage', () => {
 
     // Verify all 3 sub-tab buttons are rendered
     const subTab1 = await screen.findByRole('tab', {
-      name: /5 大全球核心基準指數近一日行情與走勢/i,
+      name: /全球指數行情/i,
     });
     const subTab2 = screen.getByRole('tab', {
-      name: /四大恐慌情緒指標/i,
+      name: /情緒指標/i,
     });
     const subTab3 = screen.getByRole('tab', {
-      name: /宏觀利率與殖利率曲線/i,
+      name: /宏觀指引與債券殖利率/i,
     });
 
     expect(subTab1).toBeInTheDocument();
@@ -150,7 +150,7 @@ describe('GlobalMarketIntelligencePage', () => {
     renderPage();
 
     const subTab3 = await screen.findByRole('tab', {
-      name: /宏觀利率與殖利率曲線/i,
+      name: /宏觀指引與債券殖利率/i,
     });
     await user.click(subTab3);
     expect(store.get('/activeSubTab')).toBe('macro-subtab-yield');
@@ -183,7 +183,7 @@ describe('GlobalMarketIntelligencePage', () => {
     renderPage();
 
     const subTab3 = await screen.findByRole('tab', {
-      name: /宏觀利率與殖利率曲線/i,
+      name: /宏觀指引與債券殖利率/i,
     });
     await user.click(subTab3);
 

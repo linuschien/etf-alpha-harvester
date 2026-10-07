@@ -131,15 +131,15 @@
       "props": {
         "tabs": [
           {
-            "label": "5 大全球核心基準指數近一日行情與走勢",
+            "label": "全球指數行情",
             "value": "macro-subtab-benchmark"
           },
           {
-            "label": "四大恐慌情緒指標",
+            "label": "情緒指標",
             "value": "macro-subtab-panic"
           },
           {
-            "label": "宏觀利率與殖利率曲線",
+            "label": "宏觀指引與債券殖利率",
             "value": "macro-subtab-yield"
           }
         ],
@@ -185,7 +185,7 @@
     "benchmark-quotes-heading": {
       "type": "Heading",
       "props": {
-        "text": "5 大全球核心基準指數近一日行情",
+        "text": "5 大指數近一日行情",
         "level": "h2"
       },
       "children": []
@@ -279,7 +279,7 @@
     "panic-sentiment-heading": {
       "type": "Heading",
       "props": {
-        "text": "跨市場恐慌風向球",
+        "text": "4 大情緒指數",
         "level": "h3"
       },
       "children": []
@@ -359,7 +359,7 @@
     "macro-yield-heading": {
       "type": "Heading",
       "props": {
-        "text": "長短天期美債殖利率、企業債殖利率與 10Y-2Y 倒掛利差",
+        "text": "債券殖利率",
         "level": "h3"
       },
       "children": []
