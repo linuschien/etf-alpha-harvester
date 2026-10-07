@@ -280,6 +280,7 @@ describe('GlobalMarketIntelligencePage', () => {
     ];
 
     store.set('/data/getClusteredCandidates', mockClusters);
+    store.set('/filters/perspective-mode-selector', '🧩 分群去冗餘族群');
     renderPage();
 
     // Leader row should be displayed
@@ -300,7 +301,7 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(within(clusterTable).getByText(/R²: 99.8%/i)).toBeInTheDocument();
   });
 
-  // ── Pattern 3 — Modal Open + executeBehavior ─────────────────────────────
+  // ── Pattern 3 — Modal Open + User Controls ─────────────────────────────
   it('opens watermark detail modal when data freshness button is clicked', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -316,18 +317,52 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(store.get('/modals/watermark-detail-modal')).toBe(true);
   });
 
-  it('triggers executeBehavior when reset seed button is pressed', async () => {
+  it('renders ETF leaderboard heading and switches candidate asset pool subtabs', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    const resetBtn = await screen.findByRole('button', {
-      name: /↺ 重設為 Rank 1 種子/i,
-    });
-    await user.click(resetBtn);
+    expect(await screen.findByRole('heading', { name: /ETF投資清單篩選/i })).toBeInTheDocument();
 
-    expect(executeBehavior).toHaveBeenCalledWith(
-      expect.objectContaining({ ref: 'reset-seed-trigger' })
-    );
+    const coreTab = screen.getByRole('tab', { name: /核心大盤 \(Core\)/i });
+    const satTab = screen.getByRole('tab', { name: /動能衛星 \(Satellite\)/i });
+    const defTab = screen.getByRole('tab', { name: /防禦債券 \(Defensive\)/i });
+
+    expect(coreTab).toBeInTheDocument();
+    expect(satTab).toBeInTheDocument();
+    expect(defTab).toBeInTheDocument();
+
+    await user.click(satTab);
+    expect(store.get('/filters/asset-class-selector')).toBe('SATELLITE');
+  });
+
+  it('switches evaluation month with month stepper in leaderboard toolbar', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText(/2026 年 9 月 \(最新\)/i)).toBeInTheDocument();
+
+    const prevMonthBtn = screen.getByRole('button', { name: '上個月' });
+    await user.click(prevMonthBtn);
+
+    expect(store.get('/filters/leaderboard-evaluation-date')).toBe('2026-08-01');
+    expect(screen.getByText(/2026 年 8 月/i)).toBeInTheDocument();
+  });
+
+  it('switches perspective mode between Shannon orthogonal and hierarchical clustering tables', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const clusterRadio = await screen.findByRole('button', {
+      name: /🧩 分群去冗餘族群/i,
+    });
+    await user.click(clusterRadio);
+    expect(store.get('/filters/perspective-mode-selector')).toBe('🧩 分群去冗餘族群');
+
+    const shannonRadio = screen.getByRole('button', {
+      name: /⚡ 夏農幾何收割/i,
+    });
+    await user.click(shannonRadio);
+    expect(store.get('/filters/perspective-mode-selector')).toBe('⚡ 夏農幾何收割');
   });
 
   it('auto-closes modal when 關閉 button is clicked', async () => {

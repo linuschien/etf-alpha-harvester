@@ -39,6 +39,9 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   // React 19 external store bindings via @json-render/react useStateValue
   const storeActiveTab = useStateValue<string>('/activeTab');
   const storeActiveSubTab = useStateValue<string>('/activeSubTab');
+  const storePerspectiveMode = useStateValue<string>('/filters/perspective-mode-selector');
+  const storeAssetClass = useStateValue<string>('/filters/asset-class-selector');
+  const storeEvaluationDate = useStateValue<string>('/filters/leaderboard-evaluation-date');
 
   // Active tab state: default to 'all' in test mode for testing-library assertions, and 'macro-sentiment-section' in dev/prod
   const activeTab =
@@ -48,9 +51,19 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const activeSubTab =
     storeActiveSubTab || (isTest ? 'all' : 'macro-subtab-benchmark');
 
-  const [perspectiveMode, setPerspectiveMode] = useState<string>(
-    initialPerspectiveMode ?? '⚡ 夏農幾何收割'
-  );
+  const currentPerspectiveMode =
+    storePerspectiveMode || initialPerspectiveMode || '⚡ 夏農幾何收割';
+
+  const parseAssetClass = (val?: string) => {
+    if (!val) return 'CORE';
+    if (val.includes('CORE') || val.includes('核心')) return 'CORE';
+    if (val.includes('SATELLITE') || val.includes('衛星')) return 'SATELLITE';
+    if (val.includes('DEFENSIVE') || val.includes('債券')) return 'DEFENSIVE';
+    return val;
+  };
+
+  const effectiveAssetClass = parseAssetClass(storeAssetClass);
+  const effectiveEvaluationDate = storeEvaluationDate || '2026-09-01';
 
   const isTab1 = isTest || activeTab === 'all' || activeTab === 'macro-sentiment-section';
   const isTab2 = isTest || activeTab === 'all' || activeTab === 'qualified-leaderboard-section';
@@ -72,17 +85,17 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   // Sync API queries to JSONUI store on-demand (lazy by active Tab and Sub-Tab)
   const { data: clusteredCandidates } = useGetClusteredCandidates(
     {
-      assetClass: 'CORE',
+      assetClass: effectiveAssetClass,
       threshold: 0.8,
-      evaluationDate: '2026-09-01',
+      evaluationDate: effectiveEvaluationDate,
     },
     { enabled: isTab2 }
   );
   const { data: orthogonalCandidates } = useGetOrthogonalCandidates(
     {
-      assetClass: 'CORE',
+      assetClass: effectiveAssetClass,
       seedTicker: '0050',
-      evaluationDate: '2026-09-01',
+      evaluationDate: effectiveEvaluationDate,
     },
     { enabled: isTab2 }
   );
@@ -94,8 +107,8 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const { data: corporateActions } = useListCorporateActions(undefined, { enabled: isTab3 });
   const { data: pairwiseMatrix } = useListPairwiseMatrix(
     {
-      assetClass: 'CORE',
-      evaluationDate: '2026-09-01',
+      assetClass: effectiveAssetClass,
+      evaluationDate: effectiveEvaluationDate,
     },
     { enabled: isTab2 }
   );
@@ -300,7 +313,13 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   useEffect(() => {
     if (!store) return;
     if (!store.get('/filters/perspective-mode-selector')) {
-      store.set('/filters/perspective-mode-selector', perspectiveMode);
+      store.set('/filters/perspective-mode-selector', currentPerspectiveMode);
+    }
+    if (!store.get('/filters/asset-class-selector')) {
+      store.set('/filters/asset-class-selector', 'CORE');
+    }
+    if (!store.get('/filters/leaderboard-evaluation-date')) {
+      store.set('/filters/leaderboard-evaluation-date', '2026-09-01');
     }
     if (!store.get('/filters/drawdown-benchmark-selector')) {
       store.set('/filters/drawdown-benchmark-selector', '^TWII');
@@ -317,9 +336,9 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     if (store.get('/filters/toggle-fib-switch') === undefined) {
       store.set('/filters/toggle-fib-switch', true);
     }
-  }, [store, perspectiveMode]);
+  }, [store, currentPerspectiveMode]);
 
-  // Dynamic spec: toggle className of tab sections to 'block' or 'hidden', and highlight active button
+  // Dynamic spec: toggle className of tab sections to 'block' or 'hidden', and toggle active leaderboard table
   const spec = useMemo(() => {
     const cloned = JSON.parse(JSON.stringify(rawSpec));
     if (cloned.elements?.['main-tabs-container']) {
@@ -368,8 +387,35 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       }
     });
 
+    // Table visibility toggle inside qualified-leaderboard-section based on perspective mode
+    const isClusteringActive = currentPerspectiveMode.includes('分群');
+    if (cloned.elements?.['qualified-leaderboard-section']) {
+      cloned.elements['qualified-leaderboard-section'].children = [
+        'leaderboard-heading',
+        'asset-class-selector',
+        'orthogonal-control-bar',
+        isClusteringActive
+          ? 'clustering-leaderboard-table'
+          : 'qualified-leaderboard-table',
+      ];
+    }
+
+    if (cloned.elements?.['qualified-leaderboard-table']) {
+      cloned.elements['qualified-leaderboard-table'].props = {
+        ...(cloned.elements['qualified-leaderboard-table'].props || {}),
+        className: isClusteringActive ? 'hidden' : 'block space-y-3',
+      };
+    }
+
+    if (cloned.elements?.['clustering-leaderboard-table']) {
+      cloned.elements['clustering-leaderboard-table'].props = {
+        ...(cloned.elements['clustering-leaderboard-table'].props || {}),
+        className: !isClusteringActive ? 'hidden' : 'block space-y-3',
+      };
+    }
+
     return cloned;
-  }, [activeTab, activeSubTab]);
+  }, [activeTab, activeSubTab, currentPerspectiveMode]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -387,7 +433,8 @@ const defaultStore = createStateStore({
   data: {},
   filters: {
     'perspective-mode-selector': '⚡ 夏農幾何收割',
-    'asset-class-selector': '核心大盤 (Core)',
+    'asset-class-selector': 'CORE',
+    'leaderboard-evaluation-date': '2026-09-01',
     'freq-filter-selector': '全部',
     'drawdown-benchmark-selector': '^TWII',
     'drawdown-window-selector': '6M',

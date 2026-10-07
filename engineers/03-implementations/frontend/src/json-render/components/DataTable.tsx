@@ -195,7 +195,7 @@ export default function DataTable({
   };
 
   return (
-    <div className="w-full space-y-3">
+    <div className={`w-full space-y-3 ${props.className ?? ''}`}>
       {props.label && (
         <div className="text-base font-semibold tracking-tight">{props.label}</div>
       )}
@@ -303,8 +303,16 @@ export default function DataTable({
                       {/* Expandable Alternative Rows */}
                       {hasAlts &&
                         isExpanded &&
-                        item.alternatives.map((alt: any, altIdx: number) => {
-                          const altKey = `${rowKey}-alt-${alt.ticker ?? altIdx}`;
+                        item.alternatives.map((rawAlt: any, altIdx: number) => {
+                          const alt = rawAlt?.score
+                            ? {
+                                ...rawAlt.score,
+                                ...rawAlt,
+                                rSquaredWithLeader:
+                                  rawAlt.rSquaredWithLeader ?? rawAlt.rSquared,
+                              }
+                            : rawAlt;
+                          const altKey = `${rowKey}-alt-${alt?.ticker ?? altIdx}`;
                           return (
                             <tr
                               key={altKey}

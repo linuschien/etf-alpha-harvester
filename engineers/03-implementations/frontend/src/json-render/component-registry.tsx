@@ -13,6 +13,7 @@ import ChartComponent from './components/ChartComponent';
 import EventCalendar from './components/EventCalendar';
 import SegmentedRadio from './components/SegmentedRadio';
 import MacroRegimeBanner from './components/MacroRegimeBanner';
+import MonthStepper from './components/MonthStepper';
 
 // ── Adapter: ComponentRenderProps → BaseComponentProps ──────────────────────
 export function adapt(Comp: ComponentType<any>): ComponentType<any> {
@@ -155,6 +156,7 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
   Radio: adapt(SegmentedRadio), // Inline horizontal segmented radio button group
   SegmentedRadio: adapt(SegmentedRadio),
   MacroRegimeBanner: MacroRegimeBanner,
+  MonthStepper: adapt(MonthStepper),
 
   // ── 4. Chart wrappers (Real interactive SVG charts) ──────────────────────
   'Chart:bar': ChartComponent,

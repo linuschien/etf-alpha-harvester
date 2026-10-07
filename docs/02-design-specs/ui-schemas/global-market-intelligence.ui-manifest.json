@@ -541,8 +541,25 @@
               {
                 "id": "leaderboard-heading",
                 "abstract_type": "Heading",
-                "label": "合規標的天梯榜與正交去共線雷達",
+                "label": "ETF投資清單篩選",
                 "behavior_ref": "visual-hierarchy:weight"
+              },
+              {
+                "id": "asset-class-selector",
+                "abstract_type": "Selection",
+                "semantic_variant": "segmented",
+                "label": "候選資產池 (核心大盤 / 動能衛星 / 防禦債券)",
+                "behavior_ref": "nielsen:control",
+                "ux_hints": {
+                  "max_visible_options": 3
+                },
+                "interactions": [
+                  {
+                    "on_event": "on_change",
+                    "target_id": "qualified-leaderboard-section",
+                    "behavior_ref": "nielsen:feedback"
+                  }
+                ]
               },
               {
                 "id": "orthogonal-control-bar",
@@ -552,18 +569,15 @@
                 "behavior_ref": "nielsen:control",
                 "children": [
                   {
-                    "id": "asset-class-selector",
+                    "id": "leaderboard-month-stepper",
                     "abstract_type": "Selection",
-                    "semantic_variant": "dropdown",
-                    "label": "候選資產池 (核心大盤 / 動能衛星 / 防禦債券)",
+                    "semantic_variant": "segmented",
+                    "label": "評估月份",
                     "behavior_ref": "nielsen:control",
-                    "ux_hints": {
-                      "max_visible_options": 3
-                    },
                     "interactions": [
                       {
                         "on_event": "on_change",
-                        "target_id": "qualified-leaderboard-table",
+                        "target_id": "qualified-leaderboard-section",
                         "behavior_ref": "nielsen:feedback"
                       }
                     ]
@@ -581,26 +595,6 @@
                       {
                         "on_event": "on_change",
                         "target_id": "qualified-leaderboard-section",
-                        "behavior_ref": "nielsen:feedback"
-                      }
-                    ]
-                  },
-                  {
-                    "id": "current-seed-badge-text",
-                    "abstract_type": "Text",
-                    "label": "當前錨定種子: 預設 Rank 1 (夏農模式點擊任意標的切換錨點)",
-                    "behavior_ref": "visual-hierarchy:weight"
-                  },
-                  {
-                    "id": "reset-seed-trigger",
-                    "abstract_type": "Trigger",
-                    "semantic_variant": "secondary",
-                    "label": "↺ 重設為 Rank 1 種子",
-                    "behavior_ref": "nielsen:control",
-                    "interactions": [
-                      {
-                        "on_event": "on_click",
-                        "target_id": "qualified-leaderboard-table",
                         "behavior_ref": "nielsen:feedback"
                       }
                     ]

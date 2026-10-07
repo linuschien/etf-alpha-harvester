@@ -603,10 +603,12 @@
     "qualified-leaderboard-section": {
       "type": "div",
       "props": {
-        "id": "qualified-leaderboard-section"
+        "id": "qualified-leaderboard-section",
+        "className": "space-y-6"
       },
       "children": [
         "leaderboard-heading",
+        "asset-class-selector",
         "orthogonal-control-bar",
         "qualified-leaderboard-table",
         "clustering-leaderboard-table"
@@ -615,7 +617,7 @@
     "leaderboard-heading": {
       "type": "Heading",
       "props": {
-        "text": "合規標的天梯榜與正交去共線雷達",
+        "text": "ETF投資清單篩選",
         "level": "h2"
       },
       "children": []
@@ -626,40 +628,56 @@
         "direction": "horizontal",
         "gap": "md",
         "align": "center",
-        "justify": null,
-        "className": null
+        "justify": "between",
+        "className": "w-full flex flex-wrap items-center justify-between gap-4 py-2 border-b border-border/50"
       },
       "children": [
-        "asset-class-selector",
+        "leaderboard-month-stepper",
         "perspective-mode-selector",
-        "current-seed-badge-text",
-        "reset-seed-trigger",
         "open-pairwise-matrix-btn"
       ]
     },
-    "asset-class-selector": {
-      "type": "Select",
+    "leaderboard-month-stepper": {
+      "type": "MonthStepper",
       "props": {
-        "label": "候選資產池 (核心大盤 / 動能衛星 / 防禦債券)",
-        "name": "asset-class-selector",
-        "options": [
-          "核心大盤 (Core)",
-          "動能衛星 (Satellite)",
-          "防禦債券 (Defensive)"
+        "id": "leaderboard-month-stepper",
+        "label": "評估月份",
+        "defaultValue": "2026-09-01",
+        "value": {
+          "$bindState": "/filters/leaderboard-evaluation-date"
+        }
+      },
+      "children": []
+    },
+    "asset-class-selector": {
+      "type": "Tabs",
+      "props": {
+        "id": "asset-class-selector",
+        "tabs": [
+          {
+            "label": "核心大盤 (Core)",
+            "value": "CORE"
+          },
+          {
+            "label": "動能衛星 (Satellite)",
+            "value": "SATELLITE"
+          },
+          {
+            "label": "防禦債券 (Defensive)",
+            "value": "DEFENSIVE"
+          }
         ],
-        "placeholder": "請選擇 候選資產池 (核心大盤 / 動能衛星 / 防禦債券)",
+        "defaultValue": "CORE",
         "value": {
           "$bindState": "/filters/asset-class-selector"
-        },
-        "checks": null,
-        "validateOn": null
+        }
       },
       "children": []
     },
     "perspective-mode-selector": {
       "type": "Radio",
       "props": {
-        "label": "決策視角模式 (⚡ 夏農幾何收割 / 🧩 分群去冗餘族群)",
+        "label": "決策視角模式",
         "name": "perspective-mode-selector",
         "options": [
           "⚡ 夏農幾何收割",
@@ -672,34 +690,6 @@
         "validateOn": null
       },
       "children": []
-    },
-    "current-seed-badge-text": {
-      "type": "Text",
-      "props": {
-        "text": "當前錨定種子: 預設 Rank 1 (夏農模式點擊任意標的切換錨點)",
-        "variant": null
-      },
-      "children": []
-    },
-    "reset-seed-trigger": {
-      "type": "Button",
-      "props": {
-        "label": "↺ 重設為 Rank 1 種子",
-        "variant": "secondary",
-        "disabled": null
-      },
-      "children": [],
-      "on": {
-        "press": [
-          {
-            "action": "executeBehavior",
-            "params": {
-              "ref": "reset-seed-trigger",
-              "id": "reset-seed-trigger"
-            }
-          }
-        ]
-      }
     },
     "open-pairwise-matrix-btn": {
       "type": "Button",

@@ -78,24 +78,40 @@ export function useGetClusteredCandidates(
                 compositeScore
               }
               alternatives {
-                ticker
-                name
-                underlyingIndex
-                rSquaredWithLeader
-                compositeScoreGap
-                closePrice
-                changePct
-                return1m
-                return3m
-                return6m
-                return1y
-                fundSizeTwd
-                compositeScore
+                rSquared
+                score {
+                  ticker
+                  name
+                  underlyingIndex
+                  closePrice
+                  changePct
+                  return1m
+                  return3m
+                  return6m
+                  return1y
+                  fundSizeTwd
+                  compositeScore
+                }
               }
             }
           }`,
           effectiveFilter
         )
-        .then((data) => data.getClusteredCandidates),
+        .then((data) => {
+          const list = data?.getClusteredCandidates || [];
+          return list.map((c: any) => ({
+            ...c,
+            alternatives: (c.alternatives || []).map((alt: any) => {
+              if (alt.score) {
+                return {
+                  ...alt.score,
+                  ...alt,
+                  rSquaredWithLeader: alt.rSquared ?? alt.rSquaredWithLeader,
+                };
+              }
+              return alt;
+            }),
+          }));
+        }),
   });
 }
