@@ -1148,11 +1148,6 @@
             "label": "最後成功同步時間",
             "sortable": true,
             "default_sort": "desc"
-          },
-          {
-            "field": "updatedAt",
-            "label": "系統更新時間",
-            "sortable": false
           }
         ],
         "data": {

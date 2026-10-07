@@ -61,6 +61,13 @@
     max-height: 90vh !important;
     overflow-y: auto !important;
   }
+  /* Expand DialogContent when containing the watermark table */
+  [data-slot="dialog-content"]:has(#watermark-table) {
+    max-width: min(92vw, 920px) !important;
+    width: min(92vw, 920px) !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+  }
   :root {
     --background: 220 20% 97%;
     --foreground: 222.2 84% 4.9%;

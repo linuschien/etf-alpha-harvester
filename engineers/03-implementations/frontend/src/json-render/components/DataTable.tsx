@@ -254,6 +254,33 @@ export default function DataTable({
       return <span>{(val / 100000000).toFixed(1)} 億</span>;
     }
 
+    if (col.field === 'status') {
+      const isSuccess = val === 'SUCCESS' || val === 'PASS';
+      const isFailed = val === 'FAILED';
+      const isHalt = val === 'HALT';
+      const badgeClass = isSuccess
+        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold'
+        : isFailed
+        ? 'bg-destructive/15 text-destructive font-semibold'
+        : isHalt
+        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold'
+        : 'bg-muted text-muted-foreground font-medium';
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${badgeClass}`}>
+          {val || '--'}
+        </span>
+      );
+    }
+
+    if (col.field === 'recordsSyncedCount' && typeof val === 'number') {
+      return <span className="font-mono text-xs">{val.toLocaleString()} 筆</span>;
+    }
+
+    if ((col.field === 'latestRecordDate' || col.field === 'lastSuccessfulSyncAt') && val) {
+      const str = String(val).replace('T', ' ');
+      return <span className="font-mono text-xs text-foreground/90">{str}</span>;
+    }
+
     if (val === null || val === undefined || val === '') {
       return <span className="text-muted-foreground text-xs">--</span>;
     }
@@ -321,13 +348,13 @@ export default function DataTable({
   };
 
   return (
-    <div className={`w-full space-y-3 ${props.className ?? ''}`}>
+    <div id={props.id} className={`w-full min-w-0 max-w-full space-y-3 ${props.className ?? ''}`}>
       {props.label && (
         <div className="text-base font-semibold tracking-tight">{props.label}</div>
       )}
 
-      <div className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden">
-        <div className="overflow-auto max-h-[480px] relative">
+      <div className="w-full min-w-0 max-w-full rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden">
+        <div className="w-full overflow-x-auto max-h-[480px] relative">
           <table className="w-full text-left text-sm border-separate border-spacing-0">
             <thead className="sticky top-0 z-20 bg-muted text-muted-foreground text-xs font-medium shadow-2xs">
               <tr>
