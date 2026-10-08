@@ -244,13 +244,13 @@ class RepositoryIntegrationTest {
     @Test
     @DisplayName("Should verify Flyway V8 and V9 seeded monthly top list scores and pairwise matrices")
     void shouldVerifyFlywaySeededMonthlyTopListAndPairwiseMatrix() {
-        // V8 (2026-09: 51 scores, 867 matrices) + V9 (2026-10: 50 scores, 790 matrices)
+        // V8 (2026-09: 59 scores, 1231 matrices) + V9 (2026-10: 57 scores, 1091 matrices)
         StepVerifier.create(scoreRepository.count())
-                .assertNext(count -> assertThat(count).isEqualTo(101L))
+                .assertNext(count -> assertThat(count).isEqualTo(116L))
                 .verifyComplete();
 
         StepVerifier.create(pairwiseMatrixRepository.count())
-                .assertNext(count -> assertThat(count).isEqualTo(1657L))
+                .assertNext(count -> assertThat(count).isEqualTo(2322L))
                 .verifyComplete();
     }
 }

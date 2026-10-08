@@ -131,8 +131,11 @@ public class MonthlyTopListDumpIntegrationTest {
         sql.append("-- ").append(fileName).append("\n");
         sql.append("-- Seed official 2026-09 Monthly Candidate Screening, Multi-Factor Top List & Pairwise Matrix\n");
         sql.append("-- Evaluation Date: 2026-09-01 (Cutoff: 2026-08-31)\n");
-        sql.append("-- Total Scores: ").append(allScores.size()).append(" (4 Core, 20 Satellite, 5 Defensive)\n");
-        sql.append("-- Total Pairwise Matrices: ").append(allMatrices.size()).append(" (6 Core pairs, 190 Satellite pairs)\n\n");
+        sql.append("-- Total Scores: ").append(allScores.size()).append(" (")
+                .append(response.coreCount()).append(" Core, ")
+                .append(response.satelliteCount()).append(" Satellite, ")
+                .append(response.defensiveCount()).append(" Defensive)\n");
+        sql.append("-- Total Pairwise Matrices: ").append(allMatrices.size()).append("\n\n");
 
         // 6. Generate GlobalAssetScore INSERT
         sql.append("INSERT INTO global_asset_score (id, asset_id, ticker, evaluation_date, asset_class, class_rank, composite_score, fund_size_twd, r_squared, momentum_12m, kaufman_er, sharpe_ratio, volatility_90d, ytm, dca_rank)\nVALUES\n");
