@@ -105,6 +105,13 @@ class TwseMarketDataClientTest {
                           "c": "2,205,100,000",
                           "f": "188.50",
                           "g": "-0.12"
+                        },
+                        {
+                          "a": "00891",
+                          "b": "中信關鍵半導體",
+                          "c": 1857090000.00000,
+                          "f": "38.47",
+                          "g": "0.08"
                         }
                       ]
                     }
@@ -121,11 +128,17 @@ class TwseMarketDataClientTest {
         StepVerifier.create(client.fetchMisNavData())
                 .assertNext(map -> {
                     assertThat(map).containsKey("0050");
-                    var snap = map.get("0050");
-                    assertThat(snap.name()).isEqualTo("元大台灣50");
-                    assertThat(snap.nav()).isEqualByComparingTo(new BigDecimal("188.5000"));
-                    assertThat(snap.discountPremiumPct()).isEqualByComparingTo(new BigDecimal("-0.1200"));
-                    assertThat(snap.sharesOutstanding()).isEqualTo(2205100000L);
+                    var snap0050 = map.get("0050");
+                    assertThat(snap0050.name()).isEqualTo("元大台灣50");
+                    assertThat(snap0050.nav()).isEqualByComparingTo(new BigDecimal("188.5000"));
+                    assertThat(snap0050.discountPremiumPct()).isEqualByComparingTo(new BigDecimal("-0.1200"));
+                    assertThat(snap0050.sharesOutstanding()).isEqualTo(2205100000L);
+
+                    assertThat(map).containsKey("00891");
+                    var snap00891 = map.get("00891");
+                    assertThat(snap00891.name()).isEqualTo("中信關鍵半導體");
+                    assertThat(snap00891.nav()).isEqualByComparingTo(new BigDecimal("38.4700"));
+                    assertThat(snap00891.sharesOutstanding()).isEqualTo(1857090000L);
                 })
                 .verifyComplete();
     }

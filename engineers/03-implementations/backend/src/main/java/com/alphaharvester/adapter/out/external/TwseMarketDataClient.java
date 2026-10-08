@@ -138,7 +138,7 @@ public class TwseMarketDataClient {
                                         if (symbol.isBlank()) continue;
                                         BigDecimal nav = parseBigDecimalSafe(item.path("f").asText(""));
                                         BigDecimal discountPrem = parseBigDecimalSafe(item.path("g").asText(""));
-                                        long shares = parseLongSafe(item.path("c").asText("0").split("\\.")[0]);
+                                        long shares = parseSharesSafe(item.path("c"));
                                         map.put(symbol, new NavSnapshot(name, nav, discountPrem, shares));
                                     }
                                 }
@@ -191,6 +191,20 @@ public class TwseMarketDataClient {
         String clean = str.replace(",", "").trim();
         try {
             return Long.parseLong(clean);
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private long parseSharesSafe(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) return 0L;
+        if (node.isNumber()) {
+            return node.asLong();
+        }
+        String text = node.asText("0").replace(",", "").trim();
+        if (text.isBlank() || text.equals("--")) return 0L;
+        try {
+            return new BigDecimal(text).longValue();
         } catch (Exception e) {
             return 0L;
         }
