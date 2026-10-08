@@ -8,6 +8,7 @@ import { api } from '@/lib/api-client';
 // ── Response Type ──────────────────────────────────────────────────────────
 export interface GlobalAssetScore {
   ticker: string;
+  assetClass?: string;
   name?: string;
   classRank?: number;
   distributionFrequency?: string;
@@ -21,6 +22,13 @@ export interface GlobalAssetScore {
   return1y?: number;
   fundSizeTwd?: number;
   compositeScore?: number;
+  rSquared?: number;
+  momentum12m?: number;
+  kaufmanEr?: number;
+  sharpeRatio?: number;
+  volatility90d?: number;
+  ytm?: number;
+  dcaRank?: number;
   [key: string]: unknown;
 }
 
@@ -58,11 +66,18 @@ export function useGetOrthogonalCandidates(
           `query GetOrthogonalCandidates($assetClass: CandidateAssetClass!, $seedTicker: String, $evaluationDate: String) {
             getOrthogonalCandidates(assetClass: $assetClass, seedTicker: $seedTicker, evaluationDate: $evaluationDate) {
               ticker
+              assetClass
               name
               classRank
               distributionFrequency
               compositeScore
               rSquared
+              momentum12m
+              kaufmanEr
+              sharpeRatio
+              volatility90d
+              ytm
+              dcaRank
               orthogonalStatus
               collisionDetail
               closePrice

@@ -397,7 +397,7 @@ describe('GlobalMarketIntelligencePage', () => {
   });
 
   // ── Pattern 4 — Row Actions & Drawer Opening ─────────────────────────────
-  it('opens asset detail drawer and updates selected asset on table row click', async () => {
+  it('opens asset detail drawer and updates selected asset on table row click with 3-stage decision modules', async () => {
     const user = userEvent.setup();
     const mockRows = [
       {
@@ -414,6 +414,8 @@ describe('GlobalMarketIntelligencePage', () => {
         return1y: 35.4,
         fundSizeTwd: 420000000000,
         compositeScore: 92.4,
+        rSquared: 0.98,
+        sharpeRatio: 1.85,
       },
     ];
 
@@ -425,6 +427,26 @@ describe('GlobalMarketIntelligencePage', () => {
 
     expect(store.get('/modals/asset-detail-drawer')).toBe(true);
     expect(store.get('/selectedAsset')).toBe('0050');
+
+    // Verify dynamic drawer heading
+    const headings = await screen.findAllByText(/0050 元大台灣50 ｜ 深度決策透視/i);
+    expect(headings.length).toBeGreaterThanOrEqual(1);
+
+    // Verify Stage 1: Radar
+    expect(screen.getByText(/多因子體質透視雷達/i)).toBeInTheDocument();
+
+    // Verify Stage 2: 52-Week Drawdown Radar
+    expect(await screen.findByText(/0050 52 週回撤雷達/i)).toBeInTheDocument();
+
+    // Verify Stage 3: Dip-Buy Opportunity
+    expect(await screen.findByText(/超跌加碼綜合評分/i)).toBeInTheDocument();
+    expect(await screen.findByText(/78.5 分/i)).toBeInTheDocument();
+    expect(screen.getByText(/★★★★ 超跌區/i)).toBeInTheDocument();
+
+    // Verify close drawer button closes modal
+    const closeBtn = screen.getByRole('button', { name: /關閉抽屜/i });
+    await user.click(closeBtn);
+    expect(store.get('/modals/asset-detail-drawer')).toBe(false);
   });
 
   // ── Pattern 5 — Benchmark Selection & Radar Chart Points ─────────────────

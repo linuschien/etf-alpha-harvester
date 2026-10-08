@@ -1227,13 +1227,12 @@
     "asset-detail-drawer": {
       "type": "Drawer",
       "props": {
-        "title": "標的詳細資訊抽屜 (Asset Detail Drawer)",
+        "title": "標的深度決策透視",
         "description": null,
         "openPath": "/modals/asset-detail-drawer"
       },
       "children": [
         "drawer-header-stack",
-        "drawer-meta-container",
         "drawer-spider-radar-container",
         "drawer-kline-container",
         "drawer-dip-buy-container"
@@ -1259,7 +1258,7 @@
     "drawer-heading": {
       "type": "Heading",
       "props": {
-        "text": "標的深度檔案與超跌加碼分析",
+        "text": "標的深度決策透視",
         "level": "h3"
       },
       "children": []
@@ -1283,74 +1282,10 @@
         ]
       }
     },
-    "drawer-meta-container": {
-      "type": "Card",
-      "props": {
-        "title": "基本檔案與配息政策",
-        "description": null,
-        "maxWidth": null,
-        "centered": null,
-        "className": null
-      },
-      "children": [
-        "drawer-asset-metric-ticker",
-        "drawer-asset-metric-name",
-        "drawer-asset-metric-aum",
-        "drawer-asset-metric-freq"
-      ]
-    },
-    "drawer-asset-metric-ticker": {
-      "type": "MetricCard",
-      "props": {
-        "id": "drawer-asset-metric-ticker",
-        "label": "標的代碼",
-        "value": {
-          "$bindState": "/metrics/drawer-asset-metric-ticker"
-        },
-        "data_ref": "getGlobalAssetByTicker"
-      },
-      "children": []
-    },
-    "drawer-asset-metric-name": {
-      "type": "MetricCard",
-      "props": {
-        "id": "drawer-asset-metric-name",
-        "label": "標的名稱",
-        "value": {
-          "$bindState": "/metrics/drawer-asset-metric-name"
-        },
-        "data_ref": "getGlobalAssetByTicker"
-      },
-      "children": []
-    },
-    "drawer-asset-metric-aum": {
-      "type": "MetricCard",
-      "props": {
-        "id": "drawer-asset-metric-aum",
-        "label": "基金規模 (AUM)",
-        "value": {
-          "$bindState": "/metrics/drawer-asset-metric-aum"
-        },
-        "data_ref": "getGlobalAssetByTicker"
-      },
-      "children": []
-    },
-    "drawer-asset-metric-freq": {
-      "type": "MetricCard",
-      "props": {
-        "id": "drawer-asset-metric-freq",
-        "label": "法定配息週期",
-        "value": {
-          "$bindState": "/metrics/drawer-asset-metric-freq"
-        },
-        "data_ref": "getGlobalAssetByTicker"
-      },
-      "children": []
-    },
     "drawer-spider-radar-container": {
       "type": "Card",
       "props": {
-        "title": "多因子得分拆解雷達圖",
+        "title": "多因子體質透視雷達 (Factor Attribution Radar)",
         "description": null,
         "maxWidth": null,
         "centered": null,
@@ -1364,7 +1299,7 @@
       "type": "Chart",
       "props": {
         "id": "spider-radar-chart",
-        "label": "因子百分位數雷達 (R² / DCA / AUM / MOM / KER / Sharpe / YTM)",
+        "label": "多因子百分位數雷達",
         "data_ref": "getScoreByTicker"
       },
       "children": []
@@ -1372,7 +1307,7 @@
     "drawer-kline-container": {
       "type": "Card",
       "props": {
-        "title": "歷史 Raw Close 日 K 線與均線系統",
+        "title": "ETF 走勢與黃金分割回撤監控",
         "description": null,
         "maxWidth": null,
         "centered": null,
@@ -1461,7 +1396,7 @@
       "type": "Chart",
       "props": {
         "id": "kline-chart",
-        "label": "原始收盤日 K 線 (預設 6M，20/60/120/240MA、月線布林通道、黃金分割 23.6%/38.2%/50%/61.8%/76.4%)",
+        "label": "52 週高點回撤走勢圖 (預設 6M，20/60/120/240MA、月線布林通道、黃金分割 23.6%/38.2%/50%/61.8%/76.4%)",
         "data_ref": "getQuoteTimeSeries"
       },
       "children": []
@@ -1469,17 +1404,28 @@
     "drawer-dip-buy-container": {
       "type": "Card",
       "props": {
-        "title": "🎯 超跌加碼勝率評分卡片 (Dip-Buying Score)",
+        "title": "🎯 超跌加碼勝率評估 (Dip-Buying Opportunity)",
         "description": null,
         "maxWidth": null,
         "centered": null,
         "className": null
       },
       "children": [
+        "dip-buy-metrics-grid",
+        "dip-buy-action-text"
+      ]
+    },
+    "dip-buy-metrics-grid": {
+      "type": "Grid",
+      "props": {
+        "columns": 3,
+        "gap": "md",
+        "className": "grid-cols-1 md:grid-cols-3"
+      },
+      "children": [
         "dip-buy-score-metric",
         "dip-buy-star-metric",
-        "dip-buy-winrate-metric",
-        "dip-buy-action-text"
+        "dip-buy-winrate-metric"
       ]
     },
     "dip-buy-score-metric": {

@@ -14,6 +14,7 @@ import EventCalendar from './components/EventCalendar';
 import SegmentedRadio from './components/SegmentedRadio';
 import MacroRegimeBanner from './components/MacroRegimeBanner';
 import MonthStepper from './components/MonthStepper';
+import Drawer from './components/Drawer';
 
 // ── Adapter: ComponentRenderProps → BaseComponentProps ──────────────────────
 export function adapt(Comp: ComponentType<any>): ComponentType<any> {
@@ -115,6 +116,18 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
       }
     }
 
+    // Resolve state binding for Text / Heading (text)
+    if (rawProps.text && typeof rawProps.text === 'object' && '$bindState' in rawProps.text) {
+      const path = rawProps.text.$bindState;
+      effectiveBindings.text = path;
+      if (store) {
+        const textFromStore = store.get(path);
+        if (textFromStore !== undefined && textFromStore !== null) {
+          adaptedProps.text = textFromStore;
+        }
+      }
+    }
+
     return React.createElement(Comp, {
       props: adaptedProps,
       children,
@@ -157,6 +170,7 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
   SegmentedRadio: adapt(SegmentedRadio),
   MacroRegimeBanner: MacroRegimeBanner,
   MonthStepper: adapt(MonthStepper),
+  Drawer: Drawer,
 
   // ── 4. Chart wrappers (Real interactive SVG charts) ──────────────────────
   'Chart:bar': ChartComponent,

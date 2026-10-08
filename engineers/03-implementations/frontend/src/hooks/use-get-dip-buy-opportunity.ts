@@ -8,11 +8,17 @@ import { api } from '@/lib/api-client';
 // ── Response Type ──────────────────────────────────────────────────────────
 export interface DipBuyOpportunityScore {
   ticker: string;
-  dipScore: number;
+  compositeScore: number;
   starRating: string;
-  historical1yWinRate: number;
-  actionRecommendation: string;
-  calculatedAt: string;
+  winRateEstimate: string;
+  recommendation: string;
+  bollingerScore?: number;
+  fibonacciScore?: number;
+  maSupportScore?: number;
+  panicScore?: number;
+  dipScore?: number;
+  historical1yWinRate?: number;
+  actionRecommendation?: string;
   [key: string]: unknown;
 }
 
@@ -35,15 +41,25 @@ export function useGetDipBuyOpportunity(ticker?: string) {
           `query GetDipBuyOpportunity($ticker: String!) {
             getDipBuyOpportunity(ticker: $ticker) {
               ticker
-              dipScore
+              compositeScore
               starRating
-              historical1yWinRate
-              actionRecommendation
-              calculatedAt
+              winRateEstimate
+              recommendation
+              bollingerScore
+              fibonacciScore
+              maSupportScore
+              panicScore
             }
           }`,
           { ticker }
         )
-        .then((data) => data.getDipBuyOpportunity),
+        .then((data) => {
+          const item = data.getDipBuyOpportunity;
+          if (item) {
+            item.dipScore = item.compositeScore;
+            item.actionRecommendation = item.recommendation;
+          }
+          return item;
+        }),
   });
 }

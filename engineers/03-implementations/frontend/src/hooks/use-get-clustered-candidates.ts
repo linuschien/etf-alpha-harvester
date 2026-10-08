@@ -71,6 +71,7 @@ export function useGetClusteredCandidates(
               isSingleton
               leader {
                 ticker
+                assetClass
                 name
                 classRank
                 underlyingIndex
@@ -83,11 +84,19 @@ export function useGetClusteredCandidates(
                 return1y
                 fundSizeTwd
                 compositeScore
+                rSquared
+                momentum12m
+                kaufmanEr
+                sharpeRatio
+                volatility90d
+                ytm
+                dcaRank
               }
               alternatives {
                 rSquared
                 score {
                   ticker
+                  assetClass
                   name
                   classRank
                   underlyingIndex
@@ -100,6 +109,13 @@ export function useGetClusteredCandidates(
                   return1y
                   fundSizeTwd
                   compositeScore
+                  rSquared
+                  momentum12m
+                  kaufmanEr
+                  sharpeRatio
+                  volatility90d
+                  ytm
+                  dcaRank
                 }
               }
             }

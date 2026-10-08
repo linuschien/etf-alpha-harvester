@@ -126,14 +126,22 @@ export const handlers = [
     }
 
     if (query.includes('getDipBuyOpportunity')) {
+      const ticker = body?.variables?.ticker ?? '0050';
       return HttpResponse.json({
         data: {
           getDipBuyOpportunity: {
-            ticker: body?.variables?.ticker ?? '0050',
+            ticker,
+            compositeScore: 78.5,
             dipScore: 78.5,
             starRating: '★★★★ 超跌區',
+            winRateEstimate: '85.2%',
             historical1yWinRate: 85.2,
+            recommendation: '分批加碼建立底倉',
             actionRecommendation: '分批加碼建立底倉',
+            bollingerScore: 25.0,
+            fibonacciScore: 20.0,
+            maSupportScore: 18.5,
+            panicScore: 15.0,
             calculatedAt: '2026-09-30T16:00:00Z',
           },
         },
@@ -141,18 +149,33 @@ export const handlers = [
     }
 
     if (query.includes('getQuoteTimeSeries')) {
+      const ticker = body?.variables?.ticker ?? '0050';
+      // Generate 20 daily quotes for smooth kline rendering
+      const quotes = Array.from({ length: 20 }).map((_, i) => {
+        const day = 10 + i;
+        const base = ticker.includes('0050') ? 190 : 25;
+        const close = base + Math.sin(i / 2) * 5;
+        return {
+          ticker,
+          tradeDate: `2026-09-${String(day).padStart(2, '0')}`,
+          openPrice: close - 0.5,
+          highPrice: close + 1.2,
+          lowPrice: close - 1.0,
+          closePrice: close,
+          volumeShares: 15000000,
+          volume: 15000000,
+          ma20: base,
+          ma60: base - 2,
+          ma120: base - 5,
+          ma240: base - 10,
+          bbUpper: base + 6,
+          bbMiddle: base,
+          bbLower: base - 6,
+        };
+      });
       return HttpResponse.json({
         data: {
-          getQuoteTimeSeries: [
-            {
-              ticker: '0050',
-              tradeDate: '2026-09-23',
-              openPrice: 197.0,
-              closePrice: 198.5,
-              volumeShares: 15000000,
-              volume: 15000000,
-            },
-          ],
+          getQuoteTimeSeries: quotes,
         },
       });
     }

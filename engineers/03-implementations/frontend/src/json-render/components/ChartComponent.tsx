@@ -585,18 +585,27 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
     );
   }
 
-  // 3. Drawdown Radar / 52W Drawdown Chart
-  if (id.includes('drawdown-radar-chart')) {
+  // 3. Price Trend & Channel Chart (Unified for Benchmark Index & ETF Drawer)
+  if (id.includes('drawdown-radar-chart') || id.includes('kline-chart')) {
+    const isEtfDrawer = id.includes('kline-chart');
     const selectedBenchmark: string =
       store?.get?.('/filters/drawdown-benchmark-selector') || '^TWII';
-    const selectedWindow: string =
-      store?.get?.('/filters/drawdown-window-selector') || '6M';
-    const showMA: boolean =
-      store?.get?.('/filters/toggle-ma-switch') !== false;
-    const showBB: boolean =
-      store?.get?.('/filters/toggle-bb-switch') !== false;
-    const showFib: boolean =
-      store?.get?.('/filters/toggle-fib-switch') !== false;
+    const selectedAsset: string =
+      store?.get?.('/selectedAsset') || '^TWII';
+    const activeTicker = isEtfDrawer ? selectedAsset : selectedBenchmark;
+
+    const selectedWindow: string = isEtfDrawer
+      ? (store?.get?.('/filters/kline-window-selector') || '6M')
+      : (store?.get?.('/filters/drawdown-window-selector') || '6M');
+    const showMA: boolean = isEtfDrawer
+      ? (store?.get?.('/filters/toggle-kline-ma-switch') !== false)
+      : (store?.get?.('/filters/toggle-ma-switch') !== false);
+    const showBB: boolean = isEtfDrawer
+      ? (store?.get?.('/filters/toggle-kline-bb-switch') !== false)
+      : (store?.get?.('/filters/toggle-bb-switch') !== false);
+    const showFib: boolean = isEtfDrawer
+      ? (store?.get?.('/filters/toggle-kline-fib-switch') !== false)
+      : (store?.get?.('/filters/toggle-fib-switch') !== false);
 
     const benchmarkKeyMap: Record<string, string> = {
       '^TWII': 'twii',
@@ -613,20 +622,44 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       '^N225': '日經 225 指數',
     };
 
-    const bKey = benchmarkKeyMap[selectedBenchmark] || 'twii';
-    const bName = benchmarkNameMap[selectedBenchmark] || selectedBenchmark;
+    const bKey = benchmarkKeyMap[activeTicker] || activeTicker.toLowerCase();
+    const bName = benchmarkNameMap[activeTicker] || activeTicker;
+    const isBenchmark = activeTicker.startsWith('^');
+    const chartHeaderTitle = isEtfDrawer
+      ? `${activeTicker} 52 週回撤雷達`
+      : `${bName} (${activeTicker}) 52 週回撤雷達`;
 
-    const allQuotes: any[] =
-      store?.get?.(`/data/quoteTimeSeries/${selectedBenchmark}`) ||
+    let allQuotes: any[] =
+      store?.get?.(`/data/quoteTimeSeries/${activeTicker}`) ||
+      store?.get?.('/data/quoteTimeSeries')?.[activeTicker] ||
       store?.get?.('/data/quoteTimeSeries')?.[bKey] ||
       [];
 
     if (!allQuotes || allQuotes.length === 0) {
+      const isLoading = store?.get?.('/loading/quoteTimeSeries');
       return (
-        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-pulse">
-          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-          <div className="h-80 w-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
-            {bName} 回撤雷達時間序列載入中...
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
+          <div className="text-base font-semibold tracking-tight text-foreground">{chartHeaderTitle}</div>
+          <div className="h-80 w-full bg-muted/20 rounded-lg flex flex-col items-center justify-center text-xs text-muted-foreground gap-2 p-4 text-center">
+            {isLoading ? (
+              <div className="flex flex-col items-center gap-2 animate-pulse">
+                <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                <span className="font-medium text-foreground">
+                  {isEtfDrawer ? `${activeTicker} 歷史行情序列載入中...` : `${bName} (${activeTicker}) 時間序列載入中...`}
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1.5">
+                <span className="text-sm font-semibold text-foreground">
+                  {isEtfDrawer ? `未取得 ${activeTicker} 歷史行情數據` : `未取得 ${bName} (${activeTicker}) 指數歷史數據`}
+                </span>
+                <span className="text-xs text-muted-foreground max-w-sm">
+                  {isEtfDrawer
+                    ? `後端 getQuoteTimeSeries API 尚未提供此標的之歷史行情時間序列。`
+                    : `後端尚未回傳該基準指數的時間序列數據。`}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -834,7 +867,11 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       return q?.tradeDate ? String(q.tradeDate).slice(5, 10) : '';
     });
 
-    const formatPoints = (pts: number) => Math.round(pts).toLocaleString() + ' 點';
+    const formatPoints = (pts: number) => {
+      return isBenchmark
+        ? `${Math.round(pts).toLocaleString()} 點`
+        : `${pts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`;
+    };
 
     // Status badge anchored to Fibonacci Retracement zones
     let statusBadge = {
@@ -882,17 +919,17 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
         <div className="flex flex-wrap items-center justify-between border-b border-border pb-3 gap-2">
           <div>
             <div className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
-              <span>{bName} ({selectedBenchmark}) 52 週回撤雷達</span>
+              <span>{chartHeaderTitle}</span>
               <span className="text-xs px-2 py-0.5 rounded font-mono bg-secondary text-secondary-foreground font-normal">
                 視窗: {selectedWindow}
               </span>
             </div>
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span>最新指數點數: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{latestPrice.toLocaleString()} 點</strong></span>
-              <span>視窗頂部 (0.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMax.toLocaleString()} 點</strong></span>
-              <span>視窗地板 (-100.0%): <strong className="text-foreground font-mono font-semibold">{windowPriceMin.toLocaleString()} 點</strong></span>
+              <span>{isBenchmark ? '最新指數點數' : '最新市價'}: <strong className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400">{formatPoints(latestPrice)}</strong></span>
+              <span>視窗頂部 (0.0%): <strong className="text-foreground font-mono font-semibold">{formatPoints(windowPriceMax)}</strong></span>
+              <span>視窗地板 (-100.0%): <strong className="text-foreground font-mono font-semibold">{formatPoints(windowPriceMin)}</strong></span>
               <span>當前黃金分割回撤: <strong className="text-rose-600 dark:text-rose-400 font-mono font-bold">{currentFibDD}%</strong></span>
-              <span>52 週最高點數: <strong className="text-foreground font-mono font-semibold">{peak52W.toLocaleString()} 點</strong></span>
+              <span>{isBenchmark ? '52 週最高點數' : '52 週最高價'}: <strong className="text-foreground font-mono font-semibold">{formatPoints(peak52W)}</strong></span>
             </div>
           </div>
           <span className={`text-xs px-3 py-1 rounded-md font-semibold ${statusBadge.color}`}>
@@ -955,7 +992,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
               <span className="font-semibold text-foreground">📅 {hoverDate}</span>
               <span className="text-muted-foreground/50">|</span>
               <span>
-                游標點數: <strong className="text-rose-600 dark:text-rose-400 font-bold text-sm">{hoverPrice.toLocaleString()} 點</strong>
+                {isBenchmark ? '游標點數' : '游標價格'}: <strong className="text-rose-600 dark:text-rose-400 font-bold text-sm">{formatPoints(hoverPrice)}</strong>
               </span>
               <span className="text-muted-foreground/50">|</span>
               <span>
@@ -965,11 +1002,15 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
           ) : (
             <div className="text-muted-foreground flex items-center gap-2 font-mono text-[11px]">
               <span className="text-primary font-bold">💡 互動反饋:</span>
-              <span>滑鼠移動於圖表上方時，此處即時回傳歷史點位、收盤點數與黃金分割回撤幅度</span>
+              <span>
+                {isBenchmark
+                  ? '滑鼠移動於圖表上方時，此處即時回傳歷史點位、收盤點數與黃金分割回撤幅度'
+                  : '滑鼠移動於圖表上方時，此處即時回傳歷史走勢、收盤價格與黃金分割回撤幅度'}
+              </span>
             </div>
           )}
           <span className="font-mono text-[11px] text-muted-foreground hidden sm:inline-block">
-            {hoverQuote ? `${selectedBenchmark} 錨點` : `視窗資料共 ${pointsCount} 筆`}
+            {hoverQuote ? `${activeTicker} 錨點` : `視窗資料共 ${pointsCount} 筆`}
           </span>
         </div>
 
@@ -1012,7 +1053,7 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             textAnchor="end"
             className="text-[10px] font-bold font-mono fill-muted-foreground"
           >
-            指數點數
+            {isBenchmark ? '指數點數' : '市價 (元)'}
           </text>
 
           {/* Left Y Axis Ticks (Real Points) */}
@@ -1278,38 +1319,225 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
 
   // 5. Spider / Radar Chart
   if (id.includes('spider-radar-chart')) {
+    const selectedTicker = store?.get?.('/selectedAsset') || store?.get?.('/filters/seedTicker');
     const candidates: any[] = store?.get?.('/data/getOrthogonalCandidates') || [];
+    let current = candidates.find((c: any) => c.ticker === selectedTicker);
+    if (!current) {
+      const clusters: any[] = store?.get?.('/data/getClusteredCandidates') || [];
+      for (const cl of clusters) {
+        if (cl.leader?.ticker === selectedTicker) {
+          current = cl.leader;
+          break;
+        }
+        const alt = cl.alternatives?.find((a: any) => a.ticker === selectedTicker || a.score?.ticker === selectedTicker);
+        if (alt) {
+          current = alt.score || alt;
+          break;
+        }
+      }
+    }
+    if (!current) {
+      current = candidates[0];
+    }
 
-    if (!candidates || candidates.length === 0) {
+    if (!current) {
       return (
         <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col items-center space-y-3 animate-pulse">
           <div className="w-full flex items-center justify-between border-b border-border pb-3">
             <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-            <span className="text-xs font-mono text-muted-foreground">7 因子綜合評分</span>
+            <span className="text-xs font-mono text-muted-foreground">多因子評分</span>
           </div>
           <div className="w-64 h-64 bg-muted/20 rounded-full flex items-center justify-center text-xs text-muted-foreground">
-            因子評分載入中...
+            請自天梯榜點擊標的查看因子透視
           </div>
         </div>
       );
     }
 
-    const first = candidates[0];
-    const factors = [
-      { name: 'R² 獨立度', val: Math.min(1, Math.max(0.1, 1 - (first.rSquared ?? 0.5))) },
-      { name: 'DCA 人氣', val: Math.min(1, Math.max(0.1, (20 - (first.dcaRank ?? 10)) / 20)) },
-      { name: 'AUM 規模', val: Math.min(1, Math.max(0.1, (first.fundSizeTwd ?? 50) / 100)) },
-      { name: 'MOM 12M', val: Math.min(1, Math.max(0.1, ((first.momentum12m ?? 0) + 0.3) / 0.6)) },
-      { name: 'KER 效率', val: Math.min(1, Math.max(0.1, first.kerEfficiency ?? 0.7)) },
-      { name: 'Sharpe 報酬', val: Math.min(1, Math.max(0.1, (first.sharpeRatio ?? 1.0) / 2.0)) },
-      { name: 'YTM 殖利率', val: Math.min(1, Math.max(0.1, (first.dividendYield ?? 5) / 10)) },
-    ];
+    const tickerTitle = `${current.ticker || selectedTicker || ''} ${current.name || ''}`.trim();
+    const activeAssetClass =
+      current.assetClass ||
+      current.score?.assetClass ||
+      store?.get?.('/filters/asset-class-selector') ||
+      (String(current.ticker || '').endsWith('B') ? 'DEFENSIVE' : 'CORE');
+
+    const isCore = activeAssetClass === 'CORE';
+    const isDefensive = activeAssetClass === 'DEFENSIVE' || String(current.ticker || '').endsWith('B');
+
+    // Mathematical scoring models strictly aligned with domain GlobalAssetScoreEvaluationService:
+    // 1. CORE: 1/3 R² + 1/3 DCA Rank + 1/3 AUM (No Return, No Sharpe)
+    // 2. SATELLITE: 50% MOM(12M) + 25% KER + 25% Sharpe (Gate: 90D Vol >= 18% & MOM > 0; NO AUM)
+    // 3. DEFENSIVE: 70% YTM + 30% AUM (No Return, No DCA)
+
+    if (isDefensive) {
+      const hasYtm = current.ytm !== undefined && current.ytm !== null;
+      const ytmVal = hasYtm ? Number(current.ytm) : null;
+      const hasAum = current.fundSizeTwd !== undefined && current.fundSizeTwd !== null;
+      const aumVal = hasAum ? Number(current.fundSizeTwd) : null;
+      const ytmPct = ytmVal !== null ? Math.min(100, Math.max(0, (ytmVal / 0.08) * 100)) : 0;
+      const aumPct = aumVal !== null ? Math.min(100, Math.max(0, (Math.log10(Math.max(1e8, aumVal)) / Math.log10(3000e8)) * 100)) : 0;
+      const compScore = current.compositeScore
+        ? Number(current.compositeScore).toFixed(1)
+        : (hasYtm && hasAum ? (0.7 * ytmPct + 0.3 * aumPct).toFixed(1) : '--');
+
+      return (
+        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between border-b border-border pb-3 gap-2">
+            <div>
+              <div className="text-base font-semibold tracking-tight text-foreground">
+                {tickerTitle || label} · 雙因子防禦定價透視
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                防禦標的嚴格依循 70% YTM + 30% AUM 雙因子模型（不採納歷史報酬與散戶 DCA 評分）
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2.5 py-1 rounded-md font-mono bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold">
+                綜合評分: {compScore !== '--' ? `${compScore} 分` : '--'}
+              </span>
+              <span className="text-xs px-2.5 py-1 rounded-md font-medium bg-secondary text-secondary-foreground">
+                防禦債券模型
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {/* Factor 1: YTM */}
+            <div className="p-4 rounded-lg border border-border bg-card shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  💎 YTM 實質到期殖利率
+                </span>
+                <span className="font-mono font-bold text-primary">權重 70.0%</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-2xl font-bold font-mono tracking-tight text-foreground">
+                  {ytmVal !== null ? `${(ytmVal * 100).toFixed(2)}%` : '--'}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono">
+                  {ytmVal !== null ? `百分位約 ${ytmPct.toFixed(0)}%` : '無數據'}
+                </span>
+              </div>
+              <div className="w-full bg-muted/40 h-2 rounded-full overflow-hidden">
+                <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${ytmPct}%` }}></div>
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                債券 ETF 預期持有至到期年化殖利率（收益核心權重 70%）
+              </div>
+            </div>
+
+            {/* Factor 2: AUM */}
+            <div className="p-4 rounded-lg border border-border bg-card shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  🛡️ AUM 規模深度安全墊
+                </span>
+                <span className="font-mono font-bold text-primary">權重 30.0%</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-2xl font-bold font-mono tracking-tight text-foreground">
+                  {aumVal !== null ? `${(aumVal / 1e8).toFixed(1)} 億` : '--'}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono">
+                  {aumVal !== null ? `百分位約 ${aumPct.toFixed(0)}%` : '無數據'}
+                </span>
+              </div>
+              <div className="w-full bg-muted/40 h-2 rounded-full overflow-hidden">
+                <div className="bg-blue-500 h-full rounded-full transition-all duration-500" style={{ width: `${aumPct}%` }}></div>
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                基金總資產規模、初級市場造市深度與流動性安全墊（權重 30%）
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const factors = isCore
+      ? [
+          {
+            name: 'R² 基準擬合 (33.3%)',
+            label: 'R² 貼合度',
+            weight: '33.3%',
+            val: current.rSquared !== undefined && current.rSquared !== null
+              ? Math.min(1, Math.max(0, Number(current.rSquared)))
+              : 0,
+            display: current.rSquared !== undefined && current.rSquared !== null
+              ? Number(current.rSquared).toFixed(4)
+              : '--',
+            desc: '加權指數擬合判定係數 R²',
+          },
+          {
+            name: 'DCA 定額人氣 (33.3%)',
+            label: '定額人氣',
+            weight: '33.3%',
+            val: current.dcaRank !== undefined && current.dcaRank !== null
+              ? Math.min(1, Math.max(0, (21 - Math.min(20, Number(current.dcaRank))) / 20))
+              : 0,
+            display: current.dcaRank !== undefined && current.dcaRank !== null && Number(current.dcaRank) > 0
+              ? `第 ${current.dcaRank} 名`
+              : '--',
+            desc: '散戶定期定額戶數人氣黏著度',
+          },
+          {
+            name: 'AUM 規模深度 (33.3%)',
+            label: '規模流動性',
+            weight: '33.3%',
+            val: current.fundSizeTwd !== undefined && current.fundSizeTwd !== null
+              ? Math.min(1, Math.max(0, Math.log10(Math.max(1e8, Number(current.fundSizeTwd))) / Math.log10(5000e8)))
+              : 0,
+            display: current.fundSizeTwd !== undefined && current.fundSizeTwd !== null
+              ? `${(Number(current.fundSizeTwd) / 1e8).toFixed(1)} 億`
+              : '--',
+            desc: '基金資產總規模造市流動性',
+          },
+        ]
+      : [
+          {
+            name: '12M 動能 (50.0%)',
+            label: '12M 動能 MOM',
+            weight: '50.0%',
+            val: current.momentum12m !== undefined && current.momentum12m !== null
+              ? Math.min(1, Math.max(0, (Number(current.momentum12m) + 0.1) / 0.8))
+              : 0,
+            display: current.momentum12m !== undefined && current.momentum12m !== null
+              ? `${(Number(current.momentum12m) * 100).toFixed(1)}%`
+              : '--',
+            desc: '近 12 個月價格超額動能表現',
+          },
+          {
+            name: 'KER 趨勢平滑 (25.0%)',
+            label: '考夫曼效率',
+            weight: '25.0%',
+            val: current.kaufmanEr !== undefined && current.kaufmanEr !== null
+              ? Math.min(1, Math.max(0, Number(current.kaufmanEr)))
+              : 0,
+            display: current.kaufmanEr !== undefined && current.kaufmanEr !== null
+              ? Number(current.kaufmanEr).toFixed(3)
+              : '--',
+            desc: '考夫曼效率比 (趨勢順滑度)',
+          },
+          {
+            name: '夏普比率 Sharpe (25.0%)',
+            label: '夏普比率',
+            weight: '25.0%',
+            val: current.sharpeRatio !== undefined && current.sharpeRatio !== null
+              ? Math.min(1, Math.max(0, Number(current.sharpeRatio) / 3.0))
+              : 0,
+            display: current.sharpeRatio !== undefined && current.sharpeRatio !== null
+              ? Number(current.sharpeRatio).toFixed(2)
+              : '--',
+            desc: '風險調整後超額報酬能力',
+          },
+        ];
 
     const size = 260;
     const center = size / 2;
-    const radius = 95;
+    const radius = 80;
     const numAxes = factors.length;
-
     const angleSlice = (Math.PI * 2) / numAxes;
 
     const coords = factors.map((f, i) => {
@@ -1319,27 +1547,39 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       return { x, y, ...f };
     });
 
-    const polygonPath = coords.reduce(
-      (acc, c, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${c.x} ${c.y}`,
-      ''
-    ) + ' Z';
+    const polygonPath =
+      coords.reduce((acc, c, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${c.x} ${c.y}`, '') + ' Z';
+
+    const modelBadgeText = isCore
+      ? '核心大盤模型 (33.3% R² + 33.3% DCA + 33.3% AUM)'
+      : '動能衛星模型 (50% 12M動能 + 25% KER + 25% 夏普)';
+
+    const modelExplanation = isCore
+      ? '核心標的嚴格依循 1/3 R² + 1/3 DCA 人氣 + 1/3 AUM 規模評分，不採納短期報酬或夏普評分。'
+      : '衛星標的嚴格依循 50% 12M動能 + 25% KER + 25% 夏普評分（門檻: 90D波動 >= 18% & MOM > 0，不採納 AUM 規模評分）。';
 
     return (
-      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col items-center space-y-3">
-        <div className="w-full flex items-center justify-between border-b border-border pb-3">
-          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-          <span className="text-xs font-mono text-muted-foreground">7 因子綜合評分</span>
+      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col items-center space-y-4">
+        <div className="w-full flex flex-wrap items-center justify-between border-b border-border pb-3 gap-2">
+          <div>
+            <div className="text-base font-semibold tracking-tight text-foreground">
+              {tickerTitle || label} · 多因子體質透視
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">{modelExplanation}</div>
+          </div>
+          <span className="text-xs px-2.5 py-1 rounded-md font-mono bg-secondary text-secondary-foreground font-medium">
+            {modelBadgeText}
+          </span>
         </div>
 
+        {/* 3-Axis Triangle Radar SVG */}
         <svg viewBox={`0 0 ${size} ${size}`} className="w-64 h-64 overflow-visible">
-          {/* Background Concentric Polygons */}
+          {/* Concentric Triangles */}
           {[0.25, 0.5, 0.75, 1.0].map((level) => {
             const poly = factors
               .map((_, i) => {
                 const angle = angleSlice * i - Math.PI / 2;
-                return `${center + radius * level * Math.cos(angle)},${
-                  center + radius * level * Math.sin(angle)
-                }`;
+                return `${center + radius * level * Math.cos(angle)},${center + radius * level * Math.sin(angle)}`;
               })
               .join(' ');
             return (
@@ -1359,17 +1599,17 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             const angle = angleSlice * i - Math.PI / 2;
             const x2 = center + radius * Math.cos(angle);
             const y2 = center + radius * Math.sin(angle);
-            const labelX = center + (radius + 20) * Math.cos(angle);
-            const labelY = center + (radius + 15) * Math.sin(angle);
+            const labelX = center + (radius + 26) * Math.cos(angle);
+            const labelY = center + (radius + 18) * Math.sin(angle);
 
             return (
               <g key={f.name}>
-                <line x1={center} y1={center} x2={x2} y2={y2} stroke="currentColor" strokeOpacity="0.2" />
+                <line x1={center} y1={center} x2={x2} y2={y2} stroke="currentColor" strokeOpacity="0.25" />
                 <text
                   x={labelX}
                   y={labelY}
                   textAnchor="middle"
-                  className="text-[10px] font-medium fill-muted-foreground"
+                  className="text-[10px] font-semibold fill-foreground"
                 >
                   {f.name}
                 </text>
@@ -1377,103 +1617,28 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             );
           })}
 
-          {/* Factor Area */}
+          {/* Factor Polygon Area */}
           <path d={polygonPath} fill="#3b82f6" fillOpacity="0.35" stroke="#3b82f6" strokeWidth="2.5" />
 
-          {/* Vertex points */}
+          {/* Vertex Circles */}
           {coords.map((c) => (
-            <circle key={c.name} cx={c.x} cy={c.y} r="3.5" fill="#3b82f6" stroke="#ffffff" strokeWidth="1.5" />
+            <circle key={c.name} cx={c.x} cy={c.y} r="4" fill="#3b82f6" stroke="#ffffff" strokeWidth="2" />
           ))}
         </svg>
-      </div>
-    );
-  }
 
-  // 6. K-Line / Candlestick Chart
-  if (id.includes('kline-chart')) {
-    const width = 720;
-    const height = 280;
-    const padding = 45;
-
-    const klineQuotes: any[] =
-      store?.get?.('/data/quoteTimeSeries/^TWII') ||
-      store?.get?.('/data/quoteTimeSeries')?.twii ||
-      [];
-
-    if (!klineQuotes || klineQuotes.length === 0) {
-      return (
-        <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-pulse">
-          <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-          <div className="h-64 w-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
-            K 線時間序列載入中...
-          </div>
-        </div>
-      );
-    }
-
-    const candles = klineQuotes.slice(-20).map((q: any) => ({
-      o: Number(q.openPrice ?? q.closePrice),
-      h: Number(q.highPrice ?? q.closePrice),
-      l: Number(q.lowPrice ?? q.closePrice),
-      c: Number(q.closePrice),
-    }));
-
-    const minPrice = Math.min(...candles.map((c: any) => c.l)) * 0.99;
-    const maxPrice = Math.max(...candles.map((c: any) => c.h)) * 1.01;
-    const latestCandle = candles[candles.length - 1];
-
-    const scaleY = (p: number) =>
-      height - padding - ((p - minPrice) / Math.max(1, maxPrice - minPrice)) * (height - padding * 2);
-    const candleWidth = (width - padding * 2) / candles.length - 8;
-
-    return (
-      <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-border pb-3">
-          <div>
-            <div className="text-base font-semibold tracking-tight text-foreground">{label}</div>
-            <div className="text-xs text-muted-foreground">
-              日 K 線 (當前最新價: {latestCandle.c.toLocaleString()} 點)
+        {/* 3 Factor Breakdown Detail Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full pt-1">
+          {factors.map((f) => (
+            <div key={f.name} className="p-3 rounded-lg border border-border bg-card/60 shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground">{f.label}</span>
+                <span className="font-mono text-[11px] font-bold text-primary">{f.weight}</span>
+              </div>
+              <div className="text-lg font-bold font-mono tracking-tight text-foreground">{f.display}</div>
+              <div className="text-[10px] text-muted-foreground">{f.desc}</div>
             </div>
-          </div>
-          <div className="flex items-center gap-3 text-xs font-medium">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-red-500 rounded"></span> 上漲</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-emerald-500 rounded"></span> 下跌</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-1 bg-amber-500 rounded"></span> 20MA</span>
-          </div>
-        </div>
-
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 overflow-visible">
-          {/* Price grid */}
-          {[190, 195, 200, 205].map((p) => (
-            <g key={p}>
-              <line x1={padding} y1={scaleY(p)} x2={width - padding} y2={scaleY(p)} stroke="currentColor" strokeOpacity="0.1" />
-              <text x={padding - 8} y={scaleY(p) + 4} textAnchor="end" className="text-[10px] font-mono fill-muted-foreground">
-                ${p}
-              </text>
-            </g>
           ))}
-
-          {/* Candlesticks */}
-          {candles.map((c, idx) => {
-            const isUp = c.c >= c.o;
-            const x = padding + idx * ((width - padding * 2) / candles.length) + 4;
-            const yTop = scaleY(Math.max(c.o, c.c));
-            const yBottom = scaleY(Math.min(c.o, c.c));
-            const bodyHeight = Math.max(yBottom - yTop, 2);
-            const wickX = x + candleWidth / 2;
-
-            const color = isUp ? '#ef4444' : '#10b981';
-
-            return (
-              <g key={idx}>
-                {/* Upper and Lower Wick */}
-                <line x1={wickX} y1={scaleY(c.h)} x2={wickX} y2={scaleY(c.l)} stroke={color} strokeWidth="1.5" />
-                {/* Candle Body */}
-                <rect x={x} y={yTop} width={candleWidth} height={bodyHeight} fill={color} rx="1" />
-              </g>
-            );
-          })}
-        </svg>
+        </div>
       </div>
     );
   }

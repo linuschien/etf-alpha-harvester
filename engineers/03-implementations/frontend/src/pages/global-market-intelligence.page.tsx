@@ -21,6 +21,8 @@ import { useListCorporateActions } from '@/hooks/use-list-corporate-actions';
 import { useListPairwiseMatrix } from '@/hooks/use-list-pairwise-matrix';
 import { useBenchmarkQuotes, usePanicQuotes } from '@/hooks/use-benchmark-quotes';
 import { useListMacroYieldSnapshots } from '@/hooks/use-list-macro-yield-snapshots';
+import { useGetQuoteTimeSeries } from '@/hooks/use-get-quote-time-series';
+import { useGetDipBuyOpportunity } from '@/hooks/use-get-dip-buy-opportunity';
 
 const getDefaultEvaluationDate = () => {
   const now = new Date();
@@ -48,6 +50,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const storeAssetClass = useStateValue<string>('/filters/asset-class-selector');
   const storeEvaluationDate = useStateValue<string>('/filters/leaderboard-evaluation-date');
   const storeSeedTicker = useStateValue<string>('/filters/seedTicker');
+  const storeSelectedAsset = useStateValue<string>('/selectedAsset');
 
   // Active tab state: default to 'all' in test mode for testing-library assertions, and 'macro-sentiment-section' in dev/prod
   const activeTab =
@@ -138,6 +141,8 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const { data: macroYieldHistory } = useListMacroYieldSnapshots(undefined, {
     enabled: isYield,
   });
+  const { data: quoteTimeSeries, isLoading: isQuoteSeriesLoading } = useGetQuoteTimeSeries(storeSelectedAsset);
+  const { data: dipBuyOpportunity, isLoading: isDipBuyLoading } = useGetDipBuyOpportunity(storeSelectedAsset);
 
   const syncedRef = useRef<Record<string, any>>({});
 
@@ -310,6 +315,67 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       store.set('/metrics/metric-move', move.val);
       if (move.date) store.set('/metrics/metric-move-date', move.date);
     }
+
+    if (storeSelectedAsset) {
+      store.set('/loading/quoteTimeSeries', isQuoteSeriesLoading);
+      store.set('/loading/dipBuyOpportunity', isDipBuyLoading);
+
+      if (
+        quoteTimeSeries &&
+        syncedRef.current[`quotes_${storeSelectedAsset}`] !== quoteTimeSeries
+      ) {
+        syncedRef.current[`quotes_${storeSelectedAsset}`] = quoteTimeSeries;
+        const existing = store.get('/data/quoteTimeSeries') || {};
+        store.set('/data/quoteTimeSeries', {
+          ...existing,
+          [storeSelectedAsset]: quoteTimeSeries,
+        });
+        store.set(`/data/quoteTimeSeries/${storeSelectedAsset}`, quoteTimeSeries);
+      }
+
+      if (
+        dipBuyOpportunity &&
+        syncedRef.current[`dipBuy_${storeSelectedAsset}`] !== dipBuyOpportunity
+      ) {
+        syncedRef.current[`dipBuy_${storeSelectedAsset}`] = dipBuyOpportunity;
+        store.set('/data/getDipBuyOpportunity', dipBuyOpportunity);
+        store.set(`/data/getDipBuyOpportunity/${storeSelectedAsset}`, dipBuyOpportunity);
+
+        const score =
+          dipBuyOpportunity.compositeScore ?? dipBuyOpportunity.dipScore;
+        store.set(
+          '/metrics/dip-buy-score-metric',
+          typeof score === 'number' ? `${score.toFixed(1)} 分` : (score ?? '--')
+        );
+
+        const star = dipBuyOpportunity.starRating || '--';
+        store.set('/metrics/dip-buy-star-metric', star);
+
+        const winrate =
+          dipBuyOpportunity.winRateEstimate ||
+          (dipBuyOpportunity.historical1yWinRate
+            ? `${(Number(dipBuyOpportunity.historical1yWinRate) * 100).toFixed(1)}%`
+            : '--');
+        store.set('/metrics/dip-buy-winrate-metric', winrate);
+
+        const rec =
+          dipBuyOpportunity.recommendation ||
+          dipBuyOpportunity.actionRecommendation ||
+          '';
+        if (rec) {
+          store.set('/metrics/dip-buy-action-text', `系統建議動作：${rec}`);
+        } else {
+          store.set('/metrics/dip-buy-action-text', '無特定加碼動作建議');
+        }
+      } else if (!dipBuyOpportunity && !isDipBuyLoading) {
+        if (!store.get(`/data/getDipBuyOpportunity/${storeSelectedAsset}`)) {
+          store.set('/metrics/dip-buy-score-metric', '--');
+          store.set('/metrics/dip-buy-star-metric', '--');
+          store.set('/metrics/dip-buy-winrate-metric', '--');
+          store.set('/metrics/dip-buy-action-text', '該標的目前無加碼機會數據');
+        }
+      }
+    }
   }, [
     store,
     clusteredCandidates,
@@ -324,6 +390,11 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     macroRegime,
     benchmarkQuotes,
     panicQuotes,
+    storeSelectedAsset,
+    quoteTimeSeries,
+    dipBuyOpportunity,
+    isQuoteSeriesLoading,
+    isDipBuyLoading,
   ]);
 
   // Synchronize initial filter defaults
@@ -352,6 +423,18 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     }
     if (store.get('/filters/toggle-fib-switch') === undefined) {
       store.set('/filters/toggle-fib-switch', true);
+    }
+    if (!store.get('/filters/kline-window-selector')) {
+      store.set('/filters/kline-window-selector', '6M');
+    }
+    if (store.get('/filters/toggle-kline-ma-switch') === undefined) {
+      store.set('/filters/toggle-kline-ma-switch', true);
+    }
+    if (store.get('/filters/toggle-kline-bb-switch') === undefined) {
+      store.set('/filters/toggle-kline-bb-switch', true);
+    }
+    if (store.get('/filters/toggle-kline-fib-switch') === undefined) {
+      store.set('/filters/toggle-kline-fib-switch', true);
     }
   }, [store, currentPerspectiveMode]);
 
@@ -431,8 +514,73 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       };
     }
 
+    // Drawer dynamic title and asset-specific header
+    const selectedTicker = storeSelectedAsset;
+    let selectedName = '';
+    if (selectedTicker) {
+      const allCandidates: any[] =
+        store?.get?.('/data/getOrthogonalCandidates') ||
+        orthogonalCandidates ||
+        [];
+      const allClusters: any[] =
+        store?.get?.('/data/getClusteredCandidates') ||
+        clusteredCandidates ||
+        [];
+
+      const foundCandidate =
+        allCandidates.find((c: any) => c.ticker === selectedTicker) ||
+        allClusters.find((c: any) => c.leader?.ticker === selectedTicker)?.leader ||
+        allClusters
+          ?.flatMap((c: any) => c.alternatives || [])
+          .find((a: any) => a.ticker === selectedTicker || a.score?.ticker === selectedTicker);
+      if (foundCandidate) {
+        selectedName = foundCandidate.name || foundCandidate.score?.name || '';
+      }
+    }
+
+    const drawerTitleText = selectedTicker
+      ? `${selectedTicker} ${selectedName ? selectedName + ' ｜ ' : ''}深度決策透視`
+      : '標的深度決策透視';
+
+    if (cloned.elements?.['asset-detail-drawer']) {
+      cloned.elements['asset-detail-drawer'].props = {
+        ...(cloned.elements['asset-detail-drawer'].props || {}),
+        title: drawerTitleText,
+      };
+    }
+
+    if (cloned.elements?.['drawer-heading']) {
+      cloned.elements['drawer-heading'].props = {
+        ...(cloned.elements['drawer-heading'].props || {}),
+        text: drawerTitleText,
+      };
+    }
+
+    if (cloned.elements?.['dip-buy-action-text']) {
+      const actionText =
+        dipBuyOpportunity?.recommendation ||
+        dipBuyOpportunity?.actionRecommendation ||
+        store?.get?.('/metrics/dip-buy-action-text');
+      if (actionText) {
+        cloned.elements['dip-buy-action-text'].props = {
+          ...(cloned.elements['dip-buy-action-text'].props || {}),
+          text: actionText.startsWith('系統建議動作')
+            ? actionText
+            : `系統建議動作：${actionText}`,
+        };
+      }
+    }
+
     return cloned;
-  }, [activeTab, activeSubTab, currentPerspectiveMode]);
+  }, [
+    activeTab,
+    activeSubTab,
+    currentPerspectiveMode,
+    storeSelectedAsset,
+    orthogonalCandidates,
+    clusteredCandidates,
+    dipBuyOpportunity,
+  ]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -459,8 +607,15 @@ const defaultStore = createStateStore({
     'toggle-bb-switch': true,
     'toggle-fib-switch': true,
     'macro-yield-window-selector': '6M',
+    'kline-window-selector': '6M',
+    'toggle-kline-ma-switch': true,
+    'toggle-kline-bb-switch': true,
+    'toggle-kline-fib-switch': true,
   },
   metrics: {
+    'dip-buy-score-metric': '--',
+    'dip-buy-star-metric': '--',
+    'dip-buy-winrate-metric': '--',
     'metric-twii': '--',
     'metric-twii-date': '',
     'metric-gspc': '--',
@@ -510,6 +665,13 @@ const defaultHandlers = {
   },
   resetSeed: () => {
     console.log('Resetting anchor seed to Rank 1');
+  },
+  selectAsset: (params: any) => {
+    const ticker = params?.ticker || params?.id;
+    if (ticker) {
+      defaultStore.set('/selectedAsset', ticker);
+      defaultStore.set('/modals/asset-detail-drawer', true);
+    }
   },
   executeBehavior: (params: any) => {
     console.log('executeBehavior called:', params);
