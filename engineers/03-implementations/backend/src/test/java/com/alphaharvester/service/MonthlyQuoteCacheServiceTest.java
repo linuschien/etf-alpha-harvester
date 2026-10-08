@@ -1,9 +1,12 @@
 package com.alphaharvester.service;
 
+import com.alphaharvester.adapter.out.persistence.CorporateActionRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.application.service.MonthlyQuoteCacheService;
 import com.alphaharvester.domain.cache.MonthlyQuoteCacheEntry;
+import com.alphaharvester.domain.entity.CorporateAction;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
+import com.alphaharvester.domain.model.CorporateActionType;
 import com.alphaharvester.infrastructure.cache.MonthlyQuoteExpiryPolicy;
 import org.ehcache.Cache;
 import org.ehcache.PersistentCacheManager;
@@ -41,6 +44,9 @@ class MonthlyQuoteCacheServiceTest {
     @Mock
     private MarketDailyQuoteRepository quoteRepository;
 
+    @Mock
+    private CorporateActionRepository corporateActionRepository;
+
     private PersistentCacheManager cacheManager;
     private Cache<String, MonthlyQuoteCacheEntry> cache;
     private MonthlyQuoteCacheService cacheService;
@@ -71,7 +77,8 @@ class MonthlyQuoteCacheServiceTest {
                 .build(true);
 
         cache = cacheManager.getCache("monthlyQuoteCache", String.class, MonthlyQuoteCacheEntry.class);
-        cacheService = new MonthlyQuoteCacheService(cache, quoteRepository);
+        when(corporateActionRepository.findByTicker(any())).thenReturn(Flux.empty());
+        cacheService = new MonthlyQuoteCacheService(cache, quoteRepository, corporateActionRepository);
     }
 
     @AfterEach
@@ -318,5 +325,69 @@ class MonthlyQuoteCacheServiceTest {
 
         // Repository findByTickerAndTradeDateBetweenOrderByTradeDateAsc should NOT be called (CACHE HIT)
         verify(quoteRepository, never()).findByTickerAndTradeDateBetweenOrderByTradeDateAsc(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should adjust historical quotes for stock split on cache miss (e.g. 0052 1:7 split)")
+    void shouldAdjustQuotesForSplitsWhenPopulatingCacheOnMiss() {
+        String ticker = "0052";
+        LocalDateTime start = LocalDateTime.of(2025, 11, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2025, 11, 30, 23, 59, 59);
+
+        // Raw quotes: 2025-11-10 (before split, close 350.00), 2025-11-17 (on split, close 50.00)
+        MarketDailyQuote rawQuote1 = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                LocalDateTime.of(2025, 11, 10, 0, 0), new BigDecimal("345.0000"), new BigDecimal("355.0000"),
+                new BigDecimal("340.0000"), new BigDecimal("350.0000"), 1000L, new BigDecimal("350000"));
+        MarketDailyQuote rawQuote2 = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                LocalDateTime.of(2025, 11, 17, 0, 0), new BigDecimal("49.5000"), new BigDecimal("51.0000"),
+                new BigDecimal("49.0000"), new BigDecimal("50.0000"), 7000L, new BigDecimal("350000"));
+
+        CorporateAction split = new CorporateAction(
+                UUID.randomUUID(), null, ticker, CorporateActionType.SPLIT,
+                LocalDateTime.of(2025, 11, 17, 0, 0), 7, 1
+        );
+
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(eq(ticker), any(), any()))
+                .thenReturn(Flux.just(rawQuote1, rawQuote2));
+        when(corporateActionRepository.findByTicker(ticker))
+                .thenReturn(Flux.just(split));
+
+        List<MarketDailyQuote> results = cacheService.getQuoteTimeSeries(ticker, start, end)
+                .collectList()
+                .block();
+
+        assertThat(results).hasSize(2);
+
+        // Quote 1 prior to split should be divided by 7: 350.0000 * (1/7) = 50.0000
+        MarketDailyQuote adjustedQuote1 = results.get(0);
+        assertThat(adjustedQuote1.getClosePrice()).isEqualByComparingTo(new BigDecimal("50.0000"));
+        assertThat(adjustedQuote1.getOpenPrice()).isEqualByComparingTo(new BigDecimal("49.2857"));
+
+        // Quote 2 on/after split should remain unadjusted: 50.0000
+        MarketDailyQuote adjustedQuote2 = results.get(1);
+        assertThat(adjustedQuote2.getClosePrice()).isEqualByComparingTo(new BigDecimal("50.0000"));
+
+        // Verify cache also stored the split-adjusted quotes
+        MonthlyQuoteCacheEntry cachedEntry = cacheService.getEntry(ticker, YearMonth.of(2025, 11));
+        assertThat(cachedEntry).isNotNull();
+        assertThat(cachedEntry.getQuotes().get(0).getClosePrice()).isEqualByComparingTo(new BigDecimal("50.0000"));
+    }
+
+    @Test
+    @DisplayName("Should evict all cache chunks for a specific ticker")
+    void shouldEvictAllKeysForSpecificTicker() {
+        cache.put("0050:2026-01", MonthlyQuoteCacheEntry.builder().ticker("0050").yearMonth("2026-01").quotes(List.of()).build());
+        cache.put("0050:2026-02", MonthlyQuoteCacheEntry.builder().ticker("0050").yearMonth("2026-02").quotes(List.of()).build());
+        cache.put("0052:2026-01", MonthlyQuoteCacheEntry.builder().ticker("0052").yearMonth("2026-01").quotes(List.of()).build());
+
+        assertThat(cacheService.getEntry("0050", YearMonth.of(2026, 1))).isNotNull();
+        assertThat(cacheService.getEntry("0050", YearMonth.of(2026, 2))).isNotNull();
+        assertThat(cacheService.getEntry("0052", YearMonth.of(2026, 1))).isNotNull();
+
+        cacheService.evictTicker("0050");
+
+        assertThat(cacheService.getEntry("0050", YearMonth.of(2026, 1))).isNull();
+        assertThat(cacheService.getEntry("0050", YearMonth.of(2026, 2))).isNull();
+        assertThat(cacheService.getEntry("0052", YearMonth.of(2026, 1))).isNotNull();
     }
 }

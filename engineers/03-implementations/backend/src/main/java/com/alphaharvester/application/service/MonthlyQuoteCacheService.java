@@ -1,8 +1,11 @@
 package com.alphaharvester.application.service;
 
+import com.alphaharvester.adapter.out.persistence.CorporateActionRepository;
 import com.alphaharvester.adapter.out.persistence.MarketDailyQuoteRepository;
 import com.alphaharvester.domain.cache.MonthlyQuoteCacheEntry;
+import com.alphaharvester.domain.entity.CorporateAction;
 import com.alphaharvester.domain.entity.MarketDailyQuote;
+import com.alphaharvester.domain.math.FinancialMetricsCalculator;
 import com.alphaharvester.domain.math.TechnicalIndicatorCalculator;
 import org.ehcache.Cache;
 import org.slf4j.Logger;
@@ -22,8 +25,9 @@ import java.util.stream.Collectors;
  * Implements:
  * 1. Monthly chunk key format: "{ticker}:{YYYY-MM}"
  * 2. 2-year DB lookback depth for accurate MA20/60/120/240 and Bollinger Bands calculation
- * 3. Lazy check for the ongoing calendar month against the latest trade date in DB
- * 4. Head and tail date boundary slicing across multi-month windows
+ * 3. Corporate action split adjustment for historical continuity across stock split dates
+ * 4. Lazy check for the ongoing calendar month against the latest trade date in DB
+ * 5. Head and tail date boundary slicing across multi-month windows
  */
 @Service
 public class MonthlyQuoteCacheService {
@@ -32,11 +36,14 @@ public class MonthlyQuoteCacheService {
 
     private final Cache<String, MonthlyQuoteCacheEntry> monthlyQuoteCache;
     private final MarketDailyQuoteRepository quoteRepository;
+    private final CorporateActionRepository corporateActionRepository;
 
     public MonthlyQuoteCacheService(Cache<String, MonthlyQuoteCacheEntry> monthlyQuoteCache,
-                                    MarketDailyQuoteRepository quoteRepository) {
+                                    MarketDailyQuoteRepository quoteRepository,
+                                    CorporateActionRepository corporateActionRepository) {
         this.monthlyQuoteCache = monthlyQuoteCache;
         this.quoteRepository = quoteRepository;
+        this.corporateActionRepository = corporateActionRepository;
     }
 
     /**
@@ -112,9 +119,18 @@ public class MonthlyQuoteCacheService {
                 LocalDateTime lookbackStart = start.minusYears(1).withDayOfMonth(1).toLocalDate().atStartOfDay();
                 log.debug("Cache miss/refresh for ticker {}: loading lookback data from {} to {}", ticker, lookbackStart, end);
 
-                return quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, lookbackStart, end)
-                        .collectList()
-                        .flatMapMany(rawQuotes -> {
+                Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, lookbackStart, end)
+                        .collectList();
+
+                Mono<List<CorporateAction>> splitsMono = (corporateActionRepository != null)
+                        ? corporateActionRepository.findByTicker(ticker).collectList()
+                        : Mono.just(Collections.emptyList());
+
+                return Mono.zip(quotesMono, splitsMono)
+                        .flatMapMany(tuple -> {
+                            List<MarketDailyQuote> rawQuotes = tuple.getT1();
+                            List<CorporateAction> splits = tuple.getT2();
+
                             if (rawQuotes.isEmpty()) {
                                 // Cache empty entries for required months to avoid repeated DB misses
                                 for (YearMonth ym : requiredMonths) {
@@ -128,8 +144,18 @@ public class MonthlyQuoteCacheService {
                                 return Flux.empty();
                             }
 
-                            // Compute technical indicators on the full lookback series
-                            List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(rawQuotes);
+                            // Filter splits effective on or before the latest quote
+                            LocalDateTime latestTradeDate = rawQuotes.get(rawQuotes.size() - 1).getTradeDate();
+                            List<CorporateAction> effectiveSplits = (splits != null) ? splits.stream()
+                                    .filter(s -> s != null && s.getEffectiveDate() != null
+                                            && (latestTradeDate == null || !s.getEffectiveDate().isAfter(latestTradeDate)))
+                                    .toList() : Collections.emptyList();
+
+                            // Adjust raw quotes for historical stock splits
+                            List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
+
+                            // Compute technical indicators on the full split-adjusted lookback series
+                            List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes);
 
                             // Group quotes by YearMonth
                             Map<YearMonth, List<MarketDailyQuote>> grouped = enrichedQuotes.stream()
@@ -200,6 +226,21 @@ public class MonthlyQuoteCacheService {
 
     public void evict(String ticker, YearMonth ym) {
         monthlyQuoteCache.remove(buildCacheKey(ticker, ym));
+    }
+
+    public void evictTicker(String ticker) {
+        if (ticker == null) {
+            return;
+        }
+        List<String> keysToRemove = new ArrayList<>();
+        for (Cache.Entry<String, MonthlyQuoteCacheEntry> entry : monthlyQuoteCache) {
+            if (entry != null && entry.getKey() != null && entry.getKey().startsWith(ticker + ":")) {
+                keysToRemove.add(entry.getKey());
+            }
+        }
+        for (String k : keysToRemove) {
+            monthlyQuoteCache.remove(k);
+        }
     }
 
     public void clearCache() {
