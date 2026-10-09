@@ -38,3 +38,14 @@ logging:
     org.springframework.r2dbc: INFO
     org.springframework.graphql: INFO
 
+app:
+  cache:
+    disk-dir: ./target/ehcache-data
+  scheduler:
+    enabled: true
+    market-data-sync:
+      enabled: true
+      cron: "0 0 12 * * *"
+      zone: "Asia/Taipei"
+
+
