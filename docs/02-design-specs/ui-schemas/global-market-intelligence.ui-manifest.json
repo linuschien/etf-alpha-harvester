@@ -811,7 +811,6 @@
                 "id": "dca-top20-container",
                 "abstract_type": "Container",
                 "semantic_variant": "card",
-                "label": "定期定額散戶人氣榜 Top 20",
                 "behavior_ref": "visual-hierarchy:size",
                 "children": [
                   {
@@ -824,15 +823,13 @@
                     "id": "dca-top20-table",
                     "abstract_type": "Table",
                     "semantic_variant": "data-table",
-                    "label": "定期定額人氣表格",
                     "data_ref": "getTop20DcaRanks",
                     "behavior_ref": "fitts-law",
                     "columns": [
                       {
                         "field": "rankPosition",
                         "label": "排名",
-                        "sortable": true,
-                        "default_sort": "asc"
+                        "sortable": false
                       },
                       {
                         "field": "ticker",

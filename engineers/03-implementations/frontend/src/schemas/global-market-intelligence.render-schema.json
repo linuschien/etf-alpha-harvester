@@ -940,7 +940,7 @@
     "dca-top20-container": {
       "type": "Card",
       "props": {
-        "title": "定期定額散戶人氣榜 Top 20",
+        "title": null,
         "description": null,
         "maxWidth": null,
         "centered": null,
@@ -988,7 +988,7 @@
       "type": "DataTable",
       "props": {
         "id": "dca-top20-table",
-        "label": "定期定額人氣表格",
+        "label": null,
         "columns": [
           {
             "field": "rankPosition",

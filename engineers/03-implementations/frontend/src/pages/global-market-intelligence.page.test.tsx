@@ -181,6 +181,10 @@ describe('GlobalMarketIntelligencePage', () => {
     const dcaCard = dcaHeading.closest('div[data-slot="card"]') as HTMLElement;
     expect(dcaCard).toBeInTheDocument();
 
+    // Verify redundant titles are NOT present
+    expect(within(dcaCard).queryByText('定期定額散戶人氣榜 Top 20')).not.toBeInTheDocument();
+    expect(within(dcaCard).queryByText('定期定額人氣表格')).not.toBeInTheDocument();
+
     const now = new Date();
     const curYear = now.getFullYear();
     const curMonth = now.getMonth() + 1;
