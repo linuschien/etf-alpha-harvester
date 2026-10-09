@@ -1200,7 +1200,7 @@
           },
           {
             "field": "recordsSyncedCount",
-            "label": "已同步筆數",
+            "label": "最近同步筆數",
             "sortable": false
           },
           {
