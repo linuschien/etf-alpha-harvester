@@ -27,6 +27,9 @@ const selectTab = vi.fn((p: any) => {
 const selectSubTab = vi.fn((p: any) => {
   if (p?.subTab) store.set('/activeSubTab', p.subTab);
 });
+const selectDcaSubTab = vi.fn((p: any) => {
+  if (p?.dcaSubTab) store.set('/activeDcaSubTab', p.dcaSubTab);
+});
 const navigate = vi.fn();
 const testHandlers = {
   navigate,
@@ -34,6 +37,7 @@ const testHandlers = {
   closeModal,
   selectTab,
   selectSubTab,
+  selectDcaSubTab,
   executeBehavior,
 };
 
@@ -67,6 +71,7 @@ beforeEach(() => {
   store.set('/metrics', {});
   store.set('/activeTab', 'all');
   store.set('/activeSubTab', 'all');
+  store.set('/activeDcaSubTab', 'all');
   vi.clearAllMocks();
 });
 
@@ -136,6 +141,35 @@ describe('GlobalMarketIntelligencePage', () => {
     // Click sub-tab 3 (Macro Yield Curve)
     await user.click(subTab3);
     expect(store.get('/activeSubTab')).toBe('macro-subtab-yield');
+  });
+
+  it('renders 2 sub-tabs under ETF定期定額排行榜與除權息月曆 and switches sub-tabs', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Switch to Tab 3
+    const tab3 = screen.getByRole('tab', { name: /ETF定期定額排行榜與除權息月曆/i });
+    await user.click(tab3);
+    expect(store.get('/activeTab')).toBe('dca-calendar-section');
+
+    // Verify both sub-tab buttons are rendered using exact match to distinguish from main tab
+    const dcaSubTab1 = await screen.findByRole('tab', {
+      name: /^定期定額排行榜$/,
+    });
+    const dcaSubTab2 = screen.getByRole('tab', {
+      name: /^除權息月曆$/,
+    });
+
+    expect(dcaSubTab1).toBeInTheDocument();
+    expect(dcaSubTab2).toBeInTheDocument();
+
+    // Click sub-tab 2 (除權息月曆)
+    await user.click(dcaSubTab2);
+    expect(store.get('/activeDcaSubTab')).toBe('dca-subtab-calendar');
+
+    // Click sub-tab 1 (定期定額排行榜)
+    await user.click(dcaSubTab1);
+    expect(store.get('/activeDcaSubTab')).toBe('dca-subtab-top20');
   });
 
   it('renders four panic sentiment indicators in 2x2 matrix with sparklines', async () => {

@@ -46,6 +46,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   // React 19 external store bindings via @json-render/react useStateValue
   const storeActiveTab = useStateValue<string>('/activeTab');
   const storeActiveSubTab = useStateValue<string>('/activeSubTab');
+  const storeActiveDcaSubTab = useStateValue<string>('/activeDcaSubTab');
   const storePerspectiveMode = useStateValue<string>('/filters/perspective-mode-selector');
   const storeAssetClass = useStateValue<string>('/filters/asset-class-selector');
   const storeEvaluationDate = useStateValue<string>('/filters/leaderboard-evaluation-date');
@@ -59,6 +60,10 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   // Active sub-tab state inside macro-sentiment-section: default to 'all' in test mode, and 'macro-subtab-benchmark' in dev/prod
   const activeSubTab =
     storeActiveSubTab || (isTest ? 'all' : 'macro-subtab-benchmark');
+
+  // Active sub-tab state inside dca-calendar-section: default to 'all' in test mode, and 'dca-subtab-top20' in dev/prod
+  const activeDcaSubTab =
+    storeActiveDcaSubTab || (isTest ? 'all' : 'dca-subtab-top20');
 
   const currentPerspectiveMode =
     storePerspectiveMode || initialPerspectiveMode || '⚡ 夏農幾何收割';
@@ -91,6 +96,15 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     (isTab1 &&
       (activeSubTab === 'all' || activeSubTab === 'macro-subtab-yield'));
 
+  const isDcaTop20 =
+    isTest ||
+    (isTab3 &&
+      (activeDcaSubTab === 'all' || activeDcaSubTab === 'dca-subtab-top20'));
+  const isCalendar =
+    isTest ||
+    (isTab3 &&
+      (activeDcaSubTab === 'all' || activeDcaSubTab === 'dca-subtab-calendar'));
+
   // Sync API queries to JSONUI store on-demand (lazy by active Tab and Sub-Tab)
   const { data: clusteredCandidates } = useGetClusteredCandidates(
     {
@@ -122,9 +136,9 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const { data: watermarks } = useListDataFeedWatermarks();
   const { data: macroYield } = useGetLatestMacroYieldSnapshot({ enabled: isYield });
   const { data: macroRegime } = useGetMacroRegime({ enabled: isYield });
-  const { data: topDca } = useGetTop20DcaRanks(2026, 8, { enabled: isTab3 });
-  const { data: dividendAnnouncements } = useListDividendAnnouncements(undefined, { enabled: isTab3 });
-  const { data: corporateActions } = useListCorporateActions(undefined, { enabled: isTab3 });
+  const { data: topDca } = useGetTop20DcaRanks(2026, 8, { enabled: isDcaTop20 });
+  const { data: dividendAnnouncements } = useListDividendAnnouncements(undefined, { enabled: isCalendar });
+  const { data: corporateActions } = useListCorporateActions(undefined, { enabled: isCalendar });
   const { data: pairwiseMatrix } = useListPairwiseMatrix(
     {
       assetClass: effectiveAssetClass,
@@ -487,6 +501,24 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       }
     });
 
+    // Sub-sections visibility inside dca-calendar-section
+    const dcaSubSections = [
+      'dca-subtab-top20',
+      'dca-subtab-calendar',
+    ];
+
+    dcaSubSections.forEach((subId) => {
+      if (cloned.elements?.[subId]) {
+        cloned.elements[subId].props = {
+          ...(cloned.elements[subId].props || {}),
+          className:
+            activeDcaSubTab === 'all' || activeDcaSubTab === subId
+              ? 'block space-y-6'
+              : 'hidden',
+        };
+      }
+    });
+
     // Table visibility toggle inside qualified-leaderboard-section based on perspective mode
     const isClusteringActive = currentPerspectiveMode.includes('分群');
     if (cloned.elements?.['qualified-leaderboard-section']) {
@@ -575,6 +607,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   }, [
     activeTab,
     activeSubTab,
+    activeDcaSubTab,
     currentPerspectiveMode,
     storeSelectedAsset,
     orthogonalCandidates,
@@ -595,6 +628,7 @@ const defaultStore = createStateStore({
   form: {},
   activeTab: 'macro-sentiment-section',
   activeSubTab: 'macro-subtab-benchmark',
+  activeDcaSubTab: 'dca-subtab-top20',
   data: {},
   filters: {
     'perspective-mode-selector': '⚡ 夏農幾何收割',
@@ -661,6 +695,11 @@ const defaultHandlers = {
   selectSubTab: (params: any) => {
     if (params?.subTab) {
       defaultStore.set('/activeSubTab', params.subTab);
+    }
+  },
+  selectDcaSubTab: (params: any) => {
+    if (params?.dcaSubTab) {
+      defaultStore.set('/activeDcaSubTab', params.dcaSubTab);
     }
   },
   resetSeed: () => {

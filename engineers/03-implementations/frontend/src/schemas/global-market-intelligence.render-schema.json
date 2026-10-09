@@ -888,10 +888,52 @@
     "dca-calendar-section": {
       "type": "div",
       "props": {
-        "id": "dca-calendar-section"
+        "id": "dca-calendar-section",
+        "className": "space-y-6"
       },
       "children": [
-        "dca-top20-container",
+        "dca-subtabs-nav-stack",
+        "dca-subtab-top20",
+        "dca-subtab-calendar"
+      ]
+    },
+    "dca-subtabs-nav-stack": {
+      "type": "Tabs",
+      "props": {
+        "tabs": [
+          {
+            "label": "定期定額排行榜",
+            "value": "dca-subtab-top20"
+          },
+          {
+            "label": "除權息月曆",
+            "value": "dca-subtab-calendar"
+          }
+        ],
+        "defaultValue": "dca-subtab-top20",
+        "value": {
+          "$bindState": "/activeDcaSubTab"
+        }
+      },
+      "children": []
+    },
+    "dca-subtab-top20": {
+      "type": "div",
+      "props": {
+        "id": "dca-subtab-top20",
+        "className": "space-y-6"
+      },
+      "children": [
+        "dca-top20-container"
+      ]
+    },
+    "dca-subtab-calendar": {
+      "type": "div",
+      "props": {
+        "id": "dca-subtab-calendar",
+        "className": "space-y-6"
+      },
+      "children": [
         "calendar-events-container"
       ]
     },

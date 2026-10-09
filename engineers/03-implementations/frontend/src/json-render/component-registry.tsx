@@ -51,21 +51,28 @@ export function adapt(Comp: ComponentType<any>): ComponentType<any> {
         const label = element?.props?.label ?? '';
 
         // Auto-switch tabs when clicking tab buttons
-        if (id === 'tab-macro-trigger' || label.includes('全球宏觀') || label.includes('情緒雷達')) {
+        if (id === 'tab-macro-trigger' || label.includes('全球宏觀') || label.includes('全球指數雷達') || label.includes('情緒雷達')) {
           store.set('/activeTab', 'macro-sentiment-section');
-        } else if (id === 'tab-leaderboard-trigger' || label.includes('合規標的') || label.includes('天梯榜')) {
+        } else if (id === 'tab-leaderboard-trigger' || label.includes('合規標的') || label.includes('天梯榜') || label === 'ETF排行榜') {
           store.set('/activeTab', 'qualified-leaderboard-section');
-        } else if (id === 'tab-dca-trigger' || label.includes('定期定額') || label.includes('除息月曆')) {
+        } else if (id === 'tab-dca-trigger' || label.includes('ETF定期定額排行榜與除權息月曆') || (label.includes('定期定額') && label.includes('月曆'))) {
           store.set('/activeTab', 'dca-calendar-section');
         }
 
         // Auto-switch sub-tabs inside macro-sentiment-section
-        if (id === 'subtab-benchmark-trigger' || label.includes('基準指數') || label.includes('即時行情與走勢') || label.includes('近一日行情與走勢')) {
+        if (id === 'subtab-benchmark-trigger' || label.includes('基準指數') || label.includes('全球指數行情') || label.includes('即時行情與走勢') || label.includes('近一日行情與走勢')) {
           store.set('/activeSubTab', 'macro-subtab-benchmark');
-        } else if (id === 'subtab-panic-trigger' || label.includes('恐慌情緒') || label.includes('四大恐慌')) {
+        } else if (id === 'subtab-panic-trigger' || label.includes('恐慌情緒') || label.includes('情緒指標') || label.includes('四大恐慌')) {
           store.set('/activeSubTab', 'macro-subtab-panic');
-        } else if (id === 'subtab-yield-trigger' || label.includes('殖利率曲線') || label.includes('宏觀利率')) {
+        } else if (id === 'subtab-yield-trigger' || label.includes('殖利率曲線') || label.includes('宏觀利率') || label.includes('宏觀指引與債券殖利率')) {
           store.set('/activeSubTab', 'macro-subtab-yield');
+        }
+
+        // Auto-switch sub-tabs inside dca-calendar-section
+        if (id === 'subtab-dca-top20-trigger' || label === '定期定額排行榜' || (label.includes('定期定額') && !label.includes('月曆'))) {
+          store.set('/activeDcaSubTab', 'dca-subtab-top20');
+        } else if (id === 'subtab-calendar-trigger' || label === '除權息月曆' || (label.includes('除權息') && !label.includes('排行榜'))) {
+          store.set('/activeDcaSubTab', 'dca-subtab-calendar');
         }
 
         const isClosingAction =
