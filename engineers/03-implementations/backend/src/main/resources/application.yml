@@ -45,7 +45,7 @@ app:
     enabled: true
     market-data-sync:
       enabled: true
-      cron: "0 0 12 * * *"
+      cron: "0 0 7 * * *"
       zone: "Asia/Taipei"
 
 

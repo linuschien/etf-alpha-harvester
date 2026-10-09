@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * Inbound scheduling adapter that triggers daily market data synchronization
- * at 12:00 PM Taiwan time (Asia/Taipei).
+ * at 07:00 AM Taiwan time (Asia/Taipei).
  */
 @Component
 @ConditionalOnProperty(name = "app.scheduler.market-data-sync.enabled", havingValue = "true", matchIfMissing = true)
@@ -28,15 +28,15 @@ public class MarketDataSyncScheduler {
     }
 
     /**
-     * Executes daily market data synchronization at 12:00 PM Taiwan Standard Time (TST, Asia/Taipei).
+     * Executes daily market data synchronization at 07:00 AM Taiwan Standard Time (TST, Asia/Taipei).
      * Configurable via 'app.scheduler.market-data-sync.cron' and 'app.scheduler.market-data-sync.zone'.
      */
     @Scheduled(
-            cron = "${app.scheduler.market-data-sync.cron:0 0 12 * * *}",
+            cron = "${app.scheduler.market-data-sync.cron:0 0 7 * * *}",
             zone = "${app.scheduler.market-data-sync.zone:Asia/Taipei}"
     )
     public MarketDataSyncResponse syncMarketDataDaily() {
-        log.info("Scheduled market data synchronization triggered (Asia/Taipei 12:00)...");
+        log.info("Scheduled market data synchronization triggered (Asia/Taipei 07:00)...");
         MarketDataSyncRequest request = new MarketDataSyncRequest(SyncScope.ALL, true);
 
         return syncUseCase.syncMarketData(request)
