@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useStateStore } from '@json-render/react';
 
 export interface DataTableColumn {
@@ -34,12 +34,28 @@ export default function DataTable({
     store = null;
   }
 
-  let dataList: any[] = [];
   const rawData = props.data;
+  const bindPath =
+    rawData && typeof rawData === 'object' && '$bindState' in rawData
+      ? (rawData.$bindState as string)
+      : null;
+
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!bindPath || !store?.subscribe) return;
+    const unsub = store.subscribe(() => {
+      setTick((t) => t + 1);
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [store, bindPath]);
+
+  let dataList: any[] = [];
   if (Array.isArray(rawData)) {
     dataList = rawData;
-  } else if (rawData && typeof rawData === 'object' && '$bindState' in rawData) {
-    const fromStore = store?.get?.(rawData.$bindState);
+  } else if (bindPath) {
+    const fromStore = store?.get?.(bindPath);
     if (Array.isArray(fromStore)) {
       dataList = fromStore;
     }
@@ -145,7 +161,7 @@ export default function DataTable({
       );
     }
 
-    if (col.field === 'classRank') {
+    if (col.field === 'classRank' || col.field === 'rankPosition') {
       if (val === undefined || val === null || val === '') {
         return <span className="text-muted-foreground text-xs">--</span>;
       }
@@ -270,6 +286,10 @@ export default function DataTable({
           {val || '--'}
         </span>
       );
+    }
+
+    if (col.field === 'regularInvestorCount' && typeof val === 'number') {
+      return <span className="font-mono text-xs font-semibold">{val.toLocaleString()} 戶</span>;
     }
 
     if (col.field === 'recordsSyncedCount' && typeof val === 'number') {

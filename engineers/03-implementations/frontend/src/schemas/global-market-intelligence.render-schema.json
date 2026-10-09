@@ -947,8 +947,22 @@
         "className": null
       },
       "children": [
-        "dca-heading",
+        "dca-toolbar-stack",
         "dca-top20-table"
+      ]
+    },
+    "dca-toolbar-stack": {
+      "type": "Stack",
+      "props": {
+        "direction": "horizontal",
+        "gap": "md",
+        "align": "center",
+        "justify": "between",
+        "className": "w-full flex flex-wrap items-center justify-between gap-4 py-2 border-b border-border/50"
+      },
+      "children": [
+        "dca-heading",
+        "dca-month-stepper"
       ]
     },
     "dca-heading": {
@@ -956,6 +970,17 @@
       "props": {
         "text": "證交所定期定額散戶人氣榜 Top 20",
         "level": "h3"
+      },
+      "children": []
+    },
+    "dca-month-stepper": {
+      "type": "MonthStepper",
+      "props": {
+        "id": "dca-month-stepper",
+        "label": "統計月份",
+        "value": {
+          "$bindState": "/filters/dca-evaluation-date"
+        }
       },
       "children": []
     },
@@ -968,8 +993,7 @@
           {
             "field": "rankPosition",
             "label": "排名",
-            "sortable": true,
-            "default_sort": "asc"
+            "sortable": false
           },
           {
             "field": "ticker",
@@ -987,19 +1011,9 @@
             "sortable": false
           },
           {
-            "field": "investorCount",
+            "field": "regularInvestorCount",
             "label": "定額交易戶數",
-            "sortable": true
-          },
-          {
-            "field": "rankingYear",
-            "label": "統計年份",
-            "sortable": true
-          },
-          {
-            "field": "rankingMonth",
-            "label": "統計月份",
-            "sortable": true
+            "sortable": false
           }
         ],
         "data": {

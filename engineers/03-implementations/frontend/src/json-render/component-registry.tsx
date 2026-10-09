@@ -162,6 +162,8 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
 
   // ── 5. Native HTML passthrough ───────────────────────────────────────────
   div: ({ element, children }: any) => (
-    <div className={element?.props?.className}>{children}</div>
+    <div id={element?.props?.id} className={element?.props?.className}>
+      {children}
+    </div>
   ),
 };

@@ -105,7 +105,17 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     (isTab3 &&
       (activeDcaSubTab === 'all' || activeDcaSubTab === 'dca-subtab-calendar'));
 
-  // Sync API queries to JSONUI store on-demand (lazy by active Tab and Sub-Tab)
+  const storeDcaEvaluationDate = useStateValue<string>('/filters/dca-evaluation-date');
+  const effectiveDcaDate = storeDcaEvaluationDate || getDefaultEvaluationDate();
+  const parseDcaYearMonth = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    return {
+      year: parseInt(parts[0], 10),
+      month: parseInt(parts[1], 10),
+    };
+  };
+  const { year: dcaYear, month: dcaMonth } = parseDcaYearMonth(effectiveDcaDate);
+
   const { data: clusteredCandidates } = useGetClusteredCandidates(
     {
       assetClass: effectiveAssetClass,
@@ -136,7 +146,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const { data: watermarks } = useListDataFeedWatermarks();
   const { data: macroYield } = useGetLatestMacroYieldSnapshot({ enabled: isYield });
   const { data: macroRegime } = useGetMacroRegime({ enabled: isYield });
-  const { data: topDca } = useGetTop20DcaRanks(2026, 8, { enabled: isDcaTop20 });
+  const { data: topDca } = useGetTop20DcaRanks(dcaYear, dcaMonth, { enabled: isDcaTop20 });
   const { data: dividendAnnouncements } = useListDividendAnnouncements(undefined, { enabled: isCalendar });
   const { data: corporateActions } = useListCorporateActions(undefined, { enabled: isCalendar });
   const { data: pairwiseMatrix } = useListPairwiseMatrix(
@@ -423,6 +433,9 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     if (!store.get('/filters/leaderboard-evaluation-date')) {
       store.set('/filters/leaderboard-evaluation-date', getDefaultEvaluationDate());
     }
+    if (!store.get('/filters/dca-evaluation-date')) {
+      store.set('/filters/dca-evaluation-date', getDefaultEvaluationDate());
+    }
     if (!store.get('/filters/drawdown-benchmark-selector')) {
       store.set('/filters/drawdown-benchmark-selector', '^TWII');
     }
@@ -613,6 +626,8 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     orthogonalCandidates,
     clusteredCandidates,
     dipBuyOpportunity,
+    topDca,
+    effectiveDcaDate,
   ]);
 
   return (
@@ -634,6 +649,7 @@ const defaultStore = createStateStore({
     'perspective-mode-selector': '⚡ 夏農幾何收割',
     'asset-class-selector': 'CORE',
     'leaderboard-evaluation-date': getDefaultEvaluationDate(),
+    'dca-evaluation-date': getDefaultEvaluationDate(),
     'freq-filter-selector': '全部',
     'drawdown-benchmark-selector': '^TWII',
     'drawdown-window-selector': '6M',

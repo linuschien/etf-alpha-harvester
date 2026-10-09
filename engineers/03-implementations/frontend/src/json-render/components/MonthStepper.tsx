@@ -14,7 +14,7 @@ export default function MonthStepper({
   bindings,
   emit,
 }: MonthStepperProps) {
-  const props = element?.props ?? directProps ?? {};
+  const props = directProps ?? element?.props ?? {};
   let store: any = null;
   try {
     store = useStateStore();
@@ -47,20 +47,28 @@ export default function MonthStepper({
 
   const initialVal =
     (store?.get?.(bindPath) as string) ||
-    (props.defaultValue && props.defaultValue !== '2026-09-01' ? props.defaultValue : defaultCurrentDate);
+    (typeof props?.value === 'string' && props.value ? props.value : null) ||
+    props.defaultValue ||
+    defaultCurrentDate;
   const [{ year, month }, setYm] = useState(() => parseYearMonth(initialVal));
 
   useEffect(() => {
-    if (store && bindPath && !store.get(bindPath)) {
-      store.set(bindPath, defaultCurrentDate);
+    if (store && bindPath && !store.get(bindPath) && props.defaultValue) {
+      store.set(bindPath, props.defaultValue);
     }
-  }, [store, bindPath, defaultCurrentDate]);
+  }, [store, bindPath, props.defaultValue]);
+
+  useEffect(() => {
+    if (typeof props?.value === 'string' && props.value) {
+      setYm(parseYearMonth(props.value));
+    }
+  }, [props?.value]);
 
   useEffect(() => {
     if (!bindPath || !store?.subscribe) return;
     const unsub = store.subscribe(() => {
       const v = store.get(bindPath);
-      if (typeof v === 'string') {
+      if (typeof v === 'string' && v) {
         setYm(parseYearMonth(v));
       }
     });
@@ -68,6 +76,13 @@ export default function MonthStepper({
       if (typeof unsub === 'function') unsub();
     };
   }, [store, bindPath]);
+
+  const activeVal =
+    (store && bindPath ? (store.get(bindPath) as string) : null) ||
+    (typeof props?.value === 'string' && props.value ? props.value : null);
+  const activeYm = activeVal ? parseYearMonth(activeVal) : { year, month };
+  const displayYear = activeYm.year;
+  const displayMonth = activeYm.month;
 
   const updateMonth = (newY: number, newM: number) => {
     if (newY < 2020) return;
@@ -83,8 +98,8 @@ export default function MonthStepper({
   };
 
   const prevMonth = () => {
-    let newM = month - 1;
-    let newY = year;
+    let newM = displayMonth - 1;
+    let newY = displayYear;
     if (newM < 1) {
       newM = 12;
       newY -= 1;
@@ -93,8 +108,8 @@ export default function MonthStepper({
   };
 
   const nextMonth = () => {
-    let newM = month + 1;
-    let newY = year;
+    let newM = displayMonth + 1;
+    let newY = displayYear;
     if (newM > 12) {
       newM = 1;
       newY += 1;
@@ -102,7 +117,7 @@ export default function MonthStepper({
     updateMonth(newY, newM);
   };
 
-  const isLatest = year === currentYear && month === currentMonth;
+  const isLatest = displayYear === currentYear && displayMonth === currentMonth;
 
   return (
     <div className={`flex items-center gap-2 py-1 ${props.className ?? ''}`}>
@@ -122,7 +137,7 @@ export default function MonthStepper({
           ‹
         </button>
         <span className="px-3 py-1 text-xs font-bold font-mono text-foreground select-none">
-          {year} 年 {month} 月{isLatest ? ' (最新)' : ''}
+          {displayYear} 年 {displayMonth} 月{isLatest ? ' (最新)' : ''}
         </span>
         <button
           type="button"

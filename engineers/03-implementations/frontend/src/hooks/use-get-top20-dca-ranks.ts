@@ -11,7 +11,7 @@ export interface DcaPopularityRank {
   ticker: string;
   name: string;
   distributionFrequency?: string;
-  investorCount: number;
+  regularInvestorCount: number;
   rankingYear: number;
   rankingMonth: number;
   [key: string]: unknown;
@@ -25,8 +25,8 @@ export const getTop20DcaRanksKeys = {
 };
 
 export function useGetTop20DcaRanks(
-  year: number = 2026,
-  month: number = 8,
+  year?: number,
+  month?: number,
   options?: { enabled?: boolean }
 ) {
   return useQuery({
@@ -41,13 +41,13 @@ export function useGetTop20DcaRanks(
               ticker
               name
               distributionFrequency
-              investorCount
+              regularInvestorCount
               rankingYear
               rankingMonth
             }
           }`,
           { year, month }
         )
-        .then((data) => data.getTop20DcaRanks),
+        .then((data) => data.getTop20DcaRanks || []),
   });
 }

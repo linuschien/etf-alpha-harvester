@@ -172,6 +172,49 @@ describe('GlobalMarketIntelligencePage', () => {
     expect(store.get('/activeDcaSubTab')).toBe('dca-subtab-top20');
   });
 
+  it('renders DCA top 20 rankings with MonthStepper, without year/month columns, and supports stepping month', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Verify DCA container exists
+    const dcaHeading = await screen.findByText('證交所定期定額散戶人氣榜 Top 20');
+    const dcaCard = dcaHeading.closest('div[data-slot="card"]') as HTMLElement;
+    expect(dcaCard).toBeInTheDocument();
+
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    let prevMonth = curMonth - 1;
+    let prevYear = curYear;
+    if (prevMonth < 1) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+    const expectedPrevDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+
+    // Verify MonthStepper display inside DCA card (defaults to current month (最新))
+    expect(
+      await within(dcaCard).findByText(new RegExp(`${curYear}\\s*年\\s*${curMonth}\\s*月\\s*\\(最新\\)`, 'i'))
+    ).toBeInTheDocument();
+
+    // Click previous month on DCA month stepper
+    const prevMonthBtn = within(dcaCard).getByRole('button', { name: '上個月' });
+    await user.click(prevMonthBtn);
+    expect(store.get('/filters/dca-evaluation-date')).toBe(expectedPrevDate);
+    expect(
+      within(dcaCard).getByText(new RegExp(`${prevYear}\\s*年\\s*${prevMonth}\\s*月`, 'i'))
+    ).toBeInTheDocument();
+
+    // Verify data table columns: should NOT have 統計年份 or 統計月份
+    expect(within(dcaCard).queryByText('統計年份')).not.toBeInTheDocument();
+    expect(within(dcaCard).queryByText('統計月份')).not.toBeInTheDocument();
+    expect(within(dcaCard).getByText('排名')).toBeInTheDocument();
+    expect(within(dcaCard).getByText('標的代碼')).toBeInTheDocument();
+    expect(within(dcaCard).getByText('標的名稱')).toBeInTheDocument();
+    expect(within(dcaCard).getByText('配息週期')).toBeInTheDocument();
+    expect(within(dcaCard).getByText('定額交易戶數')).toBeInTheDocument();
+  });
+
   it('renders four panic sentiment indicators in 2x2 matrix with sparklines', async () => {
     renderPage();
 
@@ -387,11 +430,12 @@ describe('GlobalMarketIntelligencePage', () => {
     }
     const expectedPrevDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
 
+    const leaderboardSection = (await screen.findByRole('heading', { name: /ETF投資清單篩選/i })).closest('div[id="qualified-leaderboard-section"]') as HTMLElement;
     expect(
-      await screen.findByText(new RegExp(`${curYear}\\s*年\\s*${curMonth}\\s*月\\s*\\(最新\\)`, 'i'))
+      await within(leaderboardSection).findByText(new RegExp(`${curYear}\\s*年\\s*${curMonth}\\s*月\\s*\\(最新\\)`, 'i'))
     ).toBeInTheDocument();
 
-    const prevMonthBtn = screen.getByRole('button', { name: '上個月' });
+    const prevMonthBtn = within(leaderboardSection).getByRole('button', { name: '上個月' });
     await user.click(prevMonthBtn);
 
     expect(store.get('/filters/leaderboard-evaluation-date')).toBe(expectedPrevDate);

@@ -850,19 +850,9 @@
                         "sortable": false
                       },
                       {
-                        "field": "investorCount",
+                        "field": "regularInvestorCount",
                         "label": "定額交易戶數",
-                        "sortable": true
-                      },
-                      {
-                        "field": "rankingYear",
-                        "label": "統計年份",
-                        "sortable": true
-                      },
-                      {
-                        "field": "rankingMonth",
-                        "label": "統計月份",
-                        "sortable": true
+                        "sortable": false
                       }
                     ],
                     "interactions": [

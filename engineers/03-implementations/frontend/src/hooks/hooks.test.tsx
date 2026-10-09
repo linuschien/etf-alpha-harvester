@@ -8,6 +8,7 @@ import { useGetGlobalAssetByTicker } from './use-get-global-asset-by-ticker';
 import { useGetQuoteTimeSeries } from './use-get-quote-time-series';
 import { useGetScoreByTicker } from './use-get-score-by-ticker';
 import { useListMarketDailyQuotes } from './use-list-market-daily-quotes';
+import { useGetTop20DcaRanks } from './use-get-top20-dca-ranks';
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -65,5 +66,16 @@ describe('API Hook Stubs', () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+
+  it('useGetTop20DcaRanks queries DCA top 20 rankings and populates regularInvestorCount', async () => {
+    const { result } = renderHook(() => useGetTop20DcaRanks(2026, 8), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.length).toBeGreaterThan(0);
+    expect(result.current.data?.[0].ticker).toBe('0050');
+    expect(result.current.data?.[0].regularInvestorCount).toBe(1280028);
   });
 });
