@@ -19,6 +19,8 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -214,10 +216,11 @@ class GlobalServicesGraphQLResolverTest {
         assertThat(resolver.corporateActionEffectiveDate(ca)).isEqualTo(now.toString());
 
         DataFeedSyncWatermark wm = new DataFeedSyncWatermark(id, "TWSE_DAILY_QUOTES", now, now, 100, "SUCCESS", null, now);
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         assertThat(resolver.dataFeedWatermarkId(wm)).isEqualTo(id.toString());
-        assertThat(resolver.dataFeedWatermarkLastSuccessfulSyncAt(wm)).isEqualTo(now.toString());
-        assertThat(resolver.dataFeedWatermarkLatestRecordDate(wm)).isEqualTo(now.toString());
-        assertThat(resolver.dataFeedWatermarkUpdatedAt(wm)).isEqualTo(now.toString());
+        assertThat(resolver.dataFeedWatermarkLastSuccessfulSyncAt(wm)).isEqualTo(now.truncatedTo(ChronoUnit.SECONDS).format(dtf));
+        assertThat(resolver.dataFeedWatermarkLatestRecordDate(wm)).isEqualTo(now.toLocalDate().toString());
+        assertThat(resolver.dataFeedWatermarkUpdatedAt(wm)).isEqualTo(now.truncatedTo(ChronoUnit.SECONDS).format(dtf));
 
         GlobalAssetPairwiseMatrix matrix = new GlobalAssetPairwiseMatrix(id, now, CandidateAssetClass.SATELLITE, "0050", "0056", new BigDecimal("0.85"), new BigDecimal("0.92"), now);
         assertThat(resolver.globalAssetPairwiseMatrixId(matrix)).isEqualTo(id.toString());

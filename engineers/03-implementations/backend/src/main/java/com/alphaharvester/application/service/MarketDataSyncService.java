@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -267,45 +268,50 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     log.info("Watermark comparison for '{}': latestRecordDate={}, status={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
                             WATERMARK_TAIWAN_ETF_QUOTES, latestRecordDate, watermark.getStatus(), now, daysMissed, allowedGap, hasGap, force);
 
-                    Mono<Integer> primaryCountMono = metadataRepository.findAll()
+                    Flux<MarketDailyQuote> primaryFlux = metadataRepository.findAll()
                             .map(GlobalAssetMetadata::getTicker)
                             .collectList()
                             .flatMapMany(externalMarketDataPort::fetchTaiwanEtfDailyQuotes)
-                            .flatMap(this::upsertDailyQuote)
-                            .count()
-                            .map(Long::intValue);
+                            .flatMap(this::upsertDailyQuote);
 
-                    Mono<Integer> backfillCountMono;
+                    Flux<MarketDailyQuote> backfillFlux;
                     if (hasGap || force) {
                         int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
                         String range = deriveRange(effectiveDays);
                         log.warn("Watermark confirmed ETF trading gap! Missed {} days. Backfilling candidate ETF universe from Yahoo Finance (range: '{}')...",
                                 daysMissed, range);
 
-                        backfillCountMono = metadataRepository.findAll()
+                        backfillFlux = metadataRepository.findAll()
                                 .map(GlobalAssetMetadata::getTicker)
                                 .collectList()
                                 .flatMapMany(tickers -> Flux.fromIterable(tickers)
                                         .flatMap(ticker -> externalMarketDataPort.fetchHistoricalQuotes(ticker, range), 4)
-                                        .flatMap(this::upsertDailyQuote))
-                                .count()
-                                .map(Long::intValue);
+                                        .flatMap(this::upsertDailyQuote));
                     } else {
-                        backfillCountMono = Mono.just(0);
+                        backfillFlux = Flux.empty();
                     }
 
-                    return primaryCountMono.flatMap(primaryCount ->
-                            backfillCountMono.flatMap(backfillCount -> {
-                                int total = primaryCount + backfillCount;
+                    return Flux.concat(primaryFlux, backfillFlux)
+                            .collectList()
+                            .flatMap(savedList -> {
+                                int total = savedList.size();
                                 if (total > 0) {
-                                    return updateWatermarkSuccess(WATERMARK_TAIWAN_ETF_QUOTES, now, now, total)
-                                            .thenReturn(total);
+                                    Optional<LocalDateTime> maxDateOpt = savedList.stream()
+                                            .map(MarketDailyQuote::getTradeDate)
+                                            .filter(Objects::nonNull)
+                                            .max(LocalDateTime::compareTo);
+                                    if (maxDateOpt.isPresent()) {
+                                        return updateWatermarkSuccess(WATERMARK_TAIWAN_ETF_QUOTES, now, maxDateOpt.get(), total)
+                                                .thenReturn(total);
+                                    } else {
+                                        return updateWatermarkFailed(WATERMARK_TAIWAN_ETF_QUOTES, now, "Synced Taiwan ETF quotes have missing or null trade dates")
+                                                .thenReturn(0);
+                                    }
                                 } else {
                                     return updateWatermarkFailed(WATERMARK_TAIWAN_ETF_QUOTES, now, "No Taiwan ETF quotes synced")
                                             .thenReturn(0);
                                 }
-                            })
-                    );
+                            });
                 })
                 .onErrorResume(e -> {
                     log.error("Failed to sync Taiwan ETF quotes: {}", e.getMessage(), e);
@@ -334,12 +340,21 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
                     return externalMarketDataPort.fetchBenchmarkQuotes(range)
                             .flatMap(this::upsertDailyQuote)
-                            .count()
-                            .map(Long::intValue)
-                            .flatMap(count -> {
+                            .collectList()
+                            .flatMap(savedList -> {
+                                int count = savedList.size();
                                 if (count > 0) {
-                                    return updateWatermarkSuccess(WATERMARK_GLOBAL_BENCHMARKS, now, now, count)
-                                            .thenReturn(count);
+                                    Optional<LocalDateTime> maxDateOpt = savedList.stream()
+                                            .map(MarketDailyQuote::getTradeDate)
+                                            .filter(Objects::nonNull)
+                                            .max(LocalDateTime::compareTo);
+                                    if (maxDateOpt.isPresent()) {
+                                        return updateWatermarkSuccess(WATERMARK_GLOBAL_BENCHMARKS, now, maxDateOpt.get(), count)
+                                                .thenReturn(count);
+                                    } else {
+                                        return updateWatermarkFailed(WATERMARK_GLOBAL_BENCHMARKS, now, "Synced benchmark quotes have missing or null trade dates")
+                                                .thenReturn(0);
+                                    }
                                 } else {
                                     return updateWatermarkFailed(WATERMARK_GLOBAL_BENCHMARKS, now, "No benchmark quotes synced")
                                             .thenReturn(0);
@@ -377,12 +392,21 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
                     return quotesFlux
                             .flatMap(this::upsertDailyQuote)
-                            .count()
-                            .map(Long::intValue)
-                            .flatMap(count -> {
+                            .collectList()
+                            .flatMap(savedList -> {
+                                int count = savedList.size();
                                 if (count > 0) {
-                                    return updateWatermarkSuccess(WATERMARK_CNN_FEAR_GREED, now, now, count)
-                                            .thenReturn(count);
+                                    Optional<LocalDateTime> maxDateOpt = savedList.stream()
+                                            .map(MarketDailyQuote::getTradeDate)
+                                            .filter(Objects::nonNull)
+                                            .max(LocalDateTime::compareTo);
+                                    if (maxDateOpt.isPresent()) {
+                                        return updateWatermarkSuccess(WATERMARK_CNN_FEAR_GREED, now, maxDateOpt.get(), count)
+                                                .thenReturn(count);
+                                    } else {
+                                        return updateWatermarkFailed(WATERMARK_CNN_FEAR_GREED, now, "Synced CNN sentiment quotes have missing or null trade dates")
+                                                .thenReturn(0);
+                                    }
                                 } else {
                                     return updateWatermarkFailed(WATERMARK_CNN_FEAR_GREED, now, "No CNN sentiment quotes synced")
                                             .thenReturn(0);
@@ -521,12 +545,21 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
 
                         return externalMarketDataPort.fetchHistoricalMacroYields(startDate, endDate)
                                 .flatMap(this::upsertMacroYieldSnapshot)
-                                .count()
-                                .map(Long::intValue)
-                                .flatMap(count -> {
+                                .collectList()
+                                .flatMap(savedList -> {
+                                    int count = savedList.size();
                                     if (count > 0) {
-                                        return updateWatermarkSuccess(WATERMARK_MACRO_YIELD_SNAPSHOT, now, now, count)
-                                                .thenReturn(count);
+                                        Optional<LocalDateTime> maxDateOpt = savedList.stream()
+                                                .map(MacroYieldSnapshot::getRecordDate)
+                                                .filter(Objects::nonNull)
+                                                .max(LocalDateTime::compareTo);
+                                        if (maxDateOpt.isPresent()) {
+                                            return updateWatermarkSuccess(WATERMARK_MACRO_YIELD_SNAPSHOT, now, maxDateOpt.get(), count)
+                                                    .thenReturn(count);
+                                        } else {
+                                            return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "Synced macro yield snapshots have missing or null record dates")
+                                                    .thenReturn(0);
+                                        }
                                     } else {
                                         return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "No historical macro yields synced")
                                                 .thenReturn(0);

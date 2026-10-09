@@ -1184,6 +1184,11 @@
             "sortable": false
           },
           {
+            "field": "syncFrequency",
+            "label": "同步週期",
+            "sortable": false
+          },
+          {
             "field": "status",
             "label": "同步狀態",
             "sortable": false

@@ -296,6 +296,27 @@ export default function DataTable({
       return <span className="font-mono text-xs">{val.toLocaleString()} 筆</span>;
     }
 
+    if (col.field === 'syncFrequency') {
+      const feed = row.feedName;
+      const isMonthly = val === 'MONTHLY' || val === '每月' || [
+        'TWSE_DCA_RANKINGS',
+        'TWSE_ETF_METADATA',
+        'MONTHLY_TOP_LIST',
+        'DIVIDENDS_AND_SPLITS',
+      ].includes(feed);
+      return (
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+            isMonthly
+              ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300'
+              : 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+          }`}
+        >
+          {isMonthly ? '每月' : '每日'}
+        </span>
+      );
+    }
+
     if ((col.field === 'latestRecordDate' || col.field === 'lastSuccessfulSyncAt') && val) {
       const str = String(val).replace('T', ' ');
       return <span className="font-mono text-xs text-foreground/90">{str}</span>;

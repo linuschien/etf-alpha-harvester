@@ -18,12 +18,14 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Controller
 public class GlobalServicesGraphQLResolver {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalServicesGraphQLResolver.class);
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final GlobalAssetQueryService queryService;
     private final DipBuyOpportunityService dipBuyService;
@@ -460,17 +462,23 @@ public class GlobalServicesGraphQLResolver {
 
     @SchemaMapping(typeName = "DataFeedWatermark", field = "lastSuccessfulSyncAt")
     public String dataFeedWatermarkLastSuccessfulSyncAt(DataFeedSyncWatermark wm) {
-        return wm.getLastSuccessfulSyncAt() != null ? wm.getLastSuccessfulSyncAt().toString() : null;
+        return wm.getLastSuccessfulSyncAt() != null
+                ? wm.getLastSuccessfulSyncAt().truncatedTo(ChronoUnit.SECONDS).format(DATE_TIME_FORMATTER)
+                : null;
     }
 
     @SchemaMapping(typeName = "DataFeedWatermark", field = "latestRecordDate")
     public String dataFeedWatermarkLatestRecordDate(DataFeedSyncWatermark wm) {
-        return wm.getLatestRecordDate() != null ? wm.getLatestRecordDate().toString() : null;
+        return wm.getLatestRecordDate() != null
+                ? wm.getLatestRecordDate().toLocalDate().toString()
+                : null;
     }
 
     @SchemaMapping(typeName = "DataFeedWatermark", field = "updatedAt")
     public String dataFeedWatermarkUpdatedAt(DataFeedSyncWatermark wm) {
-        return wm.getUpdatedAt() != null ? wm.getUpdatedAt().toString() : null;
+        return wm.getUpdatedAt() != null
+                ? wm.getUpdatedAt().truncatedTo(ChronoUnit.SECONDS).format(DATE_TIME_FORMATTER)
+                : null;
     }
 }
 
