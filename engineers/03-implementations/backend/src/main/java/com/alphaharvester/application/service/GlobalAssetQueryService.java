@@ -579,6 +579,11 @@ public class GlobalAssetQueryService {
             LocalDateTime end = parseDate(filter.endDate(), true);
             return dividendRepository.findByTickerAndExDateBetweenOrderByExDateAsc(filter.ticker(), start, end);
         }
+        if (filter.startDate() != null && filter.endDate() != null) {
+            LocalDateTime start = parseDate(filter.startDate(), false);
+            LocalDateTime end = parseDate(filter.endDate(), true);
+            return dividendRepository.findByExDateBetweenOrPaymentDateBetweenOrderByExDateAsc(start, end, start, end);
+        }
         if (filter.ticker() != null) {
             return dividendRepository.findByTickerOrderByExDateDesc(filter.ticker());
         }

@@ -44,8 +44,13 @@ export const handlers = [
     }
 
     if (query.includes('listDividendAnnouncements') || operationName === 'ListDividendAnnouncements') {
+      const filter = body?.variables?.filter;
+      let list = mockDividendAnnouncements;
+      if (filter?.ticker) {
+        list = list.filter((d: any) => d.ticker === filter.ticker);
+      }
       return HttpResponse.json({
-        data: { listDividendAnnouncements: mockDividendAnnouncements },
+        data: { listDividendAnnouncements: list },
       });
     }
 

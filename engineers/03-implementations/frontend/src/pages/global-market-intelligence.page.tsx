@@ -147,7 +147,8 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   const { data: macroYield } = useGetLatestMacroYieldSnapshot({ enabled: isYield });
   const { data: macroRegime } = useGetMacroRegime({ enabled: isYield });
   const { data: topDca } = useGetTop20DcaRanks(dcaYear, dcaMonth, { enabled: isDcaTop20 });
-  const { data: dividendAnnouncements } = useListDividendAnnouncements(undefined, { enabled: isCalendar });
+  // Lazy loading handled on-demand by EventCalendar component per month or per ticker
+  const { data: dividendAnnouncements } = useListDividendAnnouncements(undefined, { enabled: false });
   const { data: corporateActions } = useListCorporateActions(undefined, { enabled: isCalendar });
   const { data: pairwiseMatrix } = useListPairwiseMatrix(
     {

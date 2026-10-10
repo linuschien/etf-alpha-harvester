@@ -239,6 +239,15 @@ class RepositoryIntegrationTest {
         StepVerifier.create(dividendRepository.count())
                 .assertNext(count -> assertThat(count).isGreaterThanOrEqualTo(1000L))
                 .verifyComplete();
+
+        LocalDateTime octStart = LocalDateTime.of(2025, 10, 1, 0, 0);
+        LocalDateTime octEnd = LocalDateTime.of(2025, 10, 31, 23, 59, 59);
+        StepVerifier.create(dividendRepository.findByExDateBetweenOrPaymentDateBetweenOrderByExDateAsc(octStart, octEnd, octStart, octEnd).collectList())
+                .assertNext(list -> {
+                    assertThat(list).isNotEmpty();
+                    assertThat(list.stream().anyMatch(d -> "0056".equals(d.getTicker()))).isTrue();
+                })
+                .verifyComplete();
     }
 
     @Test

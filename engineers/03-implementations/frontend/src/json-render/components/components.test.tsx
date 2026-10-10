@@ -11,6 +11,7 @@ import ChartPlaceholder from './ChartPlaceholder';
 import DataTable from './DataTable';
 import MonthStepper from './MonthStepper';
 import MacroRegimeBanner from './MacroRegimeBanner';
+import EventCalendar from './EventCalendar';
 import { api } from '@/lib/api-client';
 
 describe('Custom JSON-render Components', () => {
@@ -665,4 +666,117 @@ describe('Custom JSON-render Components', () => {
       expect(screen.getByText(/滑鼠懸停於任一交叉格/)).toBeInTheDocument();
     }
   });
+
+  it('renders and interacts with refactored EventCalendar in calendar and table modes', async () => {
+    const mockDividends = [
+      {
+        ticker: '0056',
+        exDate: '2026-10-18T00:00:00',
+        paymentDate: '2026-11-12T00:00:00',
+        dividendPerShare: 1.07,
+        taxTag: 'DOMESTIC_54C',
+      },
+      {
+        ticker: '0050',
+        exDate: '2026-10-18T00:00:00',
+        paymentDate: '2026-11-15T00:00:00',
+        dividendPerShare: 0.60,
+        taxTag: 'DOMESTIC_54C',
+      },
+    ];
+
+    const mockSplits = [
+      {
+        ticker: '0050',
+        effectiveDate: '2026-10-18T00:00:00',
+        splitToShares: 4,
+        splitFromShares: 1,
+      },
+    ];
+
+    const store = createStateStore({
+      data: {
+        listDividendAnnouncements: mockDividends,
+        listCorporateActions: mockSplits,
+      },
+    });
+
+    render(
+      <JSONUIProvider store={store} registry={{}}>
+        <EventCalendar />
+      </JSONUIProvider>
+    );
+
+    // 1. Calendar Mode (Default)
+    expect(screen.getByText(/ETF 除息月曆與股票分割事件視圖/)).toBeInTheDocument();
+    expect(screen.getByText('2026 年 10 月')).toBeInTheDocument();
+    expect(screen.getByText('當月 (10月)')).toBeInTheDocument();
+
+    // Verify frequency dropdown is removed
+    expect(screen.queryByText('全部配息週期')).not.toBeInTheDocument();
+
+    // Verify Split priority on cell badge (🟣 分割 0050 4:1)
+    await waitFor(() => {
+      expect(screen.getByText('🟣 分割 0050 4:1')).toBeInTheDocument();
+    });
+
+    // Click on 18th to inspect detail card
+    const day18Cells = screen.getAllByText('18');
+    const day18Cell = day18Cells[0].closest('div');
+    if (day18Cell) {
+      fireEvent.click(day18Cell);
+      expect(screen.getByText(/2026-10-18 事件明細/)).toBeInTheDocument();
+      // Should show ticker without duplicate name
+      expect(screen.getAllByText('0050').length).toBeGreaterThan(0);
+      expect(screen.queryByText('0050 0050')).not.toBeInTheDocument();
+    }
+
+    // 2. Switch to Table Mode
+    const tableToggle = screen.getByRole('button', { name: '清單' });
+    fireEvent.click(tableToggle);
+
+    // Month steppers should be hidden
+    expect(screen.queryByText('2026 年 10 月')).not.toBeInTheDocument();
+
+    // Text search input and search button should be visible
+    const searchInput = screen.getByPlaceholderText('搜尋標的代碼 (如 0050)...');
+    expect(searchInput).toBeInTheDocument();
+    const queryBtn = screen.getByRole('button', { name: '查詢' });
+    expect(queryBtn).toBeInTheDocument();
+
+    // Default empty state prompt
+    expect(screen.getByText('請輸入標的代碼以查詢歷史除息與分割記錄')).toBeInTheDocument();
+
+    // Search for 0056
+    fireEvent.change(searchInput, { target: { value: '0056' } });
+    fireEvent.click(queryBtn);
+
+    // Wait for paired row results
+    await waitFor(() => {
+      expect(screen.getByText('0056')).toBeInTheDocument();
+      expect(screen.getByText('🟢 2026-10-18')).toBeInTheDocument();
+      expect(screen.getByText('🔵 2026-11-12')).toBeInTheDocument();
+      expect(screen.getByText('$1.07 TWD')).toBeInTheDocument();
+      expect(screen.getByText('54C 境內股利')).toBeInTheDocument();
+    });
+
+    // Ensure no redundant columns
+    expect(screen.queryByText('標的名稱')).not.toBeInTheDocument();
+    expect(screen.queryByText('配息週期')).not.toBeInTheDocument();
+
+    // Search for invalid ticker 9999
+    fireEvent.change(searchInput, { target: { value: '9999' } });
+    fireEvent.click(queryBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/查無標的「9999」的除息或分割記錄/)).toBeInTheDocument();
+    });
+
+    // Clear search using ✕
+    const clearBtn = screen.getByTitle('清除');
+    fireEvent.click(clearBtn);
+    expect(searchInput).toHaveValue('');
+    expect(screen.getByText('請輸入標的代碼以查詢歷史除息與分割記錄')).toBeInTheDocument();
+  });
 });
+

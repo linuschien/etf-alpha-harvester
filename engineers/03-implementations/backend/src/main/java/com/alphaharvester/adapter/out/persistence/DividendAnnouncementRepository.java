@@ -17,4 +17,9 @@ public interface DividendAnnouncementRepository extends R2dbcRepository<Dividend
     Flux<DividendAnnouncement> findByTickerAndExDateBetweenOrderByExDateAsc(String ticker, LocalDateTime startDate, LocalDateTime endDate);
     Flux<DividendAnnouncement> findByAssetIdOrderByExDateDesc(UUID assetId);
     Flux<DividendAnnouncement> findByTickerOrderByExDateDesc(String ticker);
+
+    Flux<DividendAnnouncement> findByExDateBetweenOrPaymentDateBetweenOrderByExDateAsc(
+        LocalDateTime exDateStart, LocalDateTime exDateEnd,
+        LocalDateTime paymentDateStart, LocalDateTime paymentDateEnd
+    );
 }

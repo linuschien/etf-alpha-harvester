@@ -176,11 +176,22 @@ class GlobalAssetQueryServiceTest {
         when(dividendRepository.findByTickerOrderByExDateDesc("0050")).thenReturn(Flux.just(div));
         when(corporateActionRepository.findByTickerOrderByEffectiveDateDesc("0050")).thenReturn(Flux.just(ca));
 
+        when(dividendRepository.findByExDateBetweenOrPaymentDateBetweenOrderByExDateAsc(any(), any(), any(), any())).thenReturn(Flux.just(div));
+        when(dividendRepository.findByTickerAndExDateBetweenOrderByExDateAsc(eq("0050"), any(), any())).thenReturn(Flux.just(div));
+
         StepVerifier.create(queryService.getTop20DcaRanks(2026, 8))
                 .assertNext(r -> assertThat(r.getRankPosition()).isEqualTo(1))
                 .verifyComplete();
 
         StepVerifier.create(queryService.listDividendAnnouncements(new DividendAnnouncementFilterInput("0050", null, null)))
+                .assertNext(d -> assertThat(d.getDividendPerShare()).isEqualTo(new BigDecimal("1.5")))
+                .verifyComplete();
+
+        StepVerifier.create(queryService.listDividendAnnouncements(new DividendAnnouncementFilterInput(null, "2026-10-01", "2026-10-31")))
+                .assertNext(d -> assertThat(d.getDividendPerShare()).isEqualTo(new BigDecimal("1.5")))
+                .verifyComplete();
+
+        StepVerifier.create(queryService.listDividendAnnouncements(new DividendAnnouncementFilterInput("0050", "2026-10-01", "2026-10-31")))
                 .assertNext(d -> assertThat(d.getDividendPerShare()).isEqualTo(new BigDecimal("1.5")))
                 .verifyComplete();
 
