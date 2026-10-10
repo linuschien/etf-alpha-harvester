@@ -605,12 +605,13 @@ describe('Custom JSON-render Components', () => {
     const matrixData: any[] = [];
     for (let i = 0; i < tickers.length; i++) {
       for (let j = i + 1; j < tickers.length; j++) {
-        const isCollinear = (i + j) % 3 === 0;
+        const mod = (i + j) % 3;
+        const r2 = mod === 0 ? 0.85 : mod === 1 ? 0.65 : 0.25;
         matrixData.push({
           baseTicker: tickers[i],
           targetTicker: tickers[j],
-          rSquared: isCollinear ? 0.65 : 0.25,
-          correlationCoefficient: isCollinear ? 0.81 : 0.50,
+          rSquared: r2,
+          correlationCoefficient: Math.sqrt(r2),
         });
       }
     }
@@ -627,8 +628,12 @@ describe('Custom JSON-render Components', () => {
       </JSONUIProvider>
     );
 
-    // Initial state: default to Top 10
+    // Initial state: default to Top 10 & 3-tier KPI badges
     expect(screen.getByText('10 × 10 維度')).toBeInTheDocument();
+    expect(screen.getByText(/夏農正交 \(幾何收割\)/)).toBeInTheDocument();
+    expect(screen.getByText(/中性常態連動/)).toBeInTheDocument();
+    expect(screen.getByText(/高度共線 \(同質冗餘\)/)).toBeInTheDocument();
+
     expect(screen.getByText('前 10 檔 (Top 10)')).toBeInTheDocument();
     expect(screen.getByText('前 20 檔 (Top 20)')).toBeInTheDocument();
     expect(screen.getByText('全部標的 (25 檔)')).toBeInTheDocument();

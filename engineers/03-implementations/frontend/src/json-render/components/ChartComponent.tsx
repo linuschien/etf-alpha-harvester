@@ -1668,7 +1668,7 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
     base: string;
     target: string;
     r2: number;
-    collinear: boolean;
+    category: 'ORTHOGONAL' | 'NEUTRAL' | 'COLLINEAR';
     corr?: number;
   } | null>(null);
 
@@ -1731,15 +1731,20 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
     r2Lookup.set(`${m.targetTicker}-${m.baseTicker}`, { r2, corr });
   });
 
-  // Stats calculation
+  // Stats calculation: 3 tiers (<0.50, 0.50~0.80, >=0.80)
   const totalPairs = (displayedTickers.length * (displayedTickers.length - 1)) / 2;
-  let collinearCount = 0;
-  let orthogonalCount = 0;
+  let orthogonalCount = 0; // R^2 < 0.50
+  let neutralCount = 0;    // 0.50 <= R^2 < 0.80
+  let collinearCount = 0;  // R^2 >= 0.80
+
   for (let i = 0; i < displayedTickers.length; i++) {
     for (let j = i + 1; j < displayedTickers.length; j++) {
       const p = r2Lookup.get(`${displayedTickers[i]}-${displayedTickers[j]}`);
-      if (p && p.r2 >= 0.50) {
+      const r2 = p ? p.r2 : 0.5;
+      if (r2 >= 0.80) {
         collinearCount++;
+      } else if (r2 >= 0.50) {
+        neutralCount++;
       } else {
         orthogonalCount++;
       }
@@ -1774,19 +1779,23 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
             </span>
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            兩兩資產判定係數 R² 檢驗（夏農幾何篩選門檻：R² ≥ 0.50 為共線冗餘剔除，R² &lt; 0.50 為正交獨立保留）
+            兩兩資產判定係數 R² 檢驗（🟢 R² &lt; 0.50 夏農正交 ｜ ⚪ 0.50 ≤ R² &lt; 0.80 中性連動 ｜ 🟣 R² ≥ 0.80 高度共線冗餘）
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-3 text-xs font-medium">
+        {/* Legend: 3 tiers */}
+        <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded bg-emerald-500"></span>
-            正交獨立 (R² &lt; 0.50)
+            夏農正交 (R² &lt; 0.50)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-muted-foreground/30 border border-border"></span>
+            中性連動 (0.50 ≤ R² &lt; 0.80)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded bg-purple-500"></span>
-            共線冗餘 (R² ≥ 0.50)
+            高度共線 (R² ≥ 0.80)
           </span>
         </div>
       </div>
@@ -1862,24 +1871,26 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
         </div>
       </div>
 
-      {/* Summary KPI Badges */}
+      {/* Summary KPI Badges: 4 slots */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <div className="p-2 rounded-md bg-muted/20 border border-border flex flex-col">
           <span className="text-muted-foreground text-[11px]">當前矩陣標的</span>
           <span className="font-bold font-mono text-sm text-foreground">{displayedTickers.length} 檔</span>
         </div>
-        <div className="p-2 rounded-md bg-muted/20 border border-border flex flex-col">
-          <span className="text-muted-foreground text-[11px]">交叉檢驗組合</span>
-          <span className="font-bold font-mono text-sm text-foreground">{totalPairs} 對</span>
-        </div>
         <div className="p-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex flex-col">
-          <span className="text-emerald-700 dark:text-emerald-300 text-[11px]">正交獨立組合</span>
+          <span className="text-emerald-700 dark:text-emerald-300 text-[11px]">🟢 夏農正交 (幾何收割)</span>
           <span className="font-bold font-mono text-sm text-emerald-700 dark:text-emerald-300">
             {orthogonalCount} 對 ({totalPairs > 0 ? ((orthogonalCount / totalPairs) * 100).toFixed(0) : 0}%)
           </span>
         </div>
+        <div className="p-2 rounded-md bg-muted/30 border border-border flex flex-col">
+          <span className="text-muted-foreground text-[11px]">⚪ 中性常態連動</span>
+          <span className="font-bold font-mono text-sm text-foreground">
+            {neutralCount} 對 ({totalPairs > 0 ? ((neutralCount / totalPairs) * 100).toFixed(0) : 0}%)
+          </span>
+        </div>
         <div className="p-2 rounded-md bg-purple-500/10 border border-purple-500/20 flex flex-col">
-          <span className="text-purple-700 dark:text-purple-300 text-[11px]">共線剔除組合</span>
+          <span className="text-purple-700 dark:text-purple-300 text-[11px]">🟣 高度共線 (同質冗餘)</span>
           <span className="font-bold font-mono text-sm text-purple-700 dark:text-purple-300">
             {collinearCount} 對 ({totalPairs > 0 ? ((collinearCount / totalPairs) * 100).toFixed(0) : 0}%)
           </span>
@@ -1932,15 +1943,27 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
                     const pairData = r2Lookup.get(`${rowTicker}-${colTicker}`);
                     const r2 = isSelf ? 1.0 : pairData?.r2 ?? 0.5;
                     const corr = isSelf ? 1.0 : pairData?.corr;
-                    const isHigh = r2 >= 0.50 && !isSelf;
+
+                    // 3 Tiers Classification
+                    const isCollinear = !isSelf && r2 >= 0.80;
+                    const isNeutral = !isSelf && r2 >= 0.50 && r2 < 0.80;
+                    const isOrthogonal = !isSelf && r2 < 0.50;
+
+                    const cellCategory: 'ORTHOGONAL' | 'NEUTRAL' | 'COLLINEAR' = isCollinear
+                      ? 'COLLINEAR'
+                      : isNeutral
+                      ? 'NEUTRAL'
+                      : 'ORTHOGONAL';
 
                     const cellMatch =
                       query && (rowMatch || colTicker.toUpperCase().includes(query));
 
                     const bgColor = isSelf
                       ? 'bg-muted/40 text-muted-foreground/60'
-                      : isHigh
-                      ? 'bg-purple-500/20 hover:bg-purple-500/35 text-purple-700 dark:text-purple-300 font-bold'
+                      : isCollinear
+                      ? 'bg-purple-500/25 hover:bg-purple-500/40 text-purple-700 dark:text-purple-300 font-bold'
+                      : isNeutral
+                      ? 'bg-muted/30 hover:bg-muted/50 text-foreground/80 font-medium'
                       : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 font-medium';
 
                     return (
@@ -1951,7 +1974,7 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
                             base: rowTicker,
                             target: colTicker,
                             r2,
-                            collinear: isHigh,
+                            category: cellCategory,
                             corr,
                           })
                         }
@@ -1961,8 +1984,8 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
                         }`}
                       >
                         <div className="leading-tight">{r2.toFixed(2)}</div>
-                        {isHigh && (
-                          <div className="text-[9px] text-destructive leading-tight font-sans">
+                        {isCollinear && (
+                          <div className="text-[9px] text-purple-700 dark:text-purple-300 leading-tight font-sans font-bold">
                             共線
                           </div>
                         )}
@@ -1998,13 +2021,17 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
             <div>
               {hoveredCell.base === hoveredCell.target ? (
                 <span className="text-muted-foreground font-medium">同一標的自相關 (R² = 1.0)</span>
-              ) : hoveredCell.collinear ? (
+              ) : hoveredCell.category === 'COLLINEAR' ? (
                 <span className="px-2 py-0.5 rounded font-semibold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                  ⚠️ 共線冗餘 (R² ≥ 0.50) — 觸發夏農正交剔除，兩者動能重複
+                  🟣 高度共線 (R² ≥ 0.80) — 走勢高度同質，分群模式觸發替代歸組
+                </span>
+              ) : hoveredCell.category === 'NEUTRAL' ? (
+                <span className="px-2 py-0.5 rounded font-semibold bg-muted text-foreground/80 border border-border">
+                  ⚪ 中性連動 (0.50 ≤ R² &lt; 0.80) — 常態市場連動，非正交收割亦非同質冗餘
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded font-semibold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                  ✅ 正交獨立 (R² &lt; 0.50) — 保留互補特性，降低投組集中度
+                  🟢 夏農正交 (R² &lt; 0.50) — 具幾何互補性，適合夏農再平衡收割
                 </span>
               )}
             </div>
@@ -2012,7 +2039,7 @@ export function PairwiseMatrixHeatmap({ label, rawMatrix, store }: PairwiseMatri
         ) : (
           <div className="text-muted-foreground flex items-center gap-1.5">
             <span>💡</span>
-            <span>滑鼠懸停於任一交叉格，可即時查看雙標的代碼、相關係數與夏農正交判定詳情。</span>
+            <span>滑鼠懸停於任一交叉格，可即時查看雙標的代碼、相關係數與三態判定詳情。</span>
           </div>
         )}
       </div>
