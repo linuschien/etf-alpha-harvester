@@ -617,6 +617,44 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       }
     }
 
+    // Dynamic data freshness trigger pill
+    if (cloned.elements?.['data-freshness-trigger']) {
+      const wmList = watermarks || [];
+      const hasError = wmList.some((w: any) =>
+        ['FAILED', 'HALT', 'ERROR'].includes(String(w?.status || '').toUpperCase())
+      );
+      const isAllSuccess =
+        wmList.length > 0 &&
+        wmList.every((w: any) =>
+          ['SUCCESS', 'PASS', 'HEALTHY'].includes(String(w?.status || '').toUpperCase())
+        );
+
+      const baseLabel = (
+        cloned.elements['data-freshness-trigger'].props?.label || '資料同步狀態'
+      ).replace(/^[🟢🔴⚪]\s*/, '');
+      let pillLabel = baseLabel;
+      let pillVariant = 'secondary';
+      let pillClass = '';
+
+      if (hasError) {
+        pillLabel = `🔴 ${baseLabel}`;
+        pillVariant = 'destructive';
+        pillClass = 'border-destructive/40 text-destructive font-medium';
+      } else if (isAllSuccess) {
+        pillLabel = `🟢 ${baseLabel}`;
+        pillVariant = 'outline';
+        pillClass =
+          'border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-medium hover:bg-emerald-500/10';
+      }
+
+      cloned.elements['data-freshness-trigger'].props = {
+        ...(cloned.elements['data-freshness-trigger'].props || {}),
+        label: pillLabel,
+        variant: pillVariant,
+        className: pillClass,
+      };
+    }
+
     return cloned;
   }, [
     activeTab,
@@ -629,6 +667,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     dipBuyOpportunity,
     topDca,
     effectiveDcaDate,
+    watermarks,
   ]);
 
   return (
@@ -651,7 +690,6 @@ const defaultStore = createStateStore({
     'asset-class-selector': 'CORE',
     'leaderboard-evaluation-date': getDefaultEvaluationDate(),
     'dca-evaluation-date': getDefaultEvaluationDate(),
-    'freq-filter-selector': '全部',
     'drawdown-benchmark-selector': '^TWII',
     'drawdown-window-selector': '6M',
     'toggle-ma-switch': true,

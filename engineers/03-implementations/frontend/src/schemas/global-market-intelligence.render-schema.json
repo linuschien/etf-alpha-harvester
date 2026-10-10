@@ -1029,126 +1029,6 @@
       },
       "children": []
     },
-    "calendar-heading": {
-      "type": "Heading",
-      "props": {
-        "text": "ETF 除息月曆與股票分割事件視圖",
-        "level": "h2"
-      },
-      "children": []
-    },
-    "calendar-filter-bar": {
-      "type": "Stack",
-      "props": {
-        "direction": "horizontal",
-        "gap": "md",
-        "align": "center",
-        "justify": null,
-        "className": null
-      },
-      "children": [
-        "freq-filter-selector"
-      ]
-    },
-    "freq-filter-selector": {
-      "type": "Select",
-      "props": {
-        "label": "配息週期快篩 (月配 / 季配 / 半年配 / 年配 / 全部)",
-        "name": "freq-filter-selector",
-        "options": [
-          "全部",
-          "月配",
-          "季配",
-          "半年配",
-          "年配"
-        ],
-        "placeholder": "請選擇 配息週期快篩 (月配 / 季配 / 半年配 / 年配 / 全部)",
-        "value": {
-          "$bindState": "/filters/freq-filter-selector"
-        },
-        "checks": null,
-        "validateOn": null
-      },
-      "children": []
-    },
-    "dividend-announcements-table": {
-      "type": "DataTable",
-      "props": {
-        "id": "dividend-announcements-table",
-        "label": "除息公告清單 (綠色標記除息日 / 藍色標記發放日)",
-        "columns": [
-          {
-            "field": "exDate",
-            "label": "除息日",
-            "sortable": true,
-            "default_sort": "asc"
-          },
-          {
-            "field": "ticker",
-            "label": "標的代碼",
-            "sortable": false
-          },
-          {
-            "field": "dividendPerShare",
-            "label": "每股配息金額 (TWD)",
-            "sortable": true
-          },
-          {
-            "field": "paymentDate",
-            "label": "發放日",
-            "sortable": true
-          },
-          {
-            "field": "taxTag",
-            "label": "稅務標籤 (76W免二代健保 / 54C)",
-            "sortable": true
-          }
-        ],
-        "data": {
-          "$bindState": "/data/listDividendAnnouncements"
-        }
-      },
-      "children": []
-    },
-    "corporate-actions-table": {
-      "type": "DataTable",
-      "props": {
-        "id": "corporate-actions-table",
-        "label": "股票分割事件清單 (紫色標記生效日)",
-        "columns": [
-          {
-            "field": "effectiveDate",
-            "label": "分割生效日",
-            "sortable": true,
-            "default_sort": "asc"
-          },
-          {
-            "field": "ticker",
-            "label": "標的代碼",
-            "sortable": false
-          },
-          {
-            "field": "actionType",
-            "label": "事件類型 (STOCK_SPLIT)",
-            "sortable": false
-          },
-          {
-            "field": "splitRatioNumerator",
-            "label": "分割分子",
-            "sortable": false
-          },
-          {
-            "field": "splitRatioDenominator",
-            "label": "分割分母",
-            "sortable": false
-          }
-        ],
-        "data": {
-          "$bindState": "/data/listCorporateActions"
-        }
-      },
-      "children": []
-    },
     "watermark-detail-modal": {
       "type": "Dialog",
       "props": {
@@ -1528,7 +1408,9 @@
     "dip-buy-action-text": {
       "type": "Text",
       "props": {
-        "text": "系統建議動作 (果斷撈底產生單筆超跌工單 / 分批加碼 / 定額靜默扣款 / 嚴禁追高)",
+        "text": {
+          "$bindState": "/metrics/dip-buy-action-text"
+        },
         "variant": null
       },
       "children": []

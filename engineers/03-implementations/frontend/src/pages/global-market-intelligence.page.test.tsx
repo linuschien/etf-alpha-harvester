@@ -393,6 +393,7 @@ describe('GlobalMarketIntelligencePage', () => {
     const triggerBtn = await screen.findByRole('button', {
       name: /資料同步狀態/i,
     });
+    expect(triggerBtn).toBeInTheDocument();
     await user.click(triggerBtn);
 
     expect(openModal).toHaveBeenCalledWith(
@@ -586,5 +587,13 @@ describe('GlobalMarketIntelligencePage', () => {
       expect(screen.getAllByText(/16\.34/i).length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText(/30\.83/i).length).toBeGreaterThanOrEqual(1);
     });
+  });
+
+  it('renders dynamic green data freshness pill when all data feeds are healthy', async () => {
+    renderPage();
+    const pill = await screen.findByRole('button', {
+      name: /🟢 資料同步狀態/i,
+    });
+    expect(pill).toBeInTheDocument();
   });
 });
