@@ -40,9 +40,9 @@ logging:
 
 app:
   scheduler:
-    enabled: true
+    enabled: false
     market-data-sync:
-      enabled: true
+      enabled: false
       cron: "0 0 7 * * *"
       zone: "Asia/Taipei"
 
