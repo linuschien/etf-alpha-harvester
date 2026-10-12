@@ -9,24 +9,21 @@ import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CorporateActionType;
 import com.alphaharvester.infrastructure.cache.MonthlyQuoteExpiryPolicy;
 import org.ehcache.Cache;
-import org.ehcache.PersistentCacheManager;
+import org.ehcache.CacheManager;
 import org.ehcache.config.builders.CacheConfigurationBuilder;
 import org.ehcache.config.builders.CacheManagerBuilder;
 import org.ehcache.config.builders.ResourcePoolsBuilder;
 import org.ehcache.config.units.EntryUnit;
-import org.ehcache.config.units.MemoryUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.io.File;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -47,30 +44,22 @@ class MonthlyQuoteCacheServiceTest {
     @Mock
     private CorporateActionRepository corporateActionRepository;
 
-    private PersistentCacheManager cacheManager;
+    private CacheManager cacheManager;
     private Cache<String, MonthlyQuoteCacheEntry> cache;
     private MonthlyQuoteCacheService cacheService;
     private AutoCloseable mocksCloseable;
-
-    @TempDir
-    File tempDir;
 
     @BeforeEach
     void setUp() {
         mocksCloseable = MockitoAnnotations.openMocks(this);
 
-        File cacheDir = new File(tempDir, "ehcache-test");
-        cacheDir.mkdirs();
-
         cacheManager = CacheManagerBuilder.newCacheManagerBuilder()
-                .with(CacheManagerBuilder.persistence(cacheDir))
                 .withCache("monthlyQuoteCache",
                         CacheConfigurationBuilder.newCacheConfigurationBuilder(
                                 String.class,
                                 MonthlyQuoteCacheEntry.class,
                                 ResourcePoolsBuilder.newResourcePoolsBuilder()
                                         .heap(500, EntryUnit.ENTRIES)
-                                        .disk(10, MemoryUnit.MB, true)
                         )
                         .withExpiry(new MonthlyQuoteExpiryPolicy())
                 )
@@ -234,8 +223,8 @@ class MonthlyQuoteCacheServiceTest {
     }
 
     @Test
-    @DisplayName("Should verify Ehcache native disk persistence recovers data across CacheManager lifecycle")
-    void shouldPersistDataToDiskAcrossRestarts() {
+    @DisplayName("Should verify in-memory heap cache correctly stores and retrieves entries")
+    void shouldStoreAndRetrieveMonthlyQuoteCacheEntryFromHeap() {
         String ticker = "0050";
         YearMonth ym = YearMonth.now().minusMonths(2);
         String key = cacheService.buildCacheKey(ticker, ym);
@@ -253,33 +242,10 @@ class MonthlyQuoteCacheServiceTest {
 
         cache.put(key, entry);
 
-        // Close cacheManager (flushes persistent disk store)
-        File cacheDir = new File(tempDir, "ehcache-test");
-        cacheManager.close();
-
-        // Re-open cacheManager pointing to the exact same disk directory
-        PersistentCacheManager reopenedManager = CacheManagerBuilder.newCacheManagerBuilder()
-                .with(CacheManagerBuilder.persistence(cacheDir))
-                .withCache("monthlyQuoteCache",
-                        CacheConfigurationBuilder.newCacheConfigurationBuilder(
-                                String.class,
-                                MonthlyQuoteCacheEntry.class,
-                                ResourcePoolsBuilder.newResourcePoolsBuilder()
-                                        .heap(500, EntryUnit.ENTRIES)
-                                        .disk(10, MemoryUnit.MB, true)
-                        )
-                        .withExpiry(new MonthlyQuoteExpiryPolicy())
-                )
-                .build(true);
-
-        Cache<String, MonthlyQuoteCacheEntry> recoveredCache =
-                reopenedManager.getCache("monthlyQuoteCache", String.class, MonthlyQuoteCacheEntry.class);
-
-        MonthlyQuoteCacheEntry recovered = recoveredCache.get(key);
-        assertThat(recovered).isNotNull();
-        assertThat(recovered.getTicker()).isEqualTo("0050");
-        assertThat(recovered.getQuotes()).hasSize(1);
-        reopenedManager.close();
+        MonthlyQuoteCacheEntry retrieved = cache.get(key);
+        assertThat(retrieved).isNotNull();
+        assertThat(retrieved.getTicker()).isEqualTo("0050");
+        assertThat(retrieved.getQuotes()).hasSize(1);
     }
 
     @Test

@@ -24,7 +24,3 @@ logging:
       add:
         version: ${APP_VERSION:unknown}
 
-app:
-  cache:
-    disk-dir: ./data/ehcache-data
-
