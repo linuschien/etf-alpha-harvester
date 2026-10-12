@@ -107,15 +107,19 @@ public class YahooFinanceClient {
                     }
 
                 })
+                .onErrorResume(WebClientResponseException.NotFound.class, e -> {
+                    log.debug("Symbol '{}' not found on Yahoo Finance (HTTP 404), returning empty.", symbol);
+                    return Flux.empty();
+                })
                 .onErrorResume(e -> {
-                    log.error("Error fetching Yahoo historical quotes for '{}': {}", symbol, e.getMessage(), e);
+                    log.warn("Error fetching Yahoo historical quotes for '{}': {}", symbol, e.getMessage());
                     return Flux.empty();
                 });
     }
 
     /**
      * Fallback to fetch Taiwan ETF quote from Yahoo Finance when TWSE/TPEx misses data.
-     * Tries {ticker}.TW (TWSE listed) first, then {ticker}.TWO (TPEx OTC listed).
+     * Uses smart bi-directional routing: tries {ticker}.TWO first for bond ETFs, {ticker}.TW first for equities.
      */
     public Mono<MarketDailyQuote> fetchTaiwanEtfQuote(String ticker) {
         log.info("Attempting Yahoo Finance fallback quote fetch for ETF '{}'...", ticker);
@@ -130,12 +134,16 @@ public class YahooFinanceClient {
 
     /**
      * Multi-day historical backfill for Taiwan ETF from Yahoo Finance.
-     * Tries {ticker}.TW first, then {ticker}.TWO.
+     * Uses smart bi-directional routing: tries {ticker}.TWO first for bond ETFs ('B'), {ticker}.TW first for equities.
      */
     public Flux<MarketDailyQuote> fetchTaiwanEtfHistoricalQuotes(String ticker, String range) {
         log.info("Attempting Yahoo Finance historical backfill for ETF '{}' (range: {})...", ticker, range);
-        return fetchHistoricalQuotes(ticker + ".TW", range)
-                .switchIfEmpty(Flux.defer(() -> fetchHistoricalQuotes(ticker + ".TWO", range)))
+        boolean isBondEtf = ticker != null && ticker.endsWith("B");
+        String primarySuffix = isBondEtf ? ".TWO" : ".TW";
+        String fallbackSuffix = isBondEtf ? ".TW" : ".TWO";
+
+        return fetchHistoricalQuotes(ticker + primarySuffix, range)
+                .switchIfEmpty(Flux.defer(() -> fetchHistoricalQuotes(ticker + fallbackSuffix, range)))
                 .map(q -> {
                     q.setTicker(ticker);
                     return q;

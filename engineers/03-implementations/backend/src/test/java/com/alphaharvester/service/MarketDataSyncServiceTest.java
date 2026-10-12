@@ -94,8 +94,12 @@ class MarketDataSyncServiceTest {
 
         GlobalAssetMetadata asset50 = new GlobalAssetMetadata(id50, "0050", "元大台灣50", now, null,
                 1, now, now, null);
+        asset50.setFundSizeTwd(new BigDecimal("10000000000"));
+        asset50.setNetAssetValue(new BigDecimal("185.0"));
         GlobalAssetMetadata asset720b = new GlobalAssetMetadata(id720b, "00720B", "元大投資級公司債", now, null,
                 1, now, now, null);
+        asset720b.setFundSizeTwd(new BigDecimal("10000000000"));
+        asset720b.setNetAssetValue(new BigDecimal("30.0"));
 
         MarketDailyQuote quote50 = new MarketDailyQuote(null, id50, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
@@ -164,6 +168,8 @@ class MarketDataSyncServiceTest {
         UUID id = UUID.randomUUID();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now.minusYears(5), null,
                 1, now, now, null);
+        asset.setFundSizeTwd(new BigDecimal("10000000000"));
+        asset.setNetAssetValue(new BigDecimal("185.0"));
 
         // Previous recorded date is 5 days ago (simulating shutdown/offline outage)
         MarketDailyQuote oldQuote = new MarketDailyQuote(null, id, null, "0050", now.minusDays(5),
@@ -308,6 +314,8 @@ class MarketDataSyncServiceTest {
         LocalDateTime now = LocalDateTime.now();
         UUID id = UUID.randomUUID();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null, 1, now, now, null);
+        asset.setFundSizeTwd(new BigDecimal("10000000000"));
+        asset.setNetAssetValue(new BigDecimal("185.0"));
         DividendAnnouncement div = new DividendAnnouncement(null, null, "0050", now.plusDays(5), now.plusDays(30), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C);
         CorporateAction split = new CorporateAction(null, null, "0050", com.alphaharvester.domain.model.CorporateActionType.SPLIT, now, 4, 1);
 
@@ -563,6 +571,8 @@ class MarketDataSyncServiceTest {
 
         UUID id = UUID.randomUUID();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null, 1, now, now, null);
+        asset.setFundSizeTwd(new BigDecimal("10000000000"));
+        asset.setNetAssetValue(new BigDecimal("185.0"));
         DividendAnnouncement div = new DividendAnnouncement(null, null, "0050", now.plusDays(5), now.plusDays(30), new BigDecimal("1.5"), TaxTag.DOMESTIC_54C);
 
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));

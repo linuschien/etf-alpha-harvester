@@ -1,5 +1,6 @@
 package com.alphaharvester.infrastructure.config;
 
+import io.netty.channel.ChannelOption;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -8,6 +9,7 @@ import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.resources.ConnectionProvider;
 
 import java.time.Duration;
 
@@ -19,7 +21,17 @@ public class WebClientConfig {
 
     @Bean
     public WebClient externalMarketWebClient() {
-        HttpClient httpClient = HttpClient.create()
+        ConnectionProvider connectionProvider = ConnectionProvider.builder("market-data-pool")
+                .maxConnections(50)
+                .maxIdleTime(Duration.ofSeconds(15))
+                .maxLifeTime(Duration.ofSeconds(60))
+                .pendingAcquireTimeout(Duration.ofSeconds(30))
+                .evictInBackground(Duration.ofSeconds(10))
+                .build();
+
+        HttpClient httpClient = HttpClient.create(connectionProvider)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
+                .option(ChannelOption.SO_KEEPALIVE, true)
                 .responseTimeout(Duration.ofSeconds(10));
 
         ExchangeStrategies exchangeStrategies = ExchangeStrategies.builder()

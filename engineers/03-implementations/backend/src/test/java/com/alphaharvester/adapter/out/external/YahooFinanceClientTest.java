@@ -115,4 +115,117 @@ class YahooFinanceClientTest {
         assertThat(split.getSplitToShares()).isEqualTo(4);
         assertThat(split.getSplitFromShares()).isEqualTo(1);
     }
+
+    private static final String SAMPLE_VALID_CHART_JSON = """
+    {
+      "chart": {
+        "result": [
+          {
+            "meta": { "exchangeTimezoneName": "Asia/Taipei" },
+            "timestamp": [1700000000],
+            "indicators": {
+              "quote": [
+                {
+                  "open": [10.0],
+                  "high": [10.5],
+                  "low": [9.8],
+                  "close": [10.2],
+                  "volume": [1000]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+    """;
+
+    @Test
+    @DisplayName("Should route bond ETF ending in 'B' directly to .TWO first")
+    void shouldRouteBondEtfToTwoFirst() {
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class)).thenReturn(reactor.core.publisher.Mono.just(SAMPLE_VALID_CHART_JSON));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        reactor.test.StepVerifier.create(mockClient.fetchTaiwanEtfHistoricalQuotes("00720B", "5d"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("00720B.TWO?"));
+        org.mockito.Mockito.verify(uriSpec, org.mockito.Mockito.never()).uri(org.mockito.ArgumentMatchers.contains("00720B.TW?"));
+    }
+
+    @Test
+    @DisplayName("Should route equity ETF not ending in 'B' directly to .TW first")
+    void shouldRouteEquityEtfToTwFirst() {
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class)).thenReturn(reactor.core.publisher.Mono.just(SAMPLE_VALID_CHART_JSON));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        reactor.test.StepVerifier.create(mockClient.fetchTaiwanEtfHistoricalQuotes("0050", "5d"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("0050.TW?"));
+        org.mockito.Mockito.verify(uriSpec, org.mockito.Mockito.never()).uri(org.mockito.ArgumentMatchers.contains("0050.TWO?"));
+    }
+
+    @Test
+    @DisplayName("Should fallback to .TW when bond ETF .TWO is empty")
+    void shouldFallbackWhenBondPrimaryIsEmpty() {
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class)).thenReturn(reactor.core.publisher.Mono.just("{}"));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        reactor.test.StepVerifier.create(mockClient.fetchTaiwanEtfHistoricalQuotes("00720B", "5d"))
+                .verifyComplete();
+
+        org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("00720B.TWO?"));
+        org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("00720B.TW?"));
+    }
+
+    @Test
+    @DisplayName("Should handle 404 NotFound gracefully without throwing exception")
+    void shouldHandle404Gracefully() {
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class))
+                .thenReturn(reactor.core.publisher.Mono.error(
+                        org.springframework.web.reactive.function.client.WebClientResponseException.create(404, "Not Found", null, null, null)));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        reactor.test.StepVerifier.create(mockClient.fetchHistoricalQuotes("UNKNOWN.TW", "5d"))
+                .verifyComplete();
+    }
 }

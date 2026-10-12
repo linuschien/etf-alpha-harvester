@@ -269,6 +269,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             WATERMARK_TAIWAN_ETF_QUOTES, latestRecordDate, watermark.getStatus(), now, daysMissed, allowedGap, hasGap, force);
 
                     Flux<MarketDailyQuote> primaryFlux = metadataRepository.findAll()
+                            .filter(asset -> asset.getFundSizeTwd() != null && asset.getNetAssetValue() != null)
                             .map(GlobalAssetMetadata::getTicker)
                             .collectList()
                             .flatMapMany(externalMarketDataPort::fetchTaiwanEtfDailyQuotes)
@@ -282,6 +283,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                 daysMissed, range);
 
                         backfillFlux = metadataRepository.findAll()
+                                .filter(asset -> asset.getFundSizeTwd() != null && asset.getNetAssetValue() != null)
                                 .map(GlobalAssetMetadata::getTicker)
                                 .collectList()
                                 .flatMapMany(tickers -> Flux.fromIterable(tickers)
@@ -724,6 +726,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     log.info("Executing dividends and splits sync: startDate={}, range='{}'...", startDate, range);
 
                     return metadataRepository.findAll()
+                            .filter(asset -> asset.getFundSizeTwd() != null && asset.getNetAssetValue() != null)
                             .flatMap(asset -> externalMarketDataPort.fetchDividendsAndSplits(asset.getTicker(), range)
                                     .flatMap(res -> {
                                         Mono<Integer> divCount = Flux.fromIterable(res.dividends())
@@ -760,7 +763,7 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                                                 .map(Long::intValue);
 
                                         return Mono.zip(divCount, splitCount, (d, s) -> new int[]{d, s});
-                                    }), 8
+                                    }), 4
                             )
                             .reduce(new int[]{0, 0}, (acc, cur) -> new int[]{acc[0] + cur[0], acc[1] + cur[1]})
                             .flatMap(counts -> {
