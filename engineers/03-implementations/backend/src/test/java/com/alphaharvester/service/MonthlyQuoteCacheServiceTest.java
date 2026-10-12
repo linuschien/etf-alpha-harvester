@@ -390,4 +390,67 @@ class MonthlyQuoteCacheServiceTest {
         assertThat(cacheService.getEntry("0050", YearMonth.of(2026, 2))).isNull();
         assertThat(cacheService.getEntry("0052", YearMonth.of(2026, 1))).isNotNull();
     }
+
+    @Test
+    @DisplayName("Should execute Path 2 incremental refresh: update ONLY current month and leave historical months untouched")
+    void shouldExecutePath2AndLeaveHistoricalMonthsUntouched() {
+        String ticker = "0050";
+        YearMonth currentYm = YearMonth.now();
+        YearMonth prevYm = currentYm.minusMonths(1);
+
+        LocalDateTime prevDate = prevYm.atDay(15).atStartOfDay();
+        MarketDailyQuote prevQuote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                prevDate, new BigDecimal("100"), new BigDecimal("101"),
+                new BigDecimal("99"), new BigDecimal("100"), 1000L, new BigDecimal("100000"));
+
+        MonthlyQuoteCacheEntry prevEntry = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(prevYm.toString())
+                .latestTradeDate(prevDate)
+                .quotes(List.of(prevQuote))
+                .build();
+        cache.put(cacheService.buildCacheKey(ticker, prevYm), prevEntry);
+
+        // Current month has an initial quote on day 5
+        LocalDateTime day5 = currentYm.atDay(5).atStartOfDay();
+        MarketDailyQuote day5Quote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day5, new BigDecimal("101"), new BigDecimal("102"),
+                new BigDecimal("100"), new BigDecimal("101"), 1000L, new BigDecimal("101000"));
+        MonthlyQuoteCacheEntry currentInitial = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(currentYm.toString())
+                .latestTradeDate(day5)
+                .quotes(List.of(day5Quote))
+                .build();
+        cache.put(cacheService.buildCacheKey(ticker, currentYm), currentInitial);
+
+        // Newer quote arrives on day 10
+        LocalDateTime day10 = currentYm.atDay(10).atStartOfDay();
+        MarketDailyQuote day10Quote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day10, new BigDecimal("103"), new BigDecimal("105"),
+                new BigDecimal("102"), new BigDecimal("104"), 1200L, new BigDecimal("124800"));
+
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker))
+                .thenReturn(Mono.just(day10Quote));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(eq(ticker), any(), any()))
+                .thenReturn(Flux.just(prevQuote, day5Quote, day10Quote));
+
+        LocalDateTime start = prevYm.atDay(1).atStartOfDay();
+        LocalDateTime end = currentYm.atEndOfMonth().atTime(23, 59, 59);
+
+        StepVerifier.create(cacheService.getQuoteTimeSeries(ticker, start, end))
+                .expectNextCount(3)
+                .verifyComplete();
+
+        // Verify current month was updated (Path 2)
+        MonthlyQuoteCacheEntry updatedCurrent = cacheService.getEntry(ticker, currentYm);
+        assertThat(updatedCurrent.getLatestTradeDate()).isEqualTo(day10);
+        assertThat(updatedCurrent.getQuotes()).hasSize(2);
+
+        // Verify historical month (prevYm) is STILL the original entry and was NOT overwritten/modified!
+        MonthlyQuoteCacheEntry checkedPrev = cacheService.getEntry(ticker, prevYm);
+        assertThat(checkedPrev).isNotNull();
+        assertThat(checkedPrev.getQuotes()).hasSize(1);
+        assertThat(checkedPrev.getLatestTradeDate()).isEqualTo(prevDate);
+    }
 }

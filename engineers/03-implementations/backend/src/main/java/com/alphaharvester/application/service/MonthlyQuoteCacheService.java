@@ -20,13 +20,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Service managing monthly cached technical indicator quotes backed by Ehcache with disk persistence.
+ * Service managing monthly cached technical indicator quotes backed by Ehcache.
  *
  * Implements:
  * 1. Monthly chunk key format: "{ticker}:{YYYY-MM}"
- * 2. 2-year DB lookback depth for accurate MA20/60/120/240 and Bollinger Bands calculation
- * 3. Corporate action split adjustment for historical continuity across stock split dates
- * 4. Lazy check for the ongoing calendar month against the latest trade date in DB
+ * 2. Immutable Historical Months: Closed months (ym &lt; currentYm) are permanent once cached,
+ *    enjoying the (13 - Delta) months dynamic TTL without being overwritten by daily updates.
+ * 3. Three distinct execution paths:
+ *    - Path 1: 100% Cache Hit (zero DB queries, zero recomputation)
+ *    - Path 2: Isolated Current Month Incremental Refresh (updates ONLY current month, historical untouched)
+ *    - Path 3: Cold Start / Historical Backfill (full lookback initialization for missing historical months)
+ * 4. Corporate action split adjustment for historical continuity across stock split dates
  * 5. Head and tail date boundary slicing across multi-month windows
  */
 @Service
@@ -48,7 +52,7 @@ public class MonthlyQuoteCacheService {
 
     /**
      * Retrieves enriched daily quotes (with MA20/60/120/240 and BB) for a specific date range.
-     * Reuses monthly cached chunks whenever available.
+     * Reuses monthly cached chunks whenever available with strict historical immutability.
      *
      * @param ticker Asset or benchmark ticker symbol (e.g. "0050", "^TWII")
      * @param start  Start timestamp inclusive
@@ -71,136 +75,227 @@ public class MonthlyQuoteCacheService {
             cursor = cursor.plusMonths(1);
         }
 
-        // Check cache for all required months
-        boolean hasMiss = false;
-        for (YearMonth ym : requiredMonths) {
+        List<YearMonth> historicalMonths = requiredMonths.stream()
+                .filter(ym -> ym.isBefore(currentYm))
+                .toList();
+        boolean includesCurrentMonth = requiredMonths.contains(currentYm);
+
+        // Check cache for all historical months (closed months)
+        List<YearMonth> missingHistoricalMonths = new ArrayList<>();
+        for (YearMonth ym : historicalMonths) {
             String key = buildCacheKey(ticker, ym);
             MonthlyQuoteCacheEntry entry = monthlyQuoteCache.get(key);
             if (entry == null) {
-                hasMiss = true;
-                break;
+                missingHistoricalMonths.add(ym);
             }
         }
 
-        // Lazy check for current ongoing month if present in range
-        Mono<Boolean> needsRefreshMono;
-        if (hasMiss) {
-            needsRefreshMono = Mono.just(true);
-        } else if (requiredMonths.contains(currentYm)) {
-            String currentMonthKey = buildCacheKey(ticker, currentYm);
-            MonthlyQuoteCacheEntry currentEntry = monthlyQuoteCache.get(currentMonthKey);
-            needsRefreshMono = quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker)
-                    .map(latestDbQuote -> {
-                        if (currentEntry == null) {
-                            return true;
-                        }
-                        if (latestDbQuote == null || latestDbQuote.getTradeDate() == null) {
-                            return false;
-                        }
-                        YearMonth latestDbYm = YearMonth.from(latestDbQuote.getTradeDate());
+        // ── PATH 3: Cold Start / Historical Backfill ──────────────────────────────────
+        if (!missingHistoricalMonths.isEmpty()) {
+            log.info("[QuoteCache: PATH 3 - Cold Start/Backfill] Ticker {}: missing {} historical months (e.g. {} out of {} required). Triggering full 2-year lookback reload.",
+                    ticker, missingHistoricalMonths.size(), missingHistoricalMonths.get(0), historicalMonths.size());
+            return executeColdStartFullReload(ticker, start, end, requiredMonths);
+        }
+
+        // ── PATH 1: Historical months only (current month not requested) ─────────────
+        if (!includesCurrentMonth) {
+            log.debug("[QuoteCache: PATH 1 - Cache Hit] Ticker {}: all {} requested historical months found in cache, current month not in scope.",
+                    ticker, requiredMonths.size());
+            return extractAndSlice(ticker, requiredMonths, start, end);
+        }
+
+        // ── Ongoing current month check (Path 1 vs Path 2) ───────────────────────────
+        String currentMonthKey = buildCacheKey(ticker, currentYm);
+        MonthlyQuoteCacheEntry currentEntry = monthlyQuoteCache.get(currentMonthKey);
+
+        return quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker)
+                .defaultIfEmpty(new MarketDailyQuote())
+                .flatMapMany(latestDbQuote -> {
+                    boolean isStale;
+                    LocalDateTime latestDbTradeDate = latestDbQuote.getTradeDate();
+
+                    if (currentEntry == null) {
+                        isStale = true;
+                    } else if (latestDbTradeDate == null) {
+                        isStale = false;
+                    } else {
+                        YearMonth latestDbYm = YearMonth.from(latestDbTradeDate);
                         if (latestDbYm.isBefore(currentYm)) {
                             // DB has no records for current ongoing month yet; cache is up-to-date
-                            return false;
+                            isStale = false;
+                        } else if (currentEntry.getLatestTradeDate() == null) {
+                            // DB now has records in ongoing month, but cache had empty entry
+                            isStale = true;
+                        } else {
+                            isStale = latestDbTradeDate.isAfter(currentEntry.getLatestTradeDate());
                         }
-                        if (currentEntry.getLatestTradeDate() == null) {
-                            // DB now has records in ongoing month, but cache had none
-                            return true;
+                    }
+
+                    if (!isStale) {
+                        // ── PATH 1: 100% Cache Hit ──────────────────────────────────────────
+                        log.debug("[QuoteCache: PATH 1 - Cache Hit] Ticker {}: all {} historical months cached, current month {} is up to date (latestTradeDate: {}).",
+                                ticker, historicalMonths.size(), currentYm, currentEntry != null ? currentEntry.getLatestTradeDate() : "N/A");
+                        return extractAndSlice(ticker, requiredMonths, start, end);
+                    }
+
+                    // ── PATH 2: Current Month Isolated Incremental Refresh ──────────────
+                    log.info("[QuoteCache: PATH 2 - Incremental Refresh] Ticker {}: historical {} months fully cached; refreshing only current month {} (cached latest: {}, DB latest: {}).",
+                            ticker, historicalMonths.size(), currentYm,
+                            currentEntry != null ? currentEntry.getLatestTradeDate() : "none",
+                            latestDbTradeDate != null ? latestDbTradeDate : "none");
+
+                    return executeCurrentMonthIncrementalRefresh(ticker, currentYm, requiredMonths, start, end);
+                });
+    }
+
+    /**
+     * Executes Path 2: Refreshes ONLY the ongoing current month, maintaining historical continuity
+     * without modifying, re-querying, or overwriting any closed historical month in the cache.
+     */
+    private Flux<MarketDailyQuote> executeCurrentMonthIncrementalRefresh(
+            String ticker, YearMonth currentYm, List<YearMonth> requiredMonths,
+            LocalDateTime start, LocalDateTime end) {
+
+        LocalDateTime lookbackStart = currentYm.atDay(1).minusYears(1).atStartOfDay();
+
+        Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, lookbackStart, end)
+                .collectList();
+
+        Mono<List<CorporateAction>> splitsMono = (corporateActionRepository != null)
+                ? corporateActionRepository.findByTicker(ticker).collectList()
+                : Mono.just(Collections.emptyList());
+
+        return Mono.zip(quotesMono, splitsMono)
+                .flatMapMany(tuple -> {
+                    List<MarketDailyQuote> rawQuotes = tuple.getT1();
+                    List<CorporateAction> splits = tuple.getT2();
+
+                    if (rawQuotes.isEmpty()) {
+                        monthlyQuoteCache.put(buildCacheKey(ticker, currentYm), MonthlyQuoteCacheEntry.builder()
+                                .ticker(ticker)
+                                .yearMonth(currentYm.toString())
+                                .latestTradeDate(null)
+                                .quotes(Collections.emptyList())
+                                .build());
+                        return extractAndSlice(ticker, requiredMonths, start, end);
+                    }
+
+                    LocalDateTime latestTradeDate = rawQuotes.get(rawQuotes.size() - 1).getTradeDate();
+                    List<CorporateAction> effectiveSplits = (splits != null) ? splits.stream()
+                            .filter(s -> s != null && s.getEffectiveDate() != null
+                                    && (latestTradeDate == null || !s.getEffectiveDate().isAfter(latestTradeDate)))
+                            .toList() : Collections.emptyList();
+
+                    List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
+                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes);
+
+                    // Filter quotes strictly belonging to current month
+                    List<MarketDailyQuote> currentMonthQuotes = enrichedQuotes.stream()
+                            .filter(q -> YearMonth.from(q.getTradeDate()).equals(currentYm))
+                            .toList();
+
+                    LocalDateTime latestTradeDateInMonth = currentMonthQuotes.isEmpty() ? null
+                            : currentMonthQuotes.get(currentMonthQuotes.size() - 1).getTradeDate();
+
+                    MonthlyQuoteCacheEntry currentMonthEntry = MonthlyQuoteCacheEntry.builder()
+                            .ticker(ticker)
+                            .yearMonth(currentYm.toString())
+                            .latestTradeDate(latestTradeDateInMonth)
+                            .quotes(currentMonthQuotes)
+                            .build();
+
+                    // CRITICAL: ONLY update current month! Historical months in cache are 100% UNTOUCHED!
+                    monthlyQuoteCache.put(buildCacheKey(ticker, currentYm), currentMonthEntry);
+                    log.info("[QuoteCache: PATH 2 - Complete] Ticker {}: updated current month {} with {} quotes (latest: {}). Historical months remain untouched.",
+                            ticker, currentYm, currentMonthQuotes.size(), latestTradeDateInMonth);
+
+                    return extractAndSlice(ticker, requiredMonths, start, end);
+                });
+    }
+
+    /**
+     * Executes Path 3: Cold Start full reload when historical months are missing.
+     * Computes all indicators over a 2-year lookback and populates all monthly chunks.
+     */
+    private Flux<MarketDailyQuote> executeColdStartFullReload(
+            String ticker, LocalDateTime start, LocalDateTime end, List<YearMonth> requiredMonths) {
+
+        LocalDateTime lookbackStart = start.minusYears(1).withDayOfMonth(1).toLocalDate().atStartOfDay();
+        log.info("[QuoteCache: PATH 3 - Loading Lookback] Ticker {}: querying lookback window [{} to {}] from DB.",
+                ticker, lookbackStart, end);
+
+        Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, lookbackStart, end)
+                .collectList();
+
+        Mono<List<CorporateAction>> splitsMono = (corporateActionRepository != null)
+                ? corporateActionRepository.findByTicker(ticker).collectList()
+                : Mono.just(Collections.emptyList());
+
+        return Mono.zip(quotesMono, splitsMono)
+                .flatMapMany(tuple -> {
+                    List<MarketDailyQuote> rawQuotes = tuple.getT1();
+                    List<CorporateAction> splits = tuple.getT2();
+
+                    if (rawQuotes.isEmpty()) {
+                        for (YearMonth ym : requiredMonths) {
+                            monthlyQuoteCache.put(buildCacheKey(ticker, ym), MonthlyQuoteCacheEntry.builder()
+                                    .ticker(ticker)
+                                    .yearMonth(ym.toString())
+                                    .latestTradeDate(null)
+                                    .quotes(Collections.emptyList())
+                                    .build());
                         }
-                        return latestDbQuote.getTradeDate().isAfter(currentEntry.getLatestTradeDate());
-                    })
-                    .defaultIfEmpty(false);
-        } else {
-            needsRefreshMono = Mono.just(false);
-        }
+                        return Flux.empty();
+                    }
 
-        return needsRefreshMono.flatMapMany(needsRefresh -> {
-            if (needsRefresh) {
-                // Fetch up to 2-year lookback from DB (start minus 1 year lookback to guarantee 240 trading days)
-                LocalDateTime lookbackStart = start.minusYears(1).withDayOfMonth(1).toLocalDate().atStartOfDay();
-                log.debug("Cache miss/refresh for ticker {}: loading lookback data from {} to {}", ticker, lookbackStart, end);
+                    LocalDateTime latestTradeDate = rawQuotes.get(rawQuotes.size() - 1).getTradeDate();
+                    List<CorporateAction> effectiveSplits = (splits != null) ? splits.stream()
+                            .filter(s -> s != null && s.getEffectiveDate() != null
+                                    && (latestTradeDate == null || !s.getEffectiveDate().isAfter(latestTradeDate)))
+                            .toList() : Collections.emptyList();
 
-                Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, lookbackStart, end)
-                        .collectList();
+                    List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
+                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes);
 
-                Mono<List<CorporateAction>> splitsMono = (corporateActionRepository != null)
-                        ? corporateActionRepository.findByTicker(ticker).collectList()
-                        : Mono.just(Collections.emptyList());
+                    Map<YearMonth, List<MarketDailyQuote>> grouped = enrichedQuotes.stream()
+                            .collect(Collectors.groupingBy(
+                                    q -> YearMonth.from(q.getTradeDate()),
+                                    LinkedHashMap::new,
+                                    Collectors.toList()
+                            ));
 
-                return Mono.zip(quotesMono, splitsMono)
-                        .flatMapMany(tuple -> {
-                            List<MarketDailyQuote> rawQuotes = tuple.getT1();
-                            List<CorporateAction> splits = tuple.getT2();
+                    for (Map.Entry<YearMonth, List<MarketDailyQuote>> entry : grouped.entrySet()) {
+                        YearMonth ym = entry.getKey();
+                        List<MarketDailyQuote> quotesInMonth = entry.getValue();
+                        LocalDateTime latestTradeDateInMonth = quotesInMonth.isEmpty() ? null
+                                : quotesInMonth.get(quotesInMonth.size() - 1).getTradeDate();
 
-                            if (rawQuotes.isEmpty()) {
-                                // Cache empty entries for required months to avoid repeated DB misses
-                                for (YearMonth ym : requiredMonths) {
-                                    monthlyQuoteCache.put(buildCacheKey(ticker, ym), MonthlyQuoteCacheEntry.builder()
-                                            .ticker(ticker)
-                                            .yearMonth(ym.toString())
-                                            .latestTradeDate(null)
-                                            .quotes(Collections.emptyList())
-                                            .build());
-                                }
-                                return Flux.empty();
-                            }
+                        MonthlyQuoteCacheEntry cacheEntry = MonthlyQuoteCacheEntry.builder()
+                                .ticker(ticker)
+                                .yearMonth(ym.toString())
+                                .latestTradeDate(latestTradeDateInMonth)
+                                .quotes(quotesInMonth)
+                                .build();
 
-                            // Filter splits effective on or before the latest quote
-                            LocalDateTime latestTradeDate = rawQuotes.get(rawQuotes.size() - 1).getTradeDate();
-                            List<CorporateAction> effectiveSplits = (splits != null) ? splits.stream()
-                                    .filter(s -> s != null && s.getEffectiveDate() != null
-                                            && (latestTradeDate == null || !s.getEffectiveDate().isAfter(latestTradeDate)))
-                                    .toList() : Collections.emptyList();
+                        monthlyQuoteCache.put(buildCacheKey(ticker, ym), cacheEntry);
+                    }
 
-                            // Adjust raw quotes for historical stock splits
-                            List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
+                    for (YearMonth ym : requiredMonths) {
+                        if (!grouped.containsKey(ym)) {
+                            monthlyQuoteCache.put(buildCacheKey(ticker, ym), MonthlyQuoteCacheEntry.builder()
+                                    .ticker(ticker)
+                                    .yearMonth(ym.toString())
+                                    .latestTradeDate(null)
+                                    .quotes(Collections.emptyList())
+                                    .build());
+                        }
+                    }
 
-                            // Compute technical indicators on the full split-adjusted lookback series
-                            List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes);
+                    log.info("[QuoteCache: PATH 3 - Complete] Ticker {}: initialized {} monthly chunks in cache.",
+                            ticker, grouped.size());
 
-                            // Group quotes by YearMonth
-                            Map<YearMonth, List<MarketDailyQuote>> grouped = enrichedQuotes.stream()
-                                    .collect(Collectors.groupingBy(
-                                            q -> YearMonth.from(q.getTradeDate()),
-                                            LinkedHashMap::new,
-                                            Collectors.toList()
-                                    ));
-
-                            // Populate cache for all months in lookback series
-                            for (Map.Entry<YearMonth, List<MarketDailyQuote>> entry : grouped.entrySet()) {
-                                YearMonth ym = entry.getKey();
-                                List<MarketDailyQuote> quotesInMonth = entry.getValue();
-                                LocalDateTime latestTradeDateInMonth = quotesInMonth.isEmpty() ? null
-                                        : quotesInMonth.get(quotesInMonth.size() - 1).getTradeDate();
-
-                                MonthlyQuoteCacheEntry cacheEntry = MonthlyQuoteCacheEntry.builder()
-                                        .ticker(ticker)
-                                        .yearMonth(ym.toString())
-                                        .latestTradeDate(latestTradeDateInMonth)
-                                        .quotes(quotesInMonth)
-                                        .build();
-
-                                monthlyQuoteCache.put(buildCacheKey(ticker, ym), cacheEntry);
-                            }
-
-                            // Also ensure required months with zero quotes are cached
-                            for (YearMonth ym : requiredMonths) {
-                                if (!grouped.containsKey(ym)) {
-                                    monthlyQuoteCache.put(buildCacheKey(ticker, ym), MonthlyQuoteCacheEntry.builder()
-                                            .ticker(ticker)
-                                            .yearMonth(ym.toString())
-                                            .latestTradeDate(null)
-                                            .quotes(Collections.emptyList())
-                                            .build());
-                                }
-                            }
-
-                            return extractAndSlice(ticker, requiredMonths, start, end);
-                        });
-            } else {
-                log.debug("Cache hit for ticker {} across {} months", ticker, requiredMonths.size());
-                return extractAndSlice(ticker, requiredMonths, start, end);
-            }
-        });
+                    return extractAndSlice(ticker, requiredMonths, start, end);
+                });
     }
 
     private Flux<MarketDailyQuote> extractAndSlice(String ticker, List<YearMonth> requiredMonths,
