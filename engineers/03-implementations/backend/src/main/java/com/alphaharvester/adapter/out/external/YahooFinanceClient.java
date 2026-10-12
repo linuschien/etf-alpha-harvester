@@ -163,19 +163,16 @@ public class YahooFinanceClient {
         String effectiveRange = (range != null && !range.isBlank()) ? range : "1y";
 
         if (ticker.contains(".")) {
-            return fetchDirectDividendsAndSplits(ticker, ticker, effectiveRange);
+            return fetchDirectDividendsAndSplits(ticker, ticker, effectiveRange)
+                    .defaultIfEmpty(new DividendsAndSplits(List.of(), List.of()));
         }
 
         String primarySuffix = ticker.endsWith("B") ? ".TWO" : ".TW";
         String fallbackSuffix = ticker.endsWith("B") ? ".TW" : ".TWO";
 
         return fetchDirectDividendsAndSplits(ticker + primarySuffix, ticker, effectiveRange)
-                .flatMap(res -> {
-                    if (res.dividends().isEmpty() && res.splits().isEmpty()) {
-                        return fetchDirectDividendsAndSplits(ticker + fallbackSuffix, ticker, effectiveRange);
-                    }
-                    return Mono.just(res);
-                });
+                .switchIfEmpty(Mono.defer(() -> fetchDirectDividendsAndSplits(ticker + fallbackSuffix, ticker, effectiveRange)))
+                .defaultIfEmpty(new DividendsAndSplits(List.of(), List.of()));
     }
 
     private Mono<DividendsAndSplits> fetchDirectDividendsAndSplits(String symbol, String ticker, String range) {
@@ -193,9 +190,13 @@ public class YahooFinanceClient {
                         return new DividendsAndSplits(List.of(), List.of());
                     }
                 })
+                .onErrorResume(WebClientResponseException.NotFound.class, e -> {
+                    log.debug("Symbol '{}' not found on Yahoo Finance for dividends/splits (HTTP 404), returning empty.", symbol);
+                    return Mono.empty();
+                })
                 .onErrorResume(e -> {
                     log.debug("Error fetching Yahoo dividends & splits for '{}': {}", symbol, e.getMessage());
-                    return Mono.just(new DividendsAndSplits(List.of(), List.of()));
+                    return Mono.empty();
                 });
     }
 

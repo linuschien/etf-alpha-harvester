@@ -228,4 +228,62 @@ class YahooFinanceClientTest {
         reactor.test.StepVerifier.create(mockClient.fetchHistoricalQuotes("UNKNOWN.TW", "5d"))
                 .verifyComplete();
     }
+
+    @Test
+    @DisplayName("Should NOT trigger fallback when primary dividends query returns 200 OK with no events")
+    void shouldNotTriggerFallbackWhenPrimaryReturnsEmptyEvents() {
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        // Valid JSON with empty events
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class)).thenReturn(reactor.core.publisher.Mono.just("{\"chart\":{\"result\":[{\"events\":{}}]}}"));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        reactor.test.StepVerifier.create(mockClient.fetchDividendsAndSplits("0050", "1mo"))
+                .assertNext(res -> {
+                    assertThat(res.dividends()).isEmpty();
+                    assertThat(res.splits()).isEmpty();
+                })
+                .verifyComplete();
+
+        // Should call 0050.TW once
+        org.mockito.Mockito.verify(uriSpec, org.mockito.Mockito.times(1)).uri(org.mockito.ArgumentMatchers.contains("0050.TW?"));
+        // Should NEVER call 0050.TWO
+        org.mockito.Mockito.verify(uriSpec, org.mockito.Mockito.never()).uri(org.mockito.ArgumentMatchers.contains("0050.TWO?"));
+    }
+
+    @Test
+    @DisplayName("Should trigger fallback when primary dividends query returns 404 NotFound")
+    void shouldTriggerFallbackWhenPrimaryReturns404() {
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class))
+                .thenReturn(reactor.core.publisher.Mono.error(
+                        org.springframework.web.reactive.function.client.WebClientResponseException.create(404, "Not Found", null, null, null)));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        reactor.test.StepVerifier.create(mockClient.fetchDividendsAndSplits("00720B", "1mo"))
+                .assertNext(res -> {
+                    assertThat(res.dividends()).isEmpty();
+                    assertThat(res.splits()).isEmpty();
+                })
+                .verifyComplete();
+
+        // 00720B is a bond ETF, so primary is .TWO, fallback is .TW
+        org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("00720B.TWO?"));
+        org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("00720B.TW?"));
+    }
 }

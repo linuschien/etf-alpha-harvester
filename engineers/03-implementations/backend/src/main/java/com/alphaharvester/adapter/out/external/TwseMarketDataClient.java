@@ -43,7 +43,7 @@ public class TwseMarketDataClient {
     private static final String TWSE_MASTER_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap47_L";
     private static final String TWSE_QUOTES_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL";
     private static final String TWSE_MIS_NAV_URL = "https://mis.twse.com.tw/stock/data/all_etf.txt";
-    private static final String TWSE_DCA_URL = "https://openapi.twse.com.tw/v1/ETFReport/ETFRank";
+    private static final String TWSE_DCA_URL = "https://www.twse.com.tw/rwd/zh/brokerService/ETFRank";
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
@@ -153,21 +153,48 @@ public class TwseMarketDataClient {
     }
 
     /**
-     * Fetches regular quota (DCA) Top 20 ETF rankings from TWSE OpenAPI.
+     * Fetches regular quota (DCA) Top 20 ETF rankings from official TWSE brokerService endpoint.
+     * Note: OpenAPI (/ETFReport/ETFRank) is NOT used due to severe cache staleness and lack of date parameters.
      */
     public Flux<DcaPopularityRank> fetchDcaRankings(int year, int month) {
-        return fetchJsonArray(TWSE_DCA_URL)
-                .map(node -> {
-                    int rank = node.path("No").asInt(0);
-                    String etfSymbol = node.path("ETFsSecurityCode").asText("").trim();
-                    int accounts = (int) parseLongSafe(node.path("ETFsNumberofTradingAccounts").asText("0"));
-
-                    return new DcaPopularityRank(
-                            null, null, etfSymbol, year, month, rank, accounts
-                    );
+        String url = TWSE_DCA_URL + "?date=" + String.format("%04d%02d01", year, month);
+        return webClient.get()
+                .uri(url)
+                .retrieve()
+                .bodyToMono(String.class)
+                .retryWhen(RETRY_SPEC)
+                .flatMapMany(jsonStr -> {
+                    try {
+                        JsonNode root = objectMapper.readTree(jsonStr);
+                        if (root == null || !"OK".equalsIgnoreCase(root.path("stat").asText())) {
+                            log.warn("TWSE DCA rankings query for {}-{} returned non-OK status: {}",
+                                    year, month, root != null ? root.path("stat").asText() : "null");
+                            return Flux.empty();
+                        }
+                        JsonNode dataArray = root.path("data");
+                        if (dataArray == null || !dataArray.isArray()) {
+                            return Flux.empty();
+                        }
+                        List<DcaPopularityRank> list = new ArrayList<>();
+                        for (JsonNode row : dataArray) {
+                            if (row.isArray() && row.size() >= 7) {
+                                int rank = row.get(0).asInt(0);
+                                String etfSymbol = row.get(4).asText("").trim();
+                                int accounts = (int) parseLongSafe(row.get(6).asText("0"));
+                                if (!etfSymbol.isBlank() && rank > 0) {
+                                    list.add(new DcaPopularityRank(
+                                            null, null, etfSymbol, year, month, rank, accounts
+                                    ));
+                                }
+                            }
+                        }
+                        return Flux.fromIterable(list);
+                    } catch (Exception e) {
+                        log.error("Failed to parse TWSE DCA rankings for {}-{}: {}", year, month, e.getMessage(), e);
+                        return Flux.empty();
+                    }
                 })
-                .filter(r -> !r.getTicker().isBlank() && r.getRankPosition() > 0)
-                .doOnError(e -> log.error("Failed to fetch TWSE DCA rankings: {}", e.getMessage(), e));
+                .doOnError(e -> log.error("Failed to fetch TWSE DCA rankings for {}-{}: {}", year, month, e.getMessage(), e));
     }
 
     private Flux<JsonNode> fetchJsonArray(String url) {

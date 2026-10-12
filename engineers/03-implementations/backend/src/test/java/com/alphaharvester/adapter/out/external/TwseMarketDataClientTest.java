@@ -144,29 +144,19 @@ class TwseMarketDataClientTest {
     }
 
     @Test
-    @DisplayName("Should fetch DCA rankings from TWSE and parse No, ETFsSecurityCode, and accounts")
+    @DisplayName("Should fetch DCA rankings from TWSE brokerService and parse rank, symbol, and accounts")
     void shouldFetchDcaRankings() throws Exception {
         String json = """
-                [
-                  {
-                    "No": "1",
-                    "STOCKsSecurityCode": "2330",
-                    "STOCKsName": "台積電",
-                    "STOCKsNumberofTradingAccounts": "231711",
-                    "ETFsSecurityCode": "0050",
-                    "ETFsName": "元大台灣50",
-                    "ETFsNumberofTradingAccounts": "1280028"
-                  },
-                  {
-                    "No": "2",
-                    "STOCKsSecurityCode": "2884",
-                    "STOCKsName": "玉山金",
-                    "STOCKsNumberofTradingAccounts": "27261",
-                    "ETFsSecurityCode": "0056",
-                    "ETFsName": "元大高股息",
-                    "ETFsNumberofTradingAccounts": "338456"
-                  }
-                ]
+                {
+                  "stat": "OK",
+                  "title": "115年08月 定期定額交易戶數統計排行月報表",
+                  "fields": [" ", "代號", "名稱", "交易戶數", "代號", "名稱", "交易戶數"],
+                  "date": "20260801",
+                  "data": [
+                    ["1", "2330", "台積電", "231,711", "0050", "元大台灣50", "1,280,028"],
+                    ["2", "2884", "玉山金", "27,261", "0056", "元大高股息", "338,456"]
+                  ]
+                }
                 """;
 
         when(webClient.get()).thenReturn(requestHeadersUriSpec);
@@ -189,6 +179,26 @@ class TwseMarketDataClientTest {
                     assertThat(rank.getRankingYear()).isEqualTo(2026);
                     assertThat(rank.getRankingMonth()).isEqualTo(8);
                 })
+                .verifyComplete();
+
+        org.mockito.Mockito.verify(requestHeadersUriSpec).uri(org.mockito.ArgumentMatchers.contains("date=20260801"));
+    }
+
+    @Test
+    @DisplayName("Should return empty flux when TWSE brokerService returns non-OK status")
+    void shouldReturnEmptyWhenDcaNonOkStatus() {
+        String json = """
+                {
+                  "stat": "查詢區間大於資料庫最大月份，請重新查詢!"
+                }
+                """;
+
+        when(webClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(json));
+
+        StepVerifier.create(client.fetchDcaRankings(2026, 10))
                 .verifyComplete();
     }
 
