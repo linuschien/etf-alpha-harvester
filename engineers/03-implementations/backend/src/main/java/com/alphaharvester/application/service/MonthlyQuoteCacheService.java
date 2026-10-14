@@ -156,7 +156,8 @@ public class MonthlyQuoteCacheService {
             String ticker, YearMonth currentYm, List<YearMonth> requiredMonths,
             LocalDateTime start, LocalDateTime end) {
 
-        LocalDateTime lookbackStart = currentYm.atDay(1).minusYears(1).atStartOfDay();
+        LocalDateTime currentMonthStart = currentYm.atDay(1).atStartOfDay();
+        LocalDateTime lookbackStart = currentMonthStart.minusYears(1);
 
         Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, lookbackStart, end)
                 .collectList();
@@ -187,7 +188,7 @@ public class MonthlyQuoteCacheService {
                             .toList() : Collections.emptyList();
 
                     List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
-                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes);
+                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes, currentMonthStart);
 
                     // Filter quotes strictly belonging to current month
                     List<MarketDailyQuote> currentMonthQuotes = enrichedQuotes.stream()
@@ -254,19 +255,20 @@ public class MonthlyQuoteCacheService {
                                     && (latestTradeDate == null || !s.getEffectiveDate().isAfter(latestTradeDate)))
                             .toList() : Collections.emptyList();
 
+                    LocalDateTime effectiveStart = requiredMonths.get(0).atDay(1).atStartOfDay();
                     List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
-                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes);
+                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes, effectiveStart);
 
                     Map<YearMonth, List<MarketDailyQuote>> grouped = enrichedQuotes.stream()
+                            .filter(q -> q.getTradeDate() != null && !q.getTradeDate().isBefore(effectiveStart))
                             .collect(Collectors.groupingBy(
                                     q -> YearMonth.from(q.getTradeDate()),
                                     LinkedHashMap::new,
                                     Collectors.toList()
                             ));
 
-                    for (Map.Entry<YearMonth, List<MarketDailyQuote>> entry : grouped.entrySet()) {
-                        YearMonth ym = entry.getKey();
-                        List<MarketDailyQuote> quotesInMonth = entry.getValue();
+                    for (YearMonth ym : requiredMonths) {
+                        List<MarketDailyQuote> quotesInMonth = grouped.getOrDefault(ym, Collections.emptyList());
                         LocalDateTime latestTradeDateInMonth = quotesInMonth.isEmpty() ? null
                                 : quotesInMonth.get(quotesInMonth.size() - 1).getTradeDate();
 
@@ -280,19 +282,8 @@ public class MonthlyQuoteCacheService {
                         monthlyQuoteCache.put(buildCacheKey(ticker, ym), cacheEntry);
                     }
 
-                    for (YearMonth ym : requiredMonths) {
-                        if (!grouped.containsKey(ym)) {
-                            monthlyQuoteCache.put(buildCacheKey(ticker, ym), MonthlyQuoteCacheEntry.builder()
-                                    .ticker(ticker)
-                                    .yearMonth(ym.toString())
-                                    .latestTradeDate(null)
-                                    .quotes(Collections.emptyList())
-                                    .build());
-                        }
-                    }
-
-                    log.info("[QuoteCache: PATH 3 - Complete] Ticker {}: initialized {} monthly chunks in cache.",
-                            ticker, grouped.size());
+                    log.info("[QuoteCache: PATH 3 - Complete] Ticker {}: initialized {} monthly chunks in cache (skipped warmup lookback).",
+                            ticker, requiredMonths.size());
 
                     return extractAndSlice(ticker, requiredMonths, start, end);
                 });

@@ -132,6 +132,9 @@ class MonthlyQuoteCacheServiceTest {
         assertThat(entryFeb).isNotNull();
         assertThat(entryFeb.getQuotes()).hasSize(20);
 
+        // Verify warmup lookback months (e.g. 2025-01) were NOT stored into cache
+        assertThat(cacheService.getEntry(ticker, YearMonth.of(2025, 1))).isNull();
+
         // Second call: Cache Hit (Repository should NOT be queried again for lookback)
         reset(quoteRepository);
 

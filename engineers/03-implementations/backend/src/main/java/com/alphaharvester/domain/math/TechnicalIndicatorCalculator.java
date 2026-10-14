@@ -4,6 +4,7 @@ import com.alphaharvester.domain.entity.MarketDailyQuote;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -22,14 +23,17 @@ public final class TechnicalIndicatorCalculator {
         // Utility class
     }
 
+
     /**
      * Calculates rolling MA20, MA60, MA120, MA240 and 20-day Bollinger Bands (Upper, Middle, Lower)
-     * for a list of daily quotes. Quotes are sorted chronologically by tradeDate ascending.
+     * for quotes on or after effectiveStart. Quotes prior to effectiveStart serve purely as a
+     * read-only price sliding window to compute indicators without wasting CPU on warmup dates.
      *
-     * @param quotes Raw market daily quotes (minimum 1 quote; indicators populate when sufficient history is available)
+     * @param quotes Raw market daily quotes
+     * @param effectiveStart Earliest date for which technical indicators need to be computed (null to compute for all)
      * @return List of quotes enriched with transient technical indicator values
      */
-    public static List<MarketDailyQuote> calculateIndicators(List<MarketDailyQuote> quotes) {
+    public static List<MarketDailyQuote> calculateIndicators(List<MarketDailyQuote> quotes, LocalDateTime effectiveStart) {
         if (quotes == null || quotes.isEmpty()) {
             return Collections.emptyList();
         }
@@ -41,6 +45,11 @@ public final class TechnicalIndicatorCalculator {
 
         for (int i = 0; i < n; i++) {
             MarketDailyQuote current = sorted.get(i);
+
+            if (effectiveStart != null && current.getTradeDate() != null && current.getTradeDate().isBefore(effectiveStart)) {
+                // Warmup lookback window: keep raw prices, skip expensive indicator calculations
+                continue;
+            }
 
             // MA20 & Bollinger Bands (requires at least 20 trading days)
             if (i >= 19) {

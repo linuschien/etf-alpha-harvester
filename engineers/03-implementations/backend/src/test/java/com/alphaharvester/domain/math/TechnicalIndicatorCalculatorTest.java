@@ -18,8 +18,8 @@ class TechnicalIndicatorCalculatorTest {
     @Test
     @DisplayName("Should return empty list when given null or empty quotes")
     void shouldHandleNullOrEmptyQuotes() {
-        assertThat(TechnicalIndicatorCalculator.calculateIndicators(null)).isEmpty();
-        assertThat(TechnicalIndicatorCalculator.calculateIndicators(Collections.emptyList())).isEmpty();
+        assertThat(TechnicalIndicatorCalculator.calculateIndicators(null, null)).isEmpty();
+        assertThat(TechnicalIndicatorCalculator.calculateIndicators(Collections.emptyList(), null)).isEmpty();
     }
 
     @Test
@@ -36,7 +36,7 @@ class TechnicalIndicatorCalculatorTest {
             quotes.add(q);
         }
 
-        List<MarketDailyQuote> result = TechnicalIndicatorCalculator.calculateIndicators(quotes);
+        List<MarketDailyQuote> result = TechnicalIndicatorCalculator.calculateIndicators(quotes, null);
 
         assertThat(result).hasSize(25);
 
@@ -76,7 +76,7 @@ class TechnicalIndicatorCalculatorTest {
             quotes.add(q);
         }
 
-        List<MarketDailyQuote> result = TechnicalIndicatorCalculator.calculateIndicators(quotes);
+        List<MarketDailyQuote> result = TechnicalIndicatorCalculator.calculateIndicators(quotes, null);
         MarketDailyQuote q19 = result.get(19);
 
         // Mean = 105.0000
@@ -103,7 +103,7 @@ class TechnicalIndicatorCalculatorTest {
             quotes.add(q);
         }
 
-        List<MarketDailyQuote> result = TechnicalIndicatorCalculator.calculateIndicators(quotes);
+        List<MarketDailyQuote> result = TechnicalIndicatorCalculator.calculateIndicators(quotes, null);
 
         // Check index 58 (< 60) vs 59 (== 60)
         assertThat(result.get(58).getMa60()).isNull();
@@ -122,5 +122,43 @@ class TechnicalIndicatorCalculatorTest {
         assertThat(result.get(239).getMa240()).isNotNull();
         // Sum of 1..240 = 240 * 241 / 2 = 28920; 28920 / 240 = 120.5
         assertThat(result.get(239).getMa240()).isEqualByComparingTo("120.5000");
+    }
+
+    @Test
+    @DisplayName("Should skip indicator calculation for quotes prior to effectiveStart while using them as lookback window")
+    void shouldSkipWarmupCalculationsWhenEffectiveStartProvided() {
+        List<MarketDailyQuote> quotes = new ArrayList<>();
+        LocalDateTime base = LocalDateTime.of(2025, 1, 1, 0, 0);
+
+        // Generate 250 daily quotes with constant close price of 100.00
+        for (int i = 0; i < 250; i++) {
+            MarketDailyQuote q = new MarketDailyQuote();
+            q.setTradeDate(base.plusDays(i));
+            q.setClosePrice(BigDecimal.valueOf(100.00).setScale(4, RoundingMode.HALF_UP));
+            quotes.add(q);
+        }
+
+        // effectiveStart is day 240 (index 240)
+        LocalDateTime effectiveStart = base.plusDays(240);
+        List<MarketDailyQuote> result = TechnicalIndicatorCalculator.calculateIndicators(quotes, effectiveStart);
+
+        assertThat(result).hasSize(250);
+
+        // Prior to effectiveStart (index 0..239): indicators should be skipped and remain null
+        for (int i = 0; i < 240; i++) {
+            assertThat(result.get(i).getMa20()).isNull();
+            assertThat(result.get(i).getMa60()).isNull();
+            assertThat(result.get(i).getMa120()).isNull();
+            assertThat(result.get(i).getMa240()).isNull();
+            assertThat(result.get(i).getBbMiddle()).isNull();
+        }
+
+        // On/after effectiveStart (index 240): MA240, MA120, MA60, MA20 are all calculated using the 240-day warmup history
+        MarketDailyQuote q240 = result.get(240);
+        assertThat(q240.getMa20()).isEqualByComparingTo("100.0000");
+        assertThat(q240.getMa60()).isEqualByComparingTo("100.0000");
+        assertThat(q240.getMa120()).isEqualByComparingTo("100.0000");
+        assertThat(q240.getMa240()).isEqualByComparingTo("100.0000");
+        assertThat(q240.getBbMiddle()).isEqualByComparingTo("100.0000");
     }
 }
