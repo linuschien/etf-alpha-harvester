@@ -1,10 +1,12 @@
 package com.alphaharvester.infrastructure.config;
 
+import com.alphaharvester.infrastructure.cache.MonthlyQuoteDbCacheLoaderWriter;
 import org.ehcache.Cache;
 import org.ehcache.CacheManager;
 import org.ehcache.Status;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,7 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EhcacheConfigTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withUserConfiguration(EhcacheConfig.class);
+            .withUserConfiguration(EhcacheConfig.class)
+            .withBean(MonthlyQuoteDbCacheLoaderWriter.class, () -> Mockito.mock(MonthlyQuoteDbCacheLoaderWriter.class));
 
     @Test
     @DisplayName("Should cleanly initialize and close CacheManager and MonthlyQuoteCache without StateTransitionException")

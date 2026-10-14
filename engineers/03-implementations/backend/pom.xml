@@ -67,6 +67,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- HikariCP Connection Pool for Database Persistence -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+
         <!-- R2DBC H2 Driver for Reactive Database Connection (PostgreSQL Mode) -->
         <dependency>
             <groupId>io.r2dbc</groupId>
