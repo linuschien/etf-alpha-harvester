@@ -422,4 +422,179 @@ class MonthlyQuoteCacheServiceTest {
         assertThat(checkedPrev.getQuotes()).hasSize(1);
         assertThat(checkedPrev.getLatestTradeDate()).isEqualTo(prevDate);
     }
+
+    @Test
+    @DisplayName("Should auto-heal incomplete last month in Path 2 when DB has newer trade dates in last month")
+    void shouldAutoHealIncompleteLastMonthInPath2() {
+        String ticker = "0050";
+        YearMonth currentYm = YearMonth.now();
+        YearMonth prevYm = currentYm.minusMonths(1);
+
+        // Preload last month cache with only partial data (up to day 10)
+        LocalDateTime day10 = prevYm.atDay(10).atStartOfDay();
+        MarketDailyQuote prevQuote10 = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day10, new BigDecimal("100"), new BigDecimal("101"),
+                new BigDecimal("99"), new BigDecimal("100"), 1000L, new BigDecimal("100000"));
+        MonthlyQuoteCacheEntry incompletePrev = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(prevYm.toString())
+                .latestTradeDate(day10)
+                .quotes(List.of(prevQuote10))
+                .build();
+        cache.put(cacheService.buildCacheKey(ticker, prevYm), incompletePrev);
+
+        // Current month cache is empty/stale, latest quote in DB is day 5 of current month
+        LocalDateTime currentDay5 = currentYm.atDay(5).atStartOfDay();
+        MarketDailyQuote currentQuote5 = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                currentDay5, new BigDecimal("102"), new BigDecimal("104"),
+                new BigDecimal("101"), new BigDecimal("103"), 1500L, new BigDecimal("154500"));
+
+        // In DB, last month actually had another quote on day 28 (which was missed in cache)
+        LocalDateTime day28 = prevYm.atDay(28).atStartOfDay();
+        MarketDailyQuote prevQuote28 = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day28, new BigDecimal("101"), new BigDecimal("103"),
+                new BigDecimal("100"), new BigDecimal("102"), 1200L, new BigDecimal("122400"));
+
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker))
+                .thenReturn(Mono.just(currentQuote5));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(eq(ticker), any(), any()))
+                .thenReturn(Flux.just(prevQuote10, prevQuote28, currentQuote5));
+
+        LocalDateTime start = prevYm.atDay(1).atStartOfDay();
+        LocalDateTime end = currentYm.atEndOfMonth().atTime(23, 59, 59);
+
+        StepVerifier.create(cacheService.getQuoteTimeSeries(ticker, start, end))
+                .expectNextCount(3)
+                .verifyComplete();
+
+        // Verify last month was auto-healed in place with day 28 quote!
+        MonthlyQuoteCacheEntry healedPrev = cacheService.getEntry(ticker, prevYm);
+        assertThat(healedPrev).isNotNull();
+        assertThat(healedPrev.getLatestTradeDate()).isEqualTo(day28);
+        assertThat(healedPrev.getQuotes()).hasSize(2);
+
+        // Verify current month was also updated
+        MonthlyQuoteCacheEntry updatedCurrent = cacheService.getEntry(ticker, currentYm);
+        assertThat(updatedCurrent).isNotNull();
+        assertThat(updatedCurrent.getLatestTradeDate()).isEqualTo(currentDay5);
+        assertThat(updatedCurrent.getQuotes()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Should trigger Path 3 cold reload when effective split crosses cache date")
+    void shouldTriggerPath3WhenSplitCrossesCacheDate() {
+        String ticker = "0050";
+        YearMonth currentYm = YearMonth.now();
+        YearMonth prevYm = currentYm.minusMonths(1);
+
+        // Cache has quotes up to day 5
+        LocalDateTime day5 = currentYm.atDay(5).atStartOfDay();
+        MarketDailyQuote day5Quote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day5, new BigDecimal("160"), new BigDecimal("162"),
+                new BigDecimal("159"), new BigDecimal("160"), 1000L, new BigDecimal("160000"));
+        MonthlyQuoteCacheEntry currentInitial = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(currentYm.toString())
+                .latestTradeDate(day5)
+                .quotes(List.of(day5Quote))
+                .build();
+        cache.put(cacheService.buildCacheKey(ticker, currentYm), currentInitial);
+
+        MonthlyQuoteCacheEntry prevEntry = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(prevYm.toString())
+                .latestTradeDate(prevYm.atDay(28).atStartOfDay())
+                .quotes(List.of())
+                .build();
+        cache.put(cacheService.buildCacheKey(ticker, prevYm), prevEntry);
+
+        // Split takes effect on day 8 (1:4 split)
+        LocalDateTime day8 = currentYm.atDay(8).atStartOfDay();
+        CorporateAction split = new CorporateAction(UUID.randomUUID(), null, ticker,
+                CorporateActionType.SPLIT, day8, 4, 1);
+        when(corporateActionRepository.findByTicker(ticker)).thenReturn(Flux.just(split));
+
+        // DB latest quote is day 10 (post-split price = 40)
+        LocalDateTime day10 = currentYm.atDay(10).atStartOfDay();
+        MarketDailyQuote day10Quote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day10, new BigDecimal("40"), new BigDecimal("41"),
+                new BigDecimal("39"), new BigDecimal("40"), 2000L, new BigDecimal("80000"));
+
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker))
+                .thenReturn(Mono.just(day10Quote));
+
+        // For Path 3 full reload, DB returns all quotes
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(eq(ticker), any(), any()))
+                .thenReturn(Flux.just(day5Quote, day10Quote));
+
+        LocalDateTime start = prevYm.atDay(1).atStartOfDay();
+        LocalDateTime end = currentYm.atEndOfMonth().atTime(23, 59, 59);
+
+        StepVerifier.create(cacheService.getQuoteTimeSeries(ticker, start, end))
+                .expectNextCount(2)
+                .verifyComplete();
+
+        // Verify Path 3 reloaded and updated cache with split applied
+        MonthlyQuoteCacheEntry updated = cacheService.getEntry(ticker, currentYm);
+        assertThat(updated).isNotNull();
+        assertThat(updated.getLatestTradeDate()).isEqualTo(day10);
+    }
+
+    @Test
+    @DisplayName("Should not trigger Path 3 if cache has already crossed the split effective date")
+    void shouldNotTriggerPath3WhenSplitAlreadyCrossedByCache() {
+        String ticker = "0050";
+        YearMonth currentYm = YearMonth.now();
+        YearMonth prevYm = currentYm.minusMonths(1);
+
+        // Split took effect on day 3
+        LocalDateTime day3 = currentYm.atDay(3).atStartOfDay();
+        CorporateAction split = new CorporateAction(UUID.randomUUID(), null, ticker,
+                CorporateActionType.SPLIT, day3, 4, 1);
+        when(corporateActionRepository.findByTicker(ticker)).thenReturn(Flux.just(split));
+
+        // Cache was already updated on day 5 (already post-split)
+        LocalDateTime day5 = currentYm.atDay(5).atStartOfDay();
+        MarketDailyQuote day5Quote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day5, new BigDecimal("40"), new BigDecimal("41"),
+                new BigDecimal("39"), new BigDecimal("40"), 1000L, new BigDecimal("40000"));
+        MonthlyQuoteCacheEntry currentInitial = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(currentYm.toString())
+                .latestTradeDate(day5)
+                .quotes(List.of(day5Quote))
+                .build();
+        cache.put(cacheService.buildCacheKey(ticker, currentYm), currentInitial);
+
+        MonthlyQuoteCacheEntry prevEntry = MonthlyQuoteCacheEntry.builder()
+                .ticker(ticker)
+                .yearMonth(prevYm.toString())
+                .latestTradeDate(prevYm.atDay(28).atStartOfDay())
+                .quotes(List.of())
+                .build();
+        cache.put(cacheService.buildCacheKey(ticker, prevYm), prevEntry);
+
+        // DB latest quote is day 10
+        LocalDateTime day10 = currentYm.atDay(10).atStartOfDay();
+        MarketDailyQuote day10Quote = new MarketDailyQuote(UUID.randomUUID(), null, null, ticker,
+                day10, new BigDecimal("41"), new BigDecimal("42"),
+                new BigDecimal("40"), new BigDecimal("41"), 1200L, new BigDecimal("49200"));
+
+        when(quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker))
+                .thenReturn(Mono.just(day10Quote));
+        when(quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(eq(ticker), any(), any()))
+                .thenReturn(Flux.just(day5Quote, day10Quote));
+
+        LocalDateTime start = prevYm.atDay(1).atStartOfDay();
+        LocalDateTime end = currentYm.atEndOfMonth().atTime(23, 59, 59);
+
+        StepVerifier.create(cacheService.getQuoteTimeSeries(ticker, start, end))
+                .expectNextCount(2)
+                .verifyComplete();
+
+        // Cache latest trade date updated to day 10 via Path 2 (incremental refresh, not Path 3 cold start)
+        MonthlyQuoteCacheEntry updated = cacheService.getEntry(ticker, currentYm);
+        assertThat(updated).isNotNull();
+        assertThat(updated.getLatestTradeDate()).isEqualTo(day10);
+    }
 }

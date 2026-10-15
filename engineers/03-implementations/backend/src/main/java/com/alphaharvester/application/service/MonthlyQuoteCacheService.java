@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.*;
@@ -108,12 +109,47 @@ public class MonthlyQuoteCacheService {
         String currentMonthKey = buildCacheKey(ticker, currentYm);
         MonthlyQuoteCacheEntry currentEntry = monthlyQuoteCache.get(currentMonthKey);
 
-        return quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker)
-                .defaultIfEmpty(new MarketDailyQuote())
-                .flatMapMany(latestDbQuote -> {
-                    boolean isStale;
+        Mono<MarketDailyQuote> latestDbQuoteMono = quoteRepository.findFirstByTickerOrderByTradeDateDesc(ticker)
+                .defaultIfEmpty(new MarketDailyQuote());
+        Mono<List<CorporateAction>> splitsMono = (corporateActionRepository != null)
+                ? corporateActionRepository.findByTicker(ticker).collectList()
+                : Mono.just(Collections.emptyList());
+
+        return Mono.zip(latestDbQuoteMono, splitsMono)
+                .flatMapMany(tuple -> {
+                    MarketDailyQuote latestDbQuote = tuple.getT1();
+                    List<CorporateAction> splits = tuple.getT2();
                     LocalDateTime latestDbTradeDate = latestDbQuote.getTradeDate();
 
+                    // ── Split Timeline Inequality Check: cacheDate.toLocalDate() < splitDate.toLocalDate() <= dbDate.toLocalDate() ──
+                    LocalDateTime effectiveCacheTradeDate = (currentEntry != null) ? currentEntry.getLatestTradeDate() : null;
+                    if (effectiveCacheTradeDate == null) {
+                        MonthlyQuoteCacheEntry lastMonthEntry = monthlyQuoteCache.get(buildCacheKey(ticker, currentYm.minusMonths(1)));
+                        if (lastMonthEntry != null) {
+                            effectiveCacheTradeDate = lastMonthEntry.getLatestTradeDate();
+                        }
+                    }
+
+                    if (effectiveCacheTradeDate != null && latestDbTradeDate != null && splits != null && !splits.isEmpty()) {
+                        LocalDate cacheDate = effectiveCacheTradeDate.toLocalDate();
+                        LocalDate dbDate = latestDbTradeDate.toLocalDate();
+
+                        boolean hasUnappliedSplit = splits.stream().anyMatch(split -> {
+                            if (split == null || split.getEffectiveDate() == null) {
+                                return false;
+                            }
+                            LocalDate splitDate = split.getEffectiveDate().toLocalDate();
+                            return cacheDate.isBefore(splitDate) && !dbDate.isBefore(splitDate);
+                        });
+
+                        if (hasUnappliedSplit) {
+                            log.info("[QuoteCache: PATH 3 - Split Detected] Ticker {}: effective split detected crossing cache date ({}) and DB date ({}). Triggering full reload.",
+                                    ticker, cacheDate, dbDate);
+                            return executeColdStartFullReload(ticker, start, end, requiredMonths);
+                        }
+                    }
+
+                    boolean isStale;
                     if (currentEntry == null) {
                         isStale = true;
                     } else if (latestDbTradeDate == null) {
@@ -138,8 +174,8 @@ public class MonthlyQuoteCacheService {
                         return extractAndSlice(ticker, requiredMonths, start, end);
                     }
 
-                    // ── PATH 2: Current Month Isolated Incremental Refresh ──────────────
-                    log.info("[QuoteCache: PATH 2 - Incremental Refresh] Ticker {}: historical {} months fully cached; refreshing only current month {} (cached latest: {}, DB latest: {}).",
+                    // ── PATH 2: Current Month Isolated Incremental Refresh with In-Place Healing ──
+                    log.info("[QuoteCache: PATH 2 - Incremental Refresh] Ticker {}: historical {} months fully cached; refreshing current month {} (cached latest: {}, DB latest: {}).",
                             ticker, historicalMonths.size(), currentYm,
                             currentEntry != null ? currentEntry.getLatestTradeDate() : "none",
                             latestDbTradeDate != null ? latestDbTradeDate : "none");
@@ -149,15 +185,18 @@ public class MonthlyQuoteCacheService {
     }
 
     /**
-     * Executes Path 2: Refreshes ONLY the ongoing current month, maintaining historical continuity
-     * without modifying, re-querying, or overwriting any closed historical month in the cache.
+     * Executes Path 2: Refreshes ongoing current month and auto-heals incomplete last month in-place,
+     * maintaining historical continuity without requiring full cold start.
      */
     private Flux<MarketDailyQuote> executeCurrentMonthIncrementalRefresh(
             String ticker, YearMonth currentYm, List<YearMonth> requiredMonths,
             LocalDateTime start, LocalDateTime end) {
 
         LocalDateTime currentMonthStart = currentYm.atDay(1).atStartOfDay();
-        LocalDateTime lookbackStart = currentMonthStart.minusYears(1);
+        YearMonth lastYm = currentYm.minusMonths(1);
+        LocalDateTime lastMonthStart = lastYm.atDay(1).atStartOfDay();
+        // 14 months lookback: 2 months safety buffer before 1 year to guarantee >= 240 trading days for MA240
+        LocalDateTime lookbackStart = currentMonthStart.minusMonths(2).minusYears(1);
 
         Mono<List<MarketDailyQuote>> quotesMono = quoteRepository.findByTickerAndTradeDateBetweenOrderByTradeDateAsc(ticker, lookbackStart, end)
                 .collectList();
@@ -187,8 +226,37 @@ public class MonthlyQuoteCacheService {
                                     && (latestTradeDate == null || !s.getEffectiveDate().isAfter(latestTradeDate)))
                             .toList() : Collections.emptyList();
 
+                    // Check last month integrity from rawQuotes
+                    List<MarketDailyQuote> lastMonthDbQuotes = rawQuotes.stream()
+                            .filter(q -> YearMonth.from(q.getTradeDate()).equals(lastYm))
+                            .toList();
+                    LocalDateTime lastMonthDbLatestTradeDate = lastMonthDbQuotes.isEmpty() ? null
+                            : lastMonthDbQuotes.get(lastMonthDbQuotes.size() - 1).getTradeDate();
+
+                    MonthlyQuoteCacheEntry lastMonthEntry = monthlyQuoteCache.get(buildCacheKey(ticker, lastYm));
+                    boolean lastMonthNeedsRepair = lastMonthDbLatestTradeDate != null
+                            && (lastMonthEntry == null || lastMonthEntry.getLatestTradeDate() == null
+                                || lastMonthEntry.getLatestTradeDate().isBefore(lastMonthDbLatestTradeDate));
+
+                    LocalDateTime effectiveStart = lastMonthNeedsRepair ? lastMonthStart : currentMonthStart;
+
                     List<MarketDailyQuote> adjustedQuotes = FinancialMetricsCalculator.adjustQuotesForSplits(rawQuotes, effectiveSplits);
-                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes, currentMonthStart);
+                    List<MarketDailyQuote> enrichedQuotes = TechnicalIndicatorCalculator.calculateIndicators(adjustedQuotes, effectiveStart);
+
+                    if (lastMonthNeedsRepair) {
+                        List<MarketDailyQuote> lastMonthEnrichedQuotes = enrichedQuotes.stream()
+                                .filter(q -> YearMonth.from(q.getTradeDate()).equals(lastYm))
+                                .toList();
+                        MonthlyQuoteCacheEntry repairedLastMonthEntry = MonthlyQuoteCacheEntry.builder()
+                                .ticker(ticker)
+                                .yearMonth(lastYm.toString())
+                                .latestTradeDate(lastMonthDbLatestTradeDate)
+                                .quotes(lastMonthEnrichedQuotes)
+                                .build();
+                        monthlyQuoteCache.put(buildCacheKey(ticker, lastYm), repairedLastMonthEntry);
+                        log.info("[QuoteCache: PATH 2 - Auto-Heal] Ticker {}: auto-healed incomplete last month {} (sealed up to {} with {} quotes).",
+                                ticker, lastYm, lastMonthDbLatestTradeDate, lastMonthEnrichedQuotes.size());
+                    }
 
                     // Filter quotes strictly belonging to current month
                     List<MarketDailyQuote> currentMonthQuotes = enrichedQuotes.stream()
@@ -205,9 +273,8 @@ public class MonthlyQuoteCacheService {
                             .quotes(currentMonthQuotes)
                             .build();
 
-                    // CRITICAL: ONLY update current month! Historical months in cache are 100% UNTOUCHED!
                     monthlyQuoteCache.put(buildCacheKey(ticker, currentYm), currentMonthEntry);
-                    log.info("[QuoteCache: PATH 2 - Complete] Ticker {}: updated current month {} with {} quotes (latest: {}). Historical months remain untouched.",
+                    log.info("[QuoteCache: PATH 2 - Complete] Ticker {}: updated current month {} with {} quotes (latest: {}).",
                             ticker, currentYm, currentMonthQuotes.size(), latestTradeDateInMonth);
 
                     return extractAndSlice(ticker, requiredMonths, start, end);
