@@ -77,8 +77,8 @@ class MarketDataSyncServiceTest {
         when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.empty());
         when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.empty());
         when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.empty());
-        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
-        when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.empty());
+        when(externalMarketDataPort.fetchHistoricalQuotes(eq("FEAR_GREED"), anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchHistoricalMacroYields(any(), any())).thenReturn(Flux.empty());
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.empty());
         when(externalMarketDataPort.fetchDividendsAndSplits(anyString(), anyString()))
                 .thenReturn(Mono.just(new ExternalMarketDataPort.DividendsAndSplits(List.of(), List.of())));
@@ -115,8 +115,8 @@ class MarketDataSyncServiceTest {
         when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset50, asset720b));
         when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.just(quote50));
         when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.empty());
-        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
-        when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(snapshot));
+        when(externalMarketDataPort.fetchHistoricalQuotes(eq("FEAR_GREED"), anyString())).thenReturn(Flux.empty());
+        when(externalMarketDataPort.fetchHistoricalMacroYields(any(), any())).thenReturn(Flux.just(snapshot));
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(rank50));
         when(externalMarketDataPort.fetchDividendsAndSplits(eq("00720B"), anyString()))
                 .thenReturn(Mono.just(new ExternalMarketDataPort.DividendsAndSplits(List.of(div), List.of())));
@@ -192,7 +192,6 @@ class MarketDataSyncServiceTest {
         when(metadataRepository.findAll()).thenReturn(Flux.just(asset));
         when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.just(todayQuote));
         when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.empty());
-        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.empty());
 
         // When watermark gap is detected (> 1 or 3 days), Yahoo historical backfill is triggered for candidate ETFs
         when(externalMarketDataPort.fetchHistoricalQuotes(eq("0050"), anyString())).thenReturn(Flux.just(backfillQuote));
@@ -235,8 +234,8 @@ class MarketDataSyncServiceTest {
         when(externalMarketDataPort.fetchEtfMasterUniverse()).thenReturn(Flux.just(asset));
         when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any())).thenReturn(Flux.just(etfQuote));
         when(externalMarketDataPort.fetchBenchmarkQuotes(anyString())).thenReturn(Flux.just(benchQuote));
-        when(externalMarketDataPort.fetchCnnSentimentQuote()).thenReturn(Mono.just(cnnQuote));
-        when(externalMarketDataPort.fetchLatestMacroYield()).thenReturn(Mono.just(yieldSnapshot));
+        when(externalMarketDataPort.fetchHistoricalQuotes(eq("FEAR_GREED"), anyString())).thenReturn(Flux.just(cnnQuote));
+        when(externalMarketDataPort.fetchHistoricalMacroYields(any(), any())).thenReturn(Flux.just(yieldSnapshot));
         when(externalMarketDataPort.fetchDcaPopularityRanks(anyInt(), anyInt())).thenReturn(Flux.just(dcaRank));
 
         when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(asset));

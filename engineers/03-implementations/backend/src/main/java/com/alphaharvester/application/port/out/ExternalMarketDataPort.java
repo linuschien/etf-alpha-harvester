@@ -34,15 +34,6 @@ public interface ExternalMarketDataPort {
      */
     Flux<MarketDailyQuote> fetchBenchmarkQuotes(String range);
 
-    /**
-     * Fetches CNN Fear & Greed sentiment score.
-     */
-    Mono<MarketDailyQuote> fetchCnnSentimentQuote();
-
-    /**
-     * Fetches macroeconomic treasury yields from Yahoo Finance / FRED (Zero API key required).
-     */
-    Mono<MacroYieldSnapshot> fetchLatestMacroYield();
 
     /**
      * Fetches historical macroeconomic yields for a given date range [startDate, endDate].

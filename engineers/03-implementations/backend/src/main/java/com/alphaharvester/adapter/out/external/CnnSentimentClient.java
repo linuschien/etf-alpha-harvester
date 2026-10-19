@@ -90,42 +90,5 @@ public class CnnSentimentClient {
                 })
                 .doOnError(e -> log.error("Error fetching CNN Fear & Greed historical index from '{}': {}", url, e.getMessage(), e));
     }
-
-    /**
-     * Fetches latest single CNN Fear & Greed Index score (0 to 100) and maps to MarketDailyQuote for 'FEAR_GREED'.
-     */
-    public Mono<MarketDailyQuote> fetchFearAndGreedIndex() {
-        LocalDateTime now = LocalDateTime.now().toLocalDate().atStartOfDay();
-        return webClient.get()
-                .uri(CNN_FEAR_GREED_URL)
-                .header(HttpHeaders.REFERER, "https://www.cnn.com/markets/fear-and-greed")
-                .header(HttpHeaders.ORIGIN, "https://www.cnn.com")
-                .retrieve()
-                .bodyToMono(String.class)
-                .retryWhen(RETRY_SPEC)
-                .flatMap(jsonStr -> {
-                    try {
-                        JsonNode root = objectMapper.readTree(jsonStr);
-                        JsonNode scoreNode = root.path("fear_and_greed").path("score");
-                        if (scoreNode.isMissingNode() || scoreNode.isNull()) {
-                            log.warn("CNN Fear & Greed score missing in response");
-                            return Mono.error(new IllegalStateException("CNN Fear & Greed score missing in response"));
-                        }
-                        double scoreVal = scoreNode.asDouble();
-                        BigDecimal score = BigDecimal.valueOf(scoreVal).setScale(2, RoundingMode.HALF_UP);
-
-                        log.info("Successfully fetched CNN Fear & Greed score: {}", score);
-                        MarketDailyQuote quote = new MarketDailyQuote(
-                                null, null, null, "FEAR_GREED", now,
-                                score, score, score, score,
-                                0L, BigDecimal.ZERO
-                        );
-                        return Mono.just(quote);
-                    } catch (Exception e) {
-                        return Mono.error(e);
-                    }
-                })
-                .doOnError(e -> log.error("Error fetching CNN Fear & Greed index from '{}': {}", CNN_FEAR_GREED_URL, e.getMessage(), e));
-    }
 }
 

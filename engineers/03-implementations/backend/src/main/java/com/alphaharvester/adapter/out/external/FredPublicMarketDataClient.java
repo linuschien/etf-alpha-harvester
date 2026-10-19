@@ -43,59 +43,6 @@ public class FredPublicMarketDataClient {
         this.webClient = webClient;
     }
 
-    public record Observation(LocalDate date, BigDecimal value) {}
-
-    /**
-     * Fetches the latest published observation for a given FRED series ID.
-     */
-    public Mono<Observation> fetchLatestObservation(String seriesId) {
-        String url = FRED_CSV_BASE + seriesId;
-        return webClient.get()
-                .uri(url)
-                .header(HttpHeaders.USER_AGENT, "curl/8.5.0")
-                .header(HttpHeaders.ACCEPT, "*/*")
-                .retrieve()
-                .bodyToMono(String.class)
-                .map(this::parseLatestObservationFromCsv)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .retryWhen(RETRY_SPEC)
-                .doOnError(e -> log.error("Failed to fetch FRED series '{}': {}", seriesId, e.getMessage(), e));
-    }
-
-    /**
-     * Fetches real macroeconomic treasury and corporate bond yields from FRED.
-     * Zero API key required.
-     */
-    public Mono<MacroYieldSnapshot> fetchLatestMacroYield() {
-        log.info("Fetching macroeconomic yields from FRED public CSV endpoints (Zero API Key)...");
-        return Mono.zip(
-                fetchLatestObservation("BAMLC0A0CMEY"),
-                fetchLatestObservation("DGS10"),
-                fetchLatestObservation("DGS20"),
-                fetchLatestObservation("T10Y2Y")
-        ).map(tuple -> {
-            Observation corp = tuple.getT1();
-            Observation y10 = tuple.getT2();
-            Observation y20 = tuple.getT3();
-            Observation spread = tuple.getT4();
-
-            LocalDate recordDate = corp.date() != null ? corp.date() : LocalDate.now();
-            LocalDateTime recordDateTime = recordDate.atStartOfDay();
-
-            log.info("Successfully fetched FRED MacroYieldSnapshot for {}: CorpYield={}% (BAMLC0A0CMEY), 10Y={}% (DGS10), 20Y={}% (DGS20), 10Y-2Y={}% (T10Y2Y)",
-                    recordDate, corp.value(), y10.value(), y20.value(), spread.value());
-
-            return new MacroYieldSnapshot(
-                    null,
-                    recordDateTime,
-                    corp.value(),
-                    y10.value(),
-                    y20.value(),
-                    spread.value()
-            );
-        }).doOnError(e -> log.error("Failed to fetch FRED macro yields: {}", e.getMessage(), e));
-    }
 
     /**
      * Fetches all observations for a given series in the given date range [startDate, endDate].
@@ -142,6 +89,46 @@ public class FredPublicMarketDataClient {
     }
 
     /**
+     * Assembles aligned MacroYieldSnapshots where all four series (BAMLC0A0CMEY, DGS10, DGS20, T10Y2Y)
+     * are authentically present and non-null on the exact same observation date.
+     * Never forward-fills or copies numbers from a previous date.
+     */
+    public List<MacroYieldSnapshot> assembleAlignedSnapshots(
+            Map<LocalDate, BigDecimal> corpMap,
+            Map<LocalDate, BigDecimal> y10Map,
+            Map<LocalDate, BigDecimal> y20Map,
+            Map<LocalDate, BigDecimal> spreadMap) {
+        if (corpMap == null || y10Map == null || y20Map == null || spreadMap == null) {
+            return Collections.emptyList();
+        }
+
+        TreeSet<LocalDate> commonDates = new TreeSet<>(corpMap.keySet());
+        commonDates.retainAll(y10Map.keySet());
+        commonDates.retainAll(y20Map.keySet());
+        commonDates.retainAll(spreadMap.keySet());
+
+        List<MacroYieldSnapshot> snapshots = new ArrayList<>();
+        for (LocalDate date : commonDates) {
+            BigDecimal corp = corpMap.get(date);
+            BigDecimal y10 = y10Map.get(date);
+            BigDecimal y20 = y20Map.get(date);
+            BigDecimal spread = spreadMap.get(date);
+
+            if (corp != null && y10 != null && y20 != null && spread != null) {
+                snapshots.add(new MacroYieldSnapshot(
+                        null,
+                        date.atStartOfDay(),
+                        corp,
+                        y10,
+                        y20,
+                        spread
+                ));
+            }
+        }
+        return snapshots;
+    }
+
+    /**
      * Fetches complete 2-year (or specified range) historical macroeconomic treasury and corporate bond yields from FRED.
      */
     public Flux<MacroYieldSnapshot> fetchHistoricalMacroYields(LocalDate startDate, LocalDate endDate) {
@@ -152,78 +139,11 @@ public class FredPublicMarketDataClient {
                 fetchHistoricalObservations("DGS20", startDate, endDate),
                 fetchHistoricalObservations("T10Y2Y", startDate, endDate)
         ).flatMapMany(tuple -> {
-            Map<LocalDate, BigDecimal> corpMap = tuple.getT1();
-            Map<LocalDate, BigDecimal> y10Map = tuple.getT2();
-            Map<LocalDate, BigDecimal> y20Map = tuple.getT3();
-            Map<LocalDate, BigDecimal> spreadMap = tuple.getT4();
-
-            TreeSet<LocalDate> allDates = new TreeSet<>();
-            allDates.addAll(corpMap.keySet());
-            allDates.addAll(y10Map.keySet());
-            allDates.addAll(y20Map.keySet());
-            allDates.addAll(spreadMap.keySet());
-
-            List<MacroYieldSnapshot> snapshots = new ArrayList<>();
-            BigDecimal lastCorp = null;
-            BigDecimal lastY10 = null;
-            BigDecimal lastY20 = null;
-            BigDecimal lastSpread = null;
-
-            for (LocalDate date : allDates) {
-                BigDecimal corp = corpMap.get(date);
-                BigDecimal y10 = y10Map.get(date);
-                BigDecimal y20 = y20Map.get(date);
-                BigDecimal spread = spreadMap.get(date);
-
-                if (corp != null) lastCorp = corp;
-                if (y10 != null) lastY10 = y10;
-                if (y20 != null) lastY20 = y20;
-                if (spread != null) lastSpread = spread;
-
-                // Trading days are dates where at least one treasury rate is observed
-                boolean isTradingDay = (y10 != null || y20 != null || spread != null);
-                if (isTradingDay && lastCorp != null && lastY10 != null && lastY20 != null && lastSpread != null) {
-                    snapshots.add(new MacroYieldSnapshot(
-                            null,
-                            date.atStartOfDay(),
-                            corp != null ? corp : lastCorp,
-                            y10 != null ? y10 : lastY10,
-                            y20 != null ? y20 : lastY20,
-                            spread != null ? spread : lastSpread
-                    ));
-                }
-            }
-
+            List<MacroYieldSnapshot> snapshots = assembleAlignedSnapshots(
+                    tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4()
+            );
             log.info("Successfully assembled {} historical MacroYieldSnapshots between {} and {}", snapshots.size(), startDate, endDate);
             return Flux.fromIterable(snapshots);
         });
-    }
-
-    /**
-     * Parses the most recent valid observation (ignoring non-trading '.' entries) from FRED CSV output.
-     */
-    public Optional<Observation> parseLatestObservationFromCsv(String csvContent) {
-        if (csvContent == null || csvContent.isBlank()) {
-            return Optional.empty();
-        }
-        String[] lines = csvContent.split("\r?\n");
-        for (int i = lines.length - 1; i >= 1; i--) {
-            String line = lines[i].trim();
-            if (line.isEmpty()) continue;
-            String[] parts = line.split(",");
-            if (parts.length >= 2) {
-                String valStr = parts[1].trim();
-                if (!valStr.equals(".") && !valStr.isBlank()) {
-                    try {
-                        LocalDate date = LocalDate.parse(parts[0].trim());
-                        BigDecimal val = new BigDecimal(valStr).setScale(4, RoundingMode.HALF_UP);
-                        return Optional.of(new Observation(date, val));
-                    } catch (Exception ignored) {
-                        // continue searching previous days
-                    }
-                }
-            }
-        }
-        return Optional.empty();
     }
 }

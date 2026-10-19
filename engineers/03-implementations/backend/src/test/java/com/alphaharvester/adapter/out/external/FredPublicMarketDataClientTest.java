@@ -12,7 +12,6 @@ import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -40,63 +39,6 @@ class FredPublicMarketDataClientTest {
         client = new FredPublicMarketDataClient(webClient);
     }
 
-    @Test
-    @DisplayName("Should correctly parse latest observation ignoring trailing dot '.' entries")
-    void shouldParseLatestObservationIgnoringDots() {
-        String csv = """
-                observation_date,BAMLC0A0CMEY
-                2026-09-18,5.65
-                2026-09-19,.
-                2026-09-20,.
-                2026-09-21,.
-                2026-09-22,5.69
-                2026-09-23,.
-                """;
-
-        Optional<FredPublicMarketDataClient.Observation> obs = client.parseLatestObservationFromCsv(csv);
-        assertThat(obs).isPresent();
-        assertThat(obs.get().date()).isEqualTo(LocalDate.of(2026, 9, 22));
-        assertThat(obs.get().value()).isEqualByComparingTo(new BigDecimal("5.69"));
-    }
-
-    @Test
-    @DisplayName("Should return empty when CSV has no valid data rows")
-    void shouldReturnEmptyForEmptyOrInvalidCsv() {
-        assertThat(client.parseLatestObservationFromCsv("")).isEmpty();
-        assertThat(client.parseLatestObservationFromCsv(null)).isEmpty();
-        assertThat(client.parseLatestObservationFromCsv("observation_date,BAMLC0A0CMEY\n2026-09-22,.")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("Should fetch and assemble macro yield snapshot from FRED series endpoints")
-    void shouldFetchLatestMacroYield() {
-        when(webClient.get()).thenReturn(requestHeadersUriSpec);
-        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
-        when(requestHeadersSpec.header(anyString(), anyString())).thenReturn(requestHeadersSpec);
-        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
-
-        String bamlcCsv = "observation_date,BAMLC0A0CMEY\n2026-09-22,5.69\n";
-        String dgs10Csv = "observation_date,DGS10\n2026-09-22,4.96\n";
-        String dgs20Csv = "observation_date,DGS20\n2026-09-22,5.33\n";
-        String t10y2yCsv = "observation_date,T10Y2Y\n2026-09-22,0.25\n";
-
-        when(responseSpec.bodyToMono(String.class)).thenReturn(
-                Mono.just(bamlcCsv),
-                Mono.just(dgs10Csv),
-                Mono.just(dgs20Csv),
-                Mono.just(t10y2yCsv)
-        );
-
-        StepVerifier.create(client.fetchLatestMacroYield())
-                .assertNext(snapshot -> {
-                    assertThat(snapshot.getUsCorporateBondEffectiveYield()).isEqualByComparingTo(new BigDecimal("5.69"));
-                    assertThat(snapshot.getUs10YearTreasuryYield()).isEqualByComparingTo(new BigDecimal("4.96"));
-                    assertThat(snapshot.getUs20YearTreasuryYield()).isEqualByComparingTo(new BigDecimal("5.33"));
-                    assertThat(snapshot.getYieldSpread10yMinus2y()).isEqualByComparingTo(new BigDecimal("0.25"));
-                    assertThat(snapshot.getRecordDate().toLocalDate()).isEqualTo(LocalDate.of(2026, 9, 22));
-                })
-                .verifyComplete();
-    }
 
     @Test
     @DisplayName("Should parse all valid observations from CSV into Map")
@@ -145,5 +87,32 @@ class FredPublicMarketDataClientTest {
                     assertThat(s2.getUsCorporateBondEffectiveYield()).isEqualByComparingTo(new BigDecimal("5.83"));
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should strictly intersect series dates and not forward-fill when T10Y2Y has an extra observation")
+    void shouldStrictlyIntersectDatesWithoutForwardFilling() {
+        LocalDate d1 = LocalDate.of(2026, 9, 22);
+        LocalDate d2 = LocalDate.of(2026, 9, 23);
+
+        java.util.Map<LocalDate, BigDecimal> corp = java.util.Map.of(d1, new BigDecimal("5.69"));
+        java.util.Map<LocalDate, BigDecimal> y10 = java.util.Map.of(d1, new BigDecimal("4.96"));
+        java.util.Map<LocalDate, BigDecimal> y20 = java.util.Map.of(d1, new BigDecimal("5.33"));
+        java.util.Map<LocalDate, BigDecimal> spread = java.util.Map.of(
+                d1, new BigDecimal("0.25"),
+                d2, new BigDecimal("0.28") // d2 only present in spread
+        );
+
+        var snapshots = client.assembleAlignedSnapshots(corp, y10, y20, spread);
+        assertThat(snapshots).hasSize(1);
+        assertThat(snapshots.get(0).getRecordDate().toLocalDate()).isEqualTo(d1);
+        assertThat(snapshots.get(0).getUsCorporateBondEffectiveYield()).isEqualByComparingTo(new BigDecimal("5.69"));
+        assertThat(snapshots.get(0).getYieldSpread10yMinus2y()).isEqualByComparingTo(new BigDecimal("0.25"));
+    }
+
+    @Test
+    @DisplayName("Should return empty list if any input map is null in assembleAlignedSnapshots")
+    void shouldReturnEmptyIfAnyMapNull() {
+        assertThat(client.assembleAlignedSnapshots(null, java.util.Map.of(), java.util.Map.of(), java.util.Map.of())).isEmpty();
     }
 }

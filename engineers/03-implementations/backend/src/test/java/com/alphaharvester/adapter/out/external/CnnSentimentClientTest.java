@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -39,33 +40,6 @@ class CnnSentimentClientTest {
     @BeforeEach
     void setUp() {
         client = new CnnSentimentClient(webClient, mapper);
-    }
-
-    @Test
-    @DisplayName("Should fetch and parse latest CNN Fear & Greed index score")
-    void shouldFetchFearAndGreedIndex() {
-        String json = """
-                {
-                  "fear_and_greed": {
-                    "score": 62.4,
-                    "rating": "greed",
-                    "timestamp": 1727740800000
-                  }
-                }
-                """;
-
-        when(webClient.get()).thenReturn(requestHeadersUriSpec);
-        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
-        when(requestHeadersSpec.header(anyString(), anyString())).thenReturn(requestHeadersSpec);
-        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
-        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(json));
-
-        StepVerifier.create(client.fetchFearAndGreedIndex())
-                .assertNext(quote -> {
-                    assertThat(quote.getTicker()).isEqualTo("FEAR_GREED");
-                    assertThat(quote.getClosePrice()).isEqualByComparingTo(new BigDecimal("62.40"));
-                })
-                .verifyComplete();
     }
 
     @Test
@@ -109,6 +83,21 @@ class CnnSentimentClientTest {
     }
 
     @Test
+    @DisplayName("Should return empty Flux when historical data array is missing or empty")
+    void shouldReturnEmptyWhenHistoricalDataMissing() {
+        String json = "{\"fear_and_greed_historical\": {\"data\": []}}";
+
+        when(webClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.header(anyString(), anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just(json));
+
+        StepVerifier.create(client.fetchHistoricalFearAndGreedIndex(null))
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("Should propagate error when CNN Fear & Greed endpoint fails")
     void shouldPropagateErrorWhenCnnFails() {
         when(webClient.get()).thenReturn(requestHeadersUriSpec);
@@ -117,7 +106,7 @@ class CnnSentimentClientTest {
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.error(new RuntimeException("503 Service Unavailable")));
 
-        StepVerifier.create(client.fetchFearAndGreedIndex())
+        StepVerifier.create(client.fetchHistoricalFearAndGreedIndex("2026-09-01"))
                 .expectErrorMatches(e -> (e.getMessage() != null && e.getMessage().contains("503 Service Unavailable"))
                         || (e.getCause() != null && e.getCause().getMessage().contains("503 Service Unavailable")))
                 .verify();

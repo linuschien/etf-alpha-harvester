@@ -1,6 +1,7 @@
 package com.alphaharvester.adapter.out.external;
 
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
+import com.alphaharvester.application.util.SyncRangeUtil;
 import com.alphaharvester.domain.entity.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,38 +146,16 @@ public class CompositeExternalMarketDataAdapter implements ExternalMarketDataPor
     }
 
     @Override
-    public Mono<MarketDailyQuote> fetchCnnSentimentQuote() {
-        log.info("Fetching CNN Fear & Greed sentiment index...");
-        return cnnSentimentClient.fetchFearAndGreedIndex();
-    }
-
-    @Override
     public Flux<MarketDailyQuote> fetchHistoricalQuotes(String ticker, String range) {
         log.info("Fetching historical quotes for ticker '{}' (range: {})...", ticker, range);
         if (ticker.startsWith("^")) {
             return yahooFinanceClient.fetchHistoricalQuotes(ticker, range);
         } else if ("FEAR_GREED".equals(ticker)) {
-            LocalDate today = LocalDate.now();
-            LocalDate startDate = switch (range != null ? range : "2y") {
-                case "5y" -> today.minusYears(5);
-                case "2y" -> today.minusYears(2);
-                case "1y" -> today.minusYears(1);
-                case "6mo" -> today.minusMonths(6);
-                case "3mo" -> today.minusMonths(3);
-                case "1mo" -> today.minusMonths(1);
-                case "5d" -> today.minusDays(5);
-                default -> today.minusYears(2);
-            };
+            LocalDate startDate = SyncRangeUtil.deriveStartDate(LocalDate.now(), range);
             return cnnSentimentClient.fetchHistoricalFearAndGreedIndex(startDate.toString());
         } else {
             return yahooFinanceClient.fetchTaiwanEtfHistoricalQuotes(ticker, range);
         }
-    }
-
-    @Override
-    public Mono<MacroYieldSnapshot> fetchLatestMacroYield() {
-        log.info("Fetching real macroeconomic yields from St. Louis Fed FRED (BAMLC0A0CMEY, DGS10, DGS20, T10Y2Y)...");
-        return fredClient.fetchLatestMacroYield();
     }
 
     @Override

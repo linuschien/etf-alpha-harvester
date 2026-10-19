@@ -173,34 +173,6 @@ class CompositeExternalMarketDataAdapterTest {
     }
 
     @Test
-    @DisplayName("Should fetch CNN sentiment quote")
-    void shouldFetchCnnSentimentQuote() {
-        MarketDailyQuote fearGreedQuote = new MarketDailyQuote(
-                null, null, null, "FEAR_GREED", LocalDateTime.now(),
-                new BigDecimal("45.5"), new BigDecimal("45.5"), new BigDecimal("45.5"),
-                new BigDecimal("45.5"), 0L, BigDecimal.ZERO
-        );
-        when(cnnSentimentClient.fetchFearAndGreedIndex()).thenReturn(Mono.just(fearGreedQuote));
-        StepVerifier.create(adapter.fetchCnnSentimentQuote())
-                .assertNext(q -> assertThat(q.getTicker()).isEqualTo("FEAR_GREED"))
-                .verifyComplete();
-    }
-
-    @Test
-    @DisplayName("Should delegate fetchLatestMacroYield to FredPublicMarketDataClient")
-    void shouldDelegateFetchLatestMacroYield() {
-        MacroYieldSnapshot snap = new MacroYieldSnapshot(
-                UUID.randomUUID(), LocalDateTime.now(), new BigDecimal("5.69"),
-                new BigDecimal("4.96"), new BigDecimal("5.33"), new BigDecimal("0.25")
-        );
-        when(fredClient.fetchLatestMacroYield()).thenReturn(Mono.just(snap));
-
-        StepVerifier.create(adapter.fetchLatestMacroYield())
-                .assertNext(res -> assertThat(res.getUsCorporateBondEffectiveYield()).isEqualTo(new BigDecimal("5.69")))
-                .verifyComplete();
-    }
-
-    @Test
     @DisplayName("Should delegate fetchHistoricalMacroYields to FredPublicMarketDataClient")
     void shouldDelegateFetchHistoricalMacroYields() {
         MacroYieldSnapshot snap = new MacroYieldSnapshot(

@@ -6,6 +6,7 @@ import com.alphaharvester.application.dto.MarketDataSyncResponse;
 import com.alphaharvester.application.dto.SyncedRecordsCount;
 import com.alphaharvester.application.port.in.MarketDataSyncUseCase;
 import com.alphaharvester.application.port.out.ExternalMarketDataPort;
+import com.alphaharvester.application.util.SyncRangeUtil;
 import com.alphaharvester.domain.entity.GlobalAssetMetadata;
 import com.alphaharvester.domain.model.SyncScope;
 import org.slf4j.Logger;
@@ -257,16 +258,12 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         return watermarkRepository.findByFeedName(WATERMARK_TAIWAN_ETF_QUOTES)
                 .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_TAIWAN_ETF_QUOTES, null, now.minusDays(1), 0, "PENDING", null, now))
                 .flatMap(watermark -> {
-                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
-                            ? watermark.getLatestRecordDate()
-                            : now.minusDays(1);
-                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
-                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
-                    boolean force = backfillDays != null && backfillDays > 0;
+                    SyncRangeUtil.SyncWindow window = SyncRangeUtil.resolveSyncWindow(
+                            watermark.getLatestRecordDate(), now, backfillDays, watermark.getStatus(), false);
 
-                    log.info("Watermark comparison for '{}': latestRecordDate={}, status={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}",
-                            WATERMARK_TAIWAN_ETF_QUOTES, latestRecordDate, watermark.getStatus(), now, daysMissed, allowedGap, hasGap, force);
+                    log.info("Watermark comparison for '{}': latestRecordDate={}, status={}, today={}, daysMissed={}, allowedGap={}, hasGap={}, force={}, range='{}'",
+                            WATERMARK_TAIWAN_ETF_QUOTES, watermark.getLatestRecordDate(), watermark.getStatus(), now,
+                            window.daysMissed(), window.allowedGap(), window.hasGap(), window.force(), window.range());
 
                     Flux<MarketDailyQuote> primaryFlux = metadataRepository.findAll()
                             .filter(asset -> asset.getFundSizeTwd() != null && asset.getNetAssetValue() != null)
@@ -276,18 +273,16 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             .flatMap(this::upsertDailyQuote);
 
                     Flux<MarketDailyQuote> backfillFlux;
-                    if (hasGap || force) {
-                        int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
-                        String range = deriveRange(effectiveDays);
+                    if (window.hasGap() || window.force()) {
                         log.warn("Watermark confirmed ETF trading gap! Missed {} days. Backfilling candidate ETF universe from Yahoo Finance (range: '{}')...",
-                                daysMissed, range);
+                                window.daysMissed(), window.range());
 
                         backfillFlux = metadataRepository.findAll()
                                 .filter(asset -> asset.getFundSizeTwd() != null && asset.getNetAssetValue() != null)
                                 .map(GlobalAssetMetadata::getTicker)
                                 .collectList()
                                 .flatMapMany(tickers -> Flux.fromIterable(tickers)
-                                        .flatMap(ticker -> externalMarketDataPort.fetchHistoricalQuotes(ticker, range), 4)
+                                        .flatMap(ticker -> externalMarketDataPort.fetchHistoricalQuotes(ticker, window.range()), 4)
                                         .flatMap(this::upsertDailyQuote));
                     } else {
                         backfillFlux = Flux.empty();
@@ -326,21 +321,13 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         return watermarkRepository.findByFeedName(WATERMARK_GLOBAL_BENCHMARKS)
                 .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_GLOBAL_BENCHMARKS, null, now.minusDays(1), 0, "PENDING", null, now))
                 .flatMap(watermark -> {
-                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
-                            ? watermark.getLatestRecordDate()
-                            : now.minusDays(1);
-                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
-                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
-                    boolean force = backfillDays != null && backfillDays > 0;
-
-                    int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
-                    String range = (hasGap || force) ? deriveRange(effectiveDays) : "5d";
+                    SyncRangeUtil.SyncWindow window = SyncRangeUtil.resolveSyncWindow(
+                            watermark.getLatestRecordDate(), now, backfillDays, watermark.getStatus(), false);
 
                     log.info("Watermark comparison for '{}': latestRecordDate={}, today={}, daysMissed={}, range='{}'",
-                            WATERMARK_GLOBAL_BENCHMARKS, latestRecordDate, now, daysMissed, range);
+                            WATERMARK_GLOBAL_BENCHMARKS, watermark.getLatestRecordDate(), now, window.daysMissed(), window.range());
 
-                    return externalMarketDataPort.fetchBenchmarkQuotes(range)
+                    return externalMarketDataPort.fetchBenchmarkQuotes(window.range())
                             .flatMap(this::upsertDailyQuote)
                             .collectList()
                             .flatMap(savedList -> {
@@ -374,25 +361,13 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         return watermarkRepository.findByFeedName(WATERMARK_CNN_FEAR_GREED)
                 .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_CNN_FEAR_GREED, null, now.minusDays(1), 0, "PENDING", null, now))
                 .flatMap(watermark -> {
-                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
-                            ? watermark.getLatestRecordDate()
-                            : now.minusDays(1);
-                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
-                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
-                    boolean force = backfillDays != null && backfillDays > 0;
-
-                    int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
-                    String range = (hasGap || force) ? deriveRange(effectiveDays) : "5d";
+                    SyncRangeUtil.SyncWindow window = SyncRangeUtil.resolveSyncWindow(
+                            watermark.getLatestRecordDate(), now, backfillDays, watermark.getStatus(), false);
 
                     log.info("Syncing CNN Fear & Greed Sentiment (Watermark: '{}', latestRecordDate={}, hasGap={}, force={}, range='{}')...",
-                            WATERMARK_CNN_FEAR_GREED, latestRecordDate, hasGap, force, range);
+                            WATERMARK_CNN_FEAR_GREED, watermark.getLatestRecordDate(), window.hasGap(), window.force(), window.range());
 
-                    Flux<MarketDailyQuote> quotesFlux = (hasGap || force)
-                            ? externalMarketDataPort.fetchHistoricalQuotes("FEAR_GREED", range)
-                            : externalMarketDataPort.fetchCnnSentimentQuote().flux();
-
-                    return quotesFlux
+                    return externalMarketDataPort.fetchHistoricalQuotes("FEAR_GREED", window.range())
                             .flatMap(this::upsertDailyQuote)
                             .collectList()
                             .flatMap(savedList -> {
@@ -500,26 +475,11 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                     existing.setTradeValueTwd(q.getTradeValueTwd());
                     return quoteRepository.save(existing);
                 })
-                .switchIfEmpty(Mono.defer(() -> {
-                    if (isTaiwanEtf && (q.getClosePrice() == null || q.getClosePrice().compareTo(BigDecimal.ZERO) <= 0)) {
-                        return quoteRepository.findFirstByTickerOrderByTradeDateDesc(q.getTicker())
-                                .flatMap(prev -> {
-                                    q.setClosePrice(prev.getClosePrice());
-                                    return quoteRepository.save(q);
-                                })
-                                .switchIfEmpty(quoteRepository.save(q));
-                    }
-                    return quoteRepository.save(q);
-                }));
+                .switchIfEmpty(quoteRepository.save(q));
     }
 
     private String deriveRange(int days) {
-        if (days <= 30) return "1mo";
-        if (days <= 90) return "3mo";
-        if (days <= 180) return "6mo";
-        if (days <= 365) return "1y";
-        if (days <= 730) return "2y";
-        return "5y";
+        return SyncRangeUtil.deriveRange(days);
     }
 
     private Mono<Integer> syncMacroYields(SyncScope scope, LocalDateTime now, Integer backfillDays) {
@@ -530,53 +490,34 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
         return watermarkRepository.findByFeedName(WATERMARK_MACRO_YIELD_SNAPSHOT)
                 .defaultIfEmpty(new DataFeedSyncWatermark(UUID.randomUUID(), WATERMARK_MACRO_YIELD_SNAPSHOT, null, now.minusDays(1), 0, "PENDING", null, now))
                 .flatMap(watermark -> {
-                    LocalDateTime latestRecordDate = (watermark.getLatestRecordDate() != null)
-                            ? watermark.getLatestRecordDate()
-                            : now.minusDays(1);
-                    long daysMissed = ChronoUnit.DAYS.between(latestRecordDate.toLocalDate(), now.toLocalDate());
-                    long allowedGap = (now.getDayOfWeek() == DayOfWeek.MONDAY) ? 3 : 1;
-                    boolean hasGap = daysMissed > allowedGap || "HALT".equalsIgnoreCase(watermark.getStatus()) || "FAILED".equalsIgnoreCase(watermark.getStatus());
-                    boolean force = backfillDays != null && backfillDays > 0;
+                    SyncRangeUtil.SyncWindow window = SyncRangeUtil.resolveSyncWindow(
+                            watermark.getLatestRecordDate(), now, backfillDays, watermark.getStatus(), true);
 
-                    if (hasGap || force) {
-                        int effectiveDays = force ? backfillDays : (int) Math.max(daysMissed, 5);
-                        LocalDate startDate = now.toLocalDate().minusDays(effectiveDays);
-                        LocalDate endDate = now.toLocalDate();
-                        log.warn("Macro yield watermark indicates gap or backfill requested (missed {} days, backfillDays={}). Syncing historical FRED yields from {} to {}...",
-                                daysMissed, backfillDays, startDate, endDate);
+                    log.info("Syncing macroeconomic yields from FRED (Watermark: '{}', latestRecordDate={}, hasGap={}, force={}, range='{}', start={}, end={})...",
+                            WATERMARK_MACRO_YIELD_SNAPSHOT, watermark.getLatestRecordDate(), window.hasGap(), window.force(), window.range(), window.startDate(), window.endDate());
 
-                        return externalMarketDataPort.fetchHistoricalMacroYields(startDate, endDate)
-                                .flatMap(this::upsertMacroYieldSnapshot)
-                                .collectList()
-                                .flatMap(savedList -> {
-                                    int count = savedList.size();
-                                    if (count > 0) {
-                                        Optional<LocalDateTime> maxDateOpt = savedList.stream()
-                                                .map(MacroYieldSnapshot::getRecordDate)
-                                                .filter(Objects::nonNull)
-                                                .max(LocalDateTime::compareTo);
-                                        if (maxDateOpt.isPresent()) {
-                                            return updateWatermarkSuccess(WATERMARK_MACRO_YIELD_SNAPSHOT, now, maxDateOpt.get(), count)
-                                                    .thenReturn(count);
-                                        } else {
-                                            return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "Synced macro yield snapshots have missing or null record dates")
-                                                    .thenReturn(0);
-                                        }
+                    return externalMarketDataPort.fetchHistoricalMacroYields(window.startDate(), window.endDate())
+                            .flatMap(this::upsertMacroYieldSnapshot)
+                            .collectList()
+                            .flatMap(savedList -> {
+                                int count = savedList.size();
+                                if (count > 0) {
+                                    Optional<LocalDateTime> maxDateOpt = savedList.stream()
+                                            .map(MacroYieldSnapshot::getRecordDate)
+                                            .filter(Objects::nonNull)
+                                            .max(LocalDateTime::compareTo);
+                                    if (maxDateOpt.isPresent()) {
+                                        return updateWatermarkSuccess(WATERMARK_MACRO_YIELD_SNAPSHOT, now, maxDateOpt.get(), count)
+                                                .thenReturn(count);
                                     } else {
-                                        return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "No historical macro yields synced")
+                                        return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "Synced macro yield snapshots have missing or null record dates")
                                                 .thenReturn(0);
                                     }
-                                });
-                    }
-
-                    return externalMarketDataPort.fetchLatestMacroYield()
-                            .flatMap(this::upsertMacroYieldSnapshot)
-                            .flatMap(saved -> updateWatermarkSuccess(WATERMARK_MACRO_YIELD_SNAPSHOT, now, saved.getRecordDate(), 1)
-                                    .thenReturn(1))
-                            .switchIfEmpty(Mono.defer(() ->
-                                    updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "Latest macro yield snapshot unavailable")
-                                            .thenReturn(0)
-                            ));
+                                } else {
+                                    return updateWatermarkFailed(WATERMARK_MACRO_YIELD_SNAPSHOT, now, "No macro yields synced")
+                                            .thenReturn(0);
+                                }
+                            });
                 })
                 .onErrorResume(e -> {
                     log.error("Failed to sync macro yields: {}", e.getMessage(), e);
