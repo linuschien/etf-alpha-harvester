@@ -2,6 +2,7 @@ package com.alphaharvester.adapter.out.external;
 
 import com.alphaharvester.application.port.out.ExternalMarketDataPort.DividendsAndSplits;
 import com.alphaharvester.domain.entity.DividendAnnouncement;
+import com.alphaharvester.domain.entity.MarketDailyQuote;
 import com.alphaharvester.domain.model.CorporateActionType;
 import com.alphaharvester.domain.model.TaxTag;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -285,5 +286,115 @@ class YahooFinanceClientTest {
         // 00720B is a bond ETF, so primary is .TWO, fallback is .TW
         org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("00720B.TWO?"));
         org.mockito.Mockito.verify(uriSpec).uri(org.mockito.ArgumentMatchers.contains("00720B.TW?"));
+    }
+
+    @Test
+    @DisplayName("Should recover missing close price from meta.regularMarketPrice when quote.close is null and regularMarketDate matches candle date")
+    void shouldRecoverCloseFromMetaWhenCloseIsNullAndDateMatches() {
+        // 1792371600 = 2026-10-19 09:00:00 CST (+08:00)
+        // 1792388005 = 2026-10-19 13:33:25 CST (+08:00)
+        String json = """
+        {
+          "chart": {
+            "result": [
+              {
+                "meta": {
+                  "exchangeTimezoneName": "Asia/Taipei",
+                  "regularMarketTime": 1792388005,
+                  "regularMarketPrice": 46822.08,
+                  "regularMarketDayHigh": 46844.64,
+                  "regularMarketDayLow": 46170.0,
+                  "regularMarketVolume": 5000000
+                },
+                "timestamp": [1792371600],
+                "indicators": {
+                  "quote": [
+                    {
+                      "open": [46844.64],
+                      "high": [46844.64],
+                      "low": [46170.0],
+                      "close": [null],
+                      "volume": [0]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+        """;
+
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class)).thenReturn(reactor.core.publisher.Mono.just(json));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        reactor.test.StepVerifier.create(mockClient.fetchHistoricalQuotes("^TWII", "5d"))
+                .assertNext(q -> {
+                    assertThat(q.getTicker()).isEqualTo("^TWII");
+                    assertThat(q.getTradeDate()).isEqualTo(java.time.LocalDate.of(2026, 10, 19).atStartOfDay());
+                    assertThat(q.getClosePrice()).isEqualTo(new java.math.BigDecimal("46822.0800"));
+                    assertThat(q.getOpenPrice()).isEqualTo(new java.math.BigDecimal("46844.6400"));
+                    assertThat(q.getHighPrice()).isEqualTo(new java.math.BigDecimal("46844.6400"));
+                    assertThat(q.getLowPrice()).isEqualTo(new java.math.BigDecimal("46170.0000"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should NOT recover close price from meta if regularMarketDate does NOT match candle date (e.g. ^VXN lagged scenario)")
+    void shouldNotRecoverCloseWhenRegularMarketDateDiffersFromCandleDate() {
+        // 1792416600 = 2026-10-19 09:30:00 EDT (-04:00) (Monday)
+        // 1792180800 = 2026-10-16 16:00:00 EDT (-04:00) (Friday - stale date)
+        String json = """
+        {
+          "chart": {
+            "result": [
+              {
+                "meta": {
+                  "exchangeTimezoneName": "America/New_York",
+                  "regularMarketTime": 1792180800,
+                  "regularMarketPrice": 27.13
+                },
+                "timestamp": [1792416600],
+                "indicators": {
+                  "quote": [
+                    {
+                      "open": [null],
+                      "high": [null],
+                      "low": [null],
+                      "close": [null],
+                      "volume": [null]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+        """;
+
+        WebClient mockWebClient = org.mockito.Mockito.mock(WebClient.class);
+        WebClient.RequestHeadersUriSpec uriSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = org.mockito.Mockito.mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = org.mockito.Mockito.mock(WebClient.ResponseSpec.class);
+
+        org.mockito.Mockito.when(mockWebClient.get()).thenReturn(uriSpec);
+        org.mockito.Mockito.when(uriSpec.uri(org.mockito.ArgumentMatchers.anyString())).thenReturn(headersSpec);
+        org.mockito.Mockito.when(headersSpec.retrieve()).thenReturn(responseSpec);
+        org.mockito.Mockito.when(responseSpec.bodyToMono(String.class)).thenReturn(reactor.core.publisher.Mono.just(json));
+
+        YahooFinanceClient mockClient = new YahooFinanceClient(mockWebClient, objectMapper);
+
+        // Monday candle with null close and stale Friday regularMarketTime must be dropped
+        reactor.test.StepVerifier.create(mockClient.fetchHistoricalQuotes("^VXN", "5d"))
+                .verifyComplete();
     }
 }

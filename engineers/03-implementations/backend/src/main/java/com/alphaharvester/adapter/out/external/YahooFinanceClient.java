@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -75,6 +76,12 @@ public class YahooFinanceClient {
                             zoneId = ZoneId.systemDefault();
                         }
 
+                        long regularMarketTime = result.path("meta").path("regularMarketTime").asLong(0L);
+                        BigDecimal regularMarketPrice = parseBigDecimalSafe(result.path("meta").path("regularMarketPrice"));
+                        LocalDate regularMarketDate = regularMarketTime > 0
+                                ? LocalDateTime.ofInstant(Instant.ofEpochSecond(regularMarketTime), zoneId).toLocalDate()
+                                : null;
+
                         JsonNode timestamps = result.path("timestamp");
                         JsonNode quote = result.path("indicators").path("quote").get(0);
                         if (timestamps == null || quote == null || !timestamps.isArray() || timestamps.isEmpty()) {
@@ -84,13 +91,20 @@ public class YahooFinanceClient {
                         List<MarketDailyQuote> list = new ArrayList<>();
                         for (int i = 0; i < timestamps.size(); i++) {
                             long epochSec = timestamps.get(i).asLong();
-                            LocalDateTime tradeDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSec), zoneId).toLocalDate().atStartOfDay();
+                            LocalDate candleDate = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSec), zoneId).toLocalDate();
+                            LocalDateTime tradeDate = candleDate.atStartOfDay();
 
                             BigDecimal open = parseBigDecimalSafe(quote.path("open").get(i));
                             BigDecimal high = parseBigDecimalSafe(quote.path("high").get(i));
                             BigDecimal low = parseBigDecimalSafe(quote.path("low").get(i));
                             BigDecimal close = parseBigDecimalSafe(quote.path("close").get(i));
                             long volume = quote.path("volume").get(i).asLong(0L);
+
+                            // For indices (e.g. ^TWII, ^N225 pre-market roll-over) where close[last] is null in chart array
+                            // but the official closing price is already present in meta.regularMarketPrice for the exact same tradeDate.
+                            if (close == null && regularMarketPrice != null && regularMarketDate != null && regularMarketDate.equals(candleDate)) {
+                                close = regularMarketPrice;
+                            }
 
                             if (close != null) {
                                 BigDecimal tradeValue = close.multiply(BigDecimal.valueOf(volume)).setScale(2, RoundingMode.HALF_UP);
