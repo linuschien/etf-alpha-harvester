@@ -30,9 +30,11 @@ export function useListPairwiseMatrix(
   },
   options?: { enabled?: boolean }
 ) {
+  const now = new Date();
+  const defaultEvaluationDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const effectiveFilter = {
     assetClass: 'CORE',
-    evaluationDate: '2026-09-01',
+    evaluationDate: defaultEvaluationDate,
     ...(filter ?? {}),
   };
 

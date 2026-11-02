@@ -476,6 +476,24 @@ describe('Custom JSON-render Components', () => {
     expect(screen.getByText('5%')).toBeInTheDocument();
   });
 
+  it('renders MacroRegimeBanner in placeholder state when no regime data is present', () => {
+    const emptyStore = createStateStore({
+      data: {},
+    });
+
+    render(
+      <JSONUIProvider store={emptyStore} registry={{}}>
+        <MacroRegimeBanner />
+      </JSONUIProvider>
+    );
+
+    expect(screen.getByText('待評估 / 載入中')).toBeInTheDocument();
+    expect(screen.getByText(/🛡️ 危機等級: 待同步/i)).toBeInTheDocument();
+    expect(screen.getByText('尚無宏觀景氣評估資料（載入中或待同步）')).toBeInTheDocument();
+    expect(screen.getAllByText('--%')).toHaveLength(2);
+    expect(screen.queryByText(/評估基準日/i)).not.toBeInTheDocument();
+  });
+
   it('renders ChartComponent macro-yield-chart with time window filtering and decimated X-axis date labels', async () => {
     // Generate 60 daily records from 2026-08-01 to 2026-09-30
     const sampleHistory = Array.from({ length: 60 }, (_, i) => {

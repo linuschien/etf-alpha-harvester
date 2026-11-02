@@ -34,78 +34,98 @@ export default function MacroRegimeBanner({
   const regimeData =
     store?.get?.('/data/getMacroRegime') ||
     store?.get?.('/macroRegime') ||
-    {};
+    null;
   const yieldSnapshot =
-    store?.get?.('/data/getLatestMacroYieldSnapshot') || {};
+    store?.get?.('/data/getLatestMacroYieldSnapshot') || null;
 
-  const rawState = String(regimeData.macroState || 'HIGH_YIELD_ACCUMULATION').toUpperCase();
+  const hasRegimeData = Boolean(regimeData && (regimeData.macroState || regimeData.currentRegime));
 
-  let stateLabel = rawState;
-  let stateIcon = '🟢';
+  let stateLabel = '待評估 / 載入中';
+  let stateIcon = '⚪';
   let stateBadgeClass =
-    'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
+    'bg-muted text-muted-foreground border-border';
 
-  if (rawState.includes('HIGH_YIELD') || rawState.includes('ACCUMULATION')) {
-    stateLabel = '高利蓄水期 (HIGH_YIELD_ACCUMULATION)';
+  let crisisLabel = '🛡️ 危機等級: 待同步';
+  let crisisBadgeClass =
+    'bg-muted text-muted-foreground border-border';
+
+  let equityPct: number | null = null;
+  let bondPct: number | null = null;
+
+  if (hasRegimeData) {
+    const rawState = String(regimeData.macroState || regimeData.currentRegime || '').toUpperCase();
+    stateLabel = rawState;
     stateIcon = '🟢';
     stateBadgeClass =
       'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
-  } else if (rawState.includes('NORMAL') || rawState.includes('BALANCED')) {
-    stateLabel = '常態平衡期 (NORMAL_BALANCED)';
-    stateIcon = '🔵';
-    stateBadgeClass =
-      'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300 dark:border-blue-800';
-  } else if (rawState.includes('LOW_YIELD') || rawState.includes('HARVEST')) {
-    stateLabel = '低利收割期 (LOW_YIELD_HARVEST)';
-    stateIcon = '🟡';
-    stateBadgeClass =
-      'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800';
-  }
 
-  // Calculate allocation percentages
-  let equityPct = 80;
-  if (regimeData.recommendedEquityRatio !== undefined && regimeData.recommendedEquityRatio !== null) {
-    equityPct =
-      regimeData.recommendedEquityRatio <= 1
-        ? Math.round(regimeData.recommendedEquityRatio * 100)
-        : Math.round(regimeData.recommendedEquityRatio);
-  }
-  let bondPct = 100 - equityPct;
-  if (regimeData.recommendedBondRatio !== undefined && regimeData.recommendedBondRatio !== null) {
-    bondPct =
-      regimeData.recommendedBondRatio <= 1
-        ? Math.round(regimeData.recommendedBondRatio * 100)
-        : Math.round(regimeData.recommendedBondRatio);
-  }
+    if (rawState.includes('HIGH_YIELD') || rawState.includes('ACCUMULATION')) {
+      stateLabel = '高利蓄水期 (HIGH_YIELD_ACCUMULATION)';
+      stateIcon = '🟢';
+      stateBadgeClass =
+        'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
+    } else if (rawState.includes('NORMAL') || rawState.includes('BALANCED')) {
+      stateLabel = '常態平衡期 (NORMAL_BALANCED)';
+      stateIcon = '🔵';
+      stateBadgeClass =
+        'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300 dark:border-blue-800';
+    } else if (rawState.includes('LOW_YIELD') || rawState.includes('HARVEST')) {
+      stateLabel = '低利收割期 (LOW_YIELD_HARVEST)';
+      stateIcon = '🟡';
+      stateBadgeClass =
+        'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+    }
 
-  // Crisis level
-  const rawCrisis = String(regimeData.crisisLevel || 'NORMAL').toUpperCase();
-  let crisisLabel = '🛡️ 危機等級: 正常 (NORMAL)';
-  let crisisBadgeClass =
-    'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700';
+    // Calculate allocation percentages
+    if (regimeData.recommendedEquityRatio !== undefined && regimeData.recommendedEquityRatio !== null) {
+      equityPct =
+        regimeData.recommendedEquityRatio <= 1
+          ? Math.round(regimeData.recommendedEquityRatio * 100)
+          : Math.round(regimeData.recommendedEquityRatio);
+    } else {
+      equityPct = 80;
+    }
 
-  if (rawCrisis.includes('CRISIS_LEVEL_2')) {
-    crisisLabel = '🔥 黑天鵝救災 (CRISIS_LEVEL_2)';
+    if (regimeData.recommendedBondRatio !== undefined && regimeData.recommendedBondRatio !== null) {
+      bondPct =
+        regimeData.recommendedBondRatio <= 1
+          ? Math.round(regimeData.recommendedBondRatio * 100)
+          : Math.round(regimeData.recommendedBondRatio);
+    } else {
+      bondPct = 100 - equityPct;
+    }
+
+    // Crisis level
+    const rawCrisis = String(regimeData.crisisLevel || 'NORMAL').toUpperCase();
+    crisisLabel = '🛡️ 危機等級: 正常 (NORMAL)';
     crisisBadgeClass =
-      'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800';
-  } else if (rawCrisis.includes('CRISIS_LEVEL_1')) {
-    crisisLabel = '🚨 恐慌抄底 (CRISIS_LEVEL_1)';
-    crisisBadgeClass =
-      'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border-orange-300 dark:border-orange-800';
-  } else if (rawCrisis.includes('CORRECTION')) {
-    crisisLabel = '⚠️ 修正期警示 (CORRECTION)';
-    crisisBadgeClass =
-      'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+      'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700';
+
+    if (rawCrisis.includes('CRISIS_LEVEL_2')) {
+      crisisLabel = '🔥 黑天鵝救災 (CRISIS_LEVEL_2)';
+      crisisBadgeClass =
+        'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800';
+    } else if (rawCrisis.includes('CRISIS_LEVEL_1')) {
+      crisisLabel = '🚨 恐慌抄底 (CRISIS_LEVEL_1)';
+      crisisBadgeClass =
+        'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border-orange-300 dark:border-orange-800';
+    } else if (rawCrisis.includes('CORRECTION')) {
+      crisisLabel = '⚠️ 修正期警示 (CORRECTION)';
+      crisisBadgeClass =
+        'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+    }
   }
 
   const effectiveDate =
-    regimeData.effectiveDate ||
-    (yieldSnapshot.recordDate ? String(yieldSnapshot.recordDate).slice(0, 10) : '') ||
-    '2026-09-30';
+    (yieldSnapshot?.recordDate ? String(yieldSnapshot.recordDate).slice(0, 10) : '') ||
+    (regimeData?.effectiveDate ? String(regimeData.effectiveDate).slice(0, 10) : '') ||
+    '';
 
   const assessmentSummary =
-    regimeData.assessmentSummary ||
-    '經濟基本面穩定擴張，長短天期利差正常化，高收益與投資級信用利差維持低位。';
+    regimeData?.assessmentSummary ||
+    (hasRegimeData
+      ? '目前宏觀景氣指標正常，未觸發特殊警示。'
+      : '尚無宏觀景氣評估資料（載入中或待同步）');
 
   return (
     <div
@@ -177,7 +197,7 @@ export default function MacroRegimeBanner({
             <span>
               建議股票配置:{' '}
               <span className="text-blue-600 dark:text-blue-400 font-bold">
-                {equityPct}%
+                {equityPct !== null ? `${equityPct}%` : '--%'}
               </span>
             </span>
           </div>
@@ -186,18 +206,18 @@ export default function MacroRegimeBanner({
             <span>
               建議防禦債券配置:{' '}
               <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                {bondPct}%
+                {bondPct !== null ? `${bondPct}%` : '--%'}
               </span>
             </span>
           </div>
         </div>
         <div className="h-2.5 w-full rounded-full bg-muted flex overflow-hidden">
           <div
-            style={{ width: `${equityPct}%` }}
+            style={{ width: `${equityPct ?? 0}%` }}
             className="bg-blue-600 h-full transition-all duration-300"
           />
           <div
-            style={{ width: `${bondPct}%` }}
+            style={{ width: `${bondPct ?? 0}%` }}
             className="bg-emerald-600 h-full transition-all duration-300"
           />
         </div>
