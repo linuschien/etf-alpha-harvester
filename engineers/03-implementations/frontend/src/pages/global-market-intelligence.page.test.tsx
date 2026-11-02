@@ -445,7 +445,7 @@ describe('GlobalMarketIntelligencePage', () => {
 
     expect(store.get('/filters/leaderboard-evaluation-date')).toBe(expectedPrevDate);
     expect(
-      screen.getByText(new RegExp(`${prevYear}\\s*年\\s*${prevMonth}\\s*月`, 'i'))
+      within(leaderboardSection).getByText(new RegExp(`${prevYear}\\s*年\\s*${prevMonth}\\s*月`, 'i'))
     ).toBeInTheDocument();
   });
 

@@ -7,6 +7,8 @@ export interface EventCalendarProps {
     props?: Record<string, any>;
   };
   props?: Record<string, any>;
+  defaultYear?: number;
+  defaultMonth?: number;
   className?: string;
 }
 
@@ -30,7 +32,12 @@ export interface TableRowItem {
   taxTagOrNote: string;
 }
 
-export default function EventCalendar({ element, props: directProps }: EventCalendarProps) {
+export default function EventCalendar({
+  element,
+  props: directProps,
+  defaultYear: propDefaultYear,
+  defaultMonth: propDefaultMonth,
+}: EventCalendarProps) {
   let store: any = null;
   let activeTab: string | undefined = undefined;
   let activeDcaSubTab: string | undefined = undefined;
@@ -54,9 +61,14 @@ export default function EventCalendar({ element, props: directProps }: EventCale
     (!activeTab || activeTab === 'all' || activeTab === 'dca-calendar-section') &&
     (!activeDcaSubTab || activeDcaSubTab === 'all' || activeDcaSubTab === 'dca-subtab-calendar');
 
-  // System reference time & defaults
-  const defaultYear = 2026;
-  const defaultMonth = 10; // 1-indexed (October)
+  // System reference time & defaults (supports props override for testing/embedding)
+  const configProps: any = element?.props ?? directProps ?? {};
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1; // 1-indexed
+
+  const defaultYear = propDefaultYear ?? configProps.defaultYear ?? configProps.year ?? currentYear;
+  const defaultMonth = propDefaultMonth ?? configProps.defaultMonth ?? configProps.month ?? currentMonth;
 
   // Calendar mode state
   const [year, setYear] = useState<number>(defaultYear);
@@ -390,7 +402,7 @@ export default function EventCalendar({ element, props: directProps }: EventCale
                 onClick={jumpToCurrentMonth}
                 className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-border bg-secondary hover:bg-muted text-secondary-foreground transition"
               >
-                當月 (10月)
+                當月 ({defaultMonth}月)
               </button>
             </div>
           ) : (

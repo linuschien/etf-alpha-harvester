@@ -708,7 +708,7 @@ describe('Custom JSON-render Components', () => {
 
     render(
       <JSONUIProvider store={store} registry={{}}>
-        <EventCalendar />
+        <EventCalendar defaultYear={2026} defaultMonth={10} />
       </JSONUIProvider>
     );
 
