@@ -1374,11 +1374,15 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
       const ytmVal = hasYtm ? Number(current.ytm) : null;
       const hasAum = current.fundSizeTwd !== undefined && current.fundSizeTwd !== null;
       const aumVal = hasAum ? Number(current.fundSizeTwd) : null;
-      const ytmPct = ytmVal !== null ? Math.min(100, Math.max(0, (ytmVal / 0.08) * 100)) : 0;
-      const aumPct = aumVal !== null ? Math.min(100, Math.max(0, (Math.log10(Math.max(1e8, aumVal)) / Math.log10(3000e8)) * 100)) : 0;
-      const compScore = current.compositeScore
-        ? Number(current.compositeScore).toFixed(1)
-        : (hasYtm && hasAum ? (0.7 * ytmPct + 0.3 * aumPct).toFixed(1) : '--');
+      // Objective domain benchmarks:
+      // YTM: 0% = 3.5% (FRED LOW_YIELD_HARVEST floor), 100% = 5.0% (FRED HIGH_YIELD_ACCUMULATION threshold), can exceed 100%
+      const ytmPct = ytmVal !== null ? Math.max(0, ((ytmVal - 0.035) / (0.05 - 0.035)) * 100) : 0;
+      // AUM: 0% = 20億 (Stage 1 gate), 100% = 2,000億 (100x gate, log10 ratio = 2), can exceed 100%
+      const aumPct = aumVal !== null && aumVal > 20e8 ? Math.max(0, (Math.log10(aumVal / 20e8) / 2) * 100) : 0;
+      const compScore =
+        current.compositeScore !== undefined && current.compositeScore !== null
+          ? Number(current.compositeScore).toFixed(1)
+          : '--';
 
       return (
         <div className="w-full rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
@@ -1416,14 +1420,17 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                   {ytmVal !== null ? `${(ytmVal * 100).toFixed(2)}%` : '--'}
                 </span>
                 <span className="text-xs text-muted-foreground font-mono">
-                  {ytmVal !== null ? `百分位約 ${ytmPct.toFixed(0)}%` : '無數據'}
+                  {ytmVal !== null ? `基準達成 ${ytmPct.toFixed(0)}%` : '無數據'}
                 </span>
               </div>
               <div className="w-full bg-muted/40 h-2 rounded-full overflow-hidden">
-                <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${ytmPct}%` }}></div>
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, ytmPct)}%` }}
+                ></div>
               </div>
               <div className="text-[11px] text-muted-foreground">
-                債券 ETF 預期持有至到期年化殖利率（收益核心權重 70%）
+                債券 ETF 預期持有至到期年化殖利率（收益核心權重 70%，3.5%~5.0% 基準）
               </div>
             </div>
 
@@ -1441,14 +1448,17 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
                   {aumVal !== null ? `${(aumVal / 1e8).toFixed(1)} 億` : '--'}
                 </span>
                 <span className="text-xs text-muted-foreground font-mono">
-                  {aumVal !== null ? `百分位約 ${aumPct.toFixed(0)}%` : '無數據'}
+                  {aumVal !== null ? `基準達成 ${aumPct.toFixed(0)}%` : '無數據'}
                 </span>
               </div>
               <div className="w-full bg-muted/40 h-2 rounded-full overflow-hidden">
-                <div className="bg-blue-500 h-full rounded-full transition-all duration-500" style={{ width: `${aumPct}%` }}></div>
+                <div
+                  className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, aumPct)}%` }}
+                ></div>
               </div>
               <div className="text-[11px] text-muted-foreground">
-                基金總資產規模、初級市場造市深度與流動性安全墊（權重 30%）
+                基金總資產規模、初級市場造市深度與流動性安全墊（權重 30%，20億~2,000億對數基準）
               </div>
             </div>
           </div>
@@ -1462,8 +1472,9 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             name: 'R² 基準擬合 (33.3%)',
             label: 'R² 貼合度',
             weight: '33.3%',
+            // 0% = 0.90 (Stage 1 Core gate), 100% = 0.95 (empirical TAIEX R² ceiling)
             val: current.rSquared !== undefined && current.rSquared !== null
-              ? Math.min(1, Math.max(0, Number(current.rSquared)))
+              ? Math.min(1, Math.max(0, (Number(current.rSquared) - 0.9) / 0.05))
               : 0,
             display: current.rSquared !== undefined && current.rSquared !== null
               ? Number(current.rSquared).toFixed(4)
@@ -1474,9 +1485,14 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             name: 'DCA 定額人氣 (33.3%)',
             label: '定額人氣',
             weight: '33.3%',
-            val: current.dcaRank !== undefined && current.dcaRank !== null
-              ? Math.min(1, Math.max(0, (21 - Math.min(20, Number(current.dcaRank))) / 20))
-              : 0,
+            // 0% = unranked (>20 or null), 100% = Rank #1, capped at 100%
+            val:
+              current.dcaRank !== undefined &&
+              current.dcaRank !== null &&
+              Number(current.dcaRank) > 0 &&
+              Number(current.dcaRank) <= 20
+                ? Math.min(1, Math.max(0, (21 - Number(current.dcaRank)) / 20))
+                : 0,
             display: current.dcaRank !== undefined && current.dcaRank !== null && Number(current.dcaRank) > 0
               ? `第 ${current.dcaRank} 名`
               : '--',
@@ -1486,9 +1502,13 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             name: 'AUM 規模深度 (33.3%)',
             label: '規模流動性',
             weight: '33.3%',
-            val: current.fundSizeTwd !== undefined && current.fundSizeTwd !== null
-              ? Math.min(1, Math.max(0, Math.log10(Math.max(1e8, Number(current.fundSizeTwd))) / Math.log10(5000e8)))
-              : 0,
+            // 0% = 20億 (Stage 1 gate), 100% = 2,000億 (100x gate, log10 ratio = 2), can exceed 100%
+            val:
+              current.fundSizeTwd !== undefined &&
+              current.fundSizeTwd !== null &&
+              Number(current.fundSizeTwd) > 20e8
+                ? Math.max(0, Math.log10(Number(current.fundSizeTwd) / 20e8) / 2)
+                : 0,
             display: current.fundSizeTwd !== undefined && current.fundSizeTwd !== null
               ? `${(Number(current.fundSizeTwd) / 1e8).toFixed(1)} 億`
               : '--',
@@ -1500,8 +1520,9 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             name: '12M 動能 (50.0%)',
             label: '12M 動能 MOM',
             weight: '50.0%',
+            // 0% = 0% (Stage 1 gate), 100% = +100% (1.0), can exceed 100%
             val: current.momentum12m !== undefined && current.momentum12m !== null
-              ? Math.min(1, Math.max(0, (Number(current.momentum12m) + 0.1) / 0.8))
+              ? Math.max(0, Number(current.momentum12m) / 1.0)
               : 0,
             display: current.momentum12m !== undefined && current.momentum12m !== null
               ? `${(Number(current.momentum12m) * 100).toFixed(1)}%`
@@ -1512,8 +1533,9 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             name: 'KER 趨勢平滑 (25.0%)',
             label: '考夫曼效率',
             weight: '25.0%',
+            // 0% = 0.00, 100% = 0.25 (daily bar trend ceiling), can exceed 100%
             val: current.kaufmanEr !== undefined && current.kaufmanEr !== null
-              ? Math.min(1, Math.max(0, Number(current.kaufmanEr)))
+              ? Math.max(0, Number(current.kaufmanEr) / 0.25)
               : 0,
             display: current.kaufmanEr !== undefined && current.kaufmanEr !== null
               ? Number(current.kaufmanEr).toFixed(3)
@@ -1524,8 +1546,9 @@ export default function ChartComponent({ element, props: directProps }: ChartPro
             name: '夏普比率 Sharpe (25.0%)',
             label: '夏普比率',
             weight: '25.0%',
+            // 0% = 0.00, 100% = 3.00, can exceed 100%
             val: current.sharpeRatio !== undefined && current.sharpeRatio !== null
-              ? Math.min(1, Math.max(0, Number(current.sharpeRatio) / 3.0))
+              ? Math.max(0, Number(current.sharpeRatio) / 3.0)
               : 0,
             display: current.sharpeRatio !== undefined && current.sharpeRatio !== null
               ? Number(current.sharpeRatio).toFixed(2)

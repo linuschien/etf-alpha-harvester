@@ -801,5 +801,90 @@ describe('Custom JSON-render Components', () => {
     expect(searchInput).toHaveValue('');
     expect(screen.getByText('請輸入標的代碼以查詢歷史除息與分割記錄')).toBeInTheDocument();
   });
+
+  it('renders spider-radar-chart with objective domain bounds and allows breakout beyond 100% for CORE, SATELLITE, and DEFENSIVE', () => {
+    const store = createStateStore({
+      selectedAsset: '0050',
+      filters: {
+        'asset-class-selector': 'CORE',
+      },
+      data: {
+        getOrthogonalCandidates: [
+          {
+            ticker: '0050',
+            name: '元大台灣50',
+            assetClass: 'CORE',
+            rSquared: 0.925, // (0.925 - 0.90) / 0.05 = 0.50
+            dcaRank: 1, // (21 - 1) / 20 = 1.00
+            fundSizeTwd: 2561549000000, // 25615.5億 -> log10(25615.49/20)/2 ≈ 1.554 (> 1.0 breakout!)
+            compositeScore: 95.8,
+          },
+          {
+            ticker: '00913',
+            name: '兆豐台灣晶圓製造',
+            assetClass: 'SATELLITE',
+            momentum12m: 1.5, // +150% -> 1.5 / 1.0 = 1.50 (> 1.0 breakout!)
+            kaufmanEr: 0.25, // 0.25 / 0.25 = 1.00
+            sharpeRatio: 1.5, // 1.5 / 3.0 = 0.50
+            compositeScore: 88.2,
+          },
+          {
+            ticker: '00720B',
+            name: '元大投資級公司債',
+            assetClass: 'DEFENSIVE',
+            ytm: 0.06, // 6.00% -> (0.06 - 0.035) / 0.015 = 166.7% (~167%)
+            fundSizeTwd: 20000000000, // 200億 -> log10(200/20)/2 = 50%
+            compositeScore: 91.5,
+          },
+        ],
+      },
+    });
+
+    const { container, rerender } = render(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'spider-radar-chart', label: '多因子體質透視' }} />
+      </JSONUIProvider>
+    );
+
+    // 1. CORE: R²=0.9250 (50% on 0.90~0.95 scale -> cy = 130 - 80*0.5 = 90), DCA=第 1 名, AUM=25615.5 億
+    expect(screen.getByText('0.9250')).toBeInTheDocument();
+    expect(screen.getByText('第 1 名')).toBeInTheDocument();
+    expect(screen.getByText('25615.5 億')).toBeInTheDocument();
+    const coreCircles = container.querySelectorAll('circle');
+    expect(coreCircles).toHaveLength(3);
+    expect(Number(coreCircles[0].getAttribute('cy'))).toBeCloseTo(90, 1);
+    // Axis 2 (AUM) has val ≈ 1.554 > 1.0, so distance from center (130, 130) is > 80
+    const aumCx = Number(coreCircles[2].getAttribute('cx'));
+    const aumCy = Number(coreCircles[2].getAttribute('cy'));
+    const aumDist = Math.hypot(aumCx - 130, aumCy - 130);
+    expect(aumDist).toBeGreaterThan(80);
+
+    // 2. SATELLITE: MOM=+150.0% (val=1.5 > 1.0 breakout at top vertex y = 130 - 80*1.5 = 10 < 50)
+    store.set('/selectedAsset', '00913');
+    store.set('/filters/asset-class-selector', 'SATELLITE');
+    rerender(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'spider-radar-chart', label: '多因子體質透視' }} />
+      </JSONUIProvider>
+    );
+    expect(screen.getByText('150.0%')).toBeInTheDocument();
+    expect(screen.getByText('0.250')).toBeInTheDocument();
+    expect(screen.getByText('1.50')).toBeInTheDocument();
+    const satCircles = container.querySelectorAll('circle');
+    expect(Number(satCircles[0].getAttribute('cy'))).toBeCloseTo(10, 1);
+
+    // 3. DEFENSIVE: YTM=6.00% -> 基準達成 167%, AUM=200.0 億 -> 基準達成 50%
+    store.set('/selectedAsset', '00720B');
+    store.set('/filters/asset-class-selector', 'DEFENSIVE');
+    rerender(
+      <JSONUIProvider store={store} registry={{}}>
+        <ChartComponent props={{ id: 'spider-radar-chart', label: '多因子體質透視' }} />
+      </JSONUIProvider>
+    );
+    expect(screen.getByText('6.00%')).toBeInTheDocument();
+    expect(screen.getByText('基準達成 167%')).toBeInTheDocument();
+    expect(screen.getByText('200.0 億')).toBeInTheDocument();
+    expect(screen.getByText('基準達成 50%')).toBeInTheDocument();
+  });
 });
 
