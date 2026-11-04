@@ -32,10 +32,13 @@
 ### 2. [後端 🟢 低] 突發颱風假 (`7/10`, `10/23`) 產生 ETF `vol=0` 平盤日 K
 - **相關檔案與行號**：
   - [`SyncRangeUtil.resolveSyncWindow()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/application/util/SyncRangeUtil.java#L49-L78)
-  - [`YahooFinanceClient.fetchHistoricalQuotes()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/adapter/out/external/YahooFinanceClient.java#L92-L116)
+  - [`YahooFinanceClient.fetchTaiwanEtfHistoricalQuotes()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/adapter/out/external/YahooFinanceClient.java#L153-L165)
 - **詳細原因與影響評估**：
   - 颱風假休市當天證交所/櫃買無報價，隔天觸發 `hasGap` 向 Yahoo Finance 回補時，Yahoo 會對台股 ETF 回傳 `close = 前日收盤價, volume = 0, trade_value_twd = 0` 的平盤 K 棒（但大盤 `^TWII` 無該日資料）。
   - 因 `alignReturnSeries` 取交集對齊日期，`R` 與 `R²` 零誤差；`MOM`、`KER`、`MDD`、`YTM` 亦零誤差；僅 `Vol 90d`、`Sharpe` 與 `30d 成交額中位數` 受單日 `0` 值微幅影響（`< 1%`），且隨滾動視窗推進自動消退。
+- **預計修復方向（待有突發休市時驗證）**：
+  - 在 `YahooFinanceClient.fetchTaiwanEtfHistoricalQuotes` 串流加上 `.filter(q -> q.getVolumeShares() != null && q.getVolumeShares() > 0)`。
+  - ⚠️ **注意**：不可加在底層共用的 `fetchHistoricalQuotes`，因為大盤與恐慌指數（`^VIX`、`^VXN`、`^MOVE`）在 Yahoo Finance 的 `volume` 恆為 `0`。
 
 ---
 
