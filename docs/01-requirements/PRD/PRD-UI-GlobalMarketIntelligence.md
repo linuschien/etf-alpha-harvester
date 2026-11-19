@@ -373,14 +373,16 @@
 置於 Tab 2「合規標的天梯榜」之第 4 個子頁籤（`[ 📈 績效比較 (Compare) ]`），提供投資人任選多檔台股 ETF 與全球基準指數，對齊同一時間起點（起始報酬率歸零為 `0.00%`），繪製每日含息累積報酬率折線圖，直觀比對各標的在相同時間窗口下的相對強弱、領漲/抗跌動能與波動軌跡。
 
 ##### 1. 可選標的範圍與選取規格 (Selectable Universe & Selection Rules)
-* **全市場台股 ETF ＋ 全球 5 大基準指數**：
-  - 支援從全市場台股原型 ETF（`GlobalAssetMetadata`）及全球 5 大市場基準指數（`^TWII` 台灣加權指數、`^GSPC` 標普 500、`^NDX` 那斯達克 100、`^SOX` 費城半導體、`^N225` 日經 225）中自由搜尋與勾選。
-* **預設狀態與選取上限**：
-  - **預設空白 (Default Empty)**：首次進入子頁籤時預設選取 `0` 檔標的，畫布中央呈現簡潔空狀態引導（「請從上方搜尋框挑選最多 10 檔 ETF 或大盤指數，比對同起點含息累積報酬走勢」）。
-  - **選取上限 10 檔 (Max 10 Assets)**：最多允許同時選取 **10 檔**標的同台疊圖。已選標的以帶專屬色點的膠囊標籤（Colored Chip）呈現，支援單一點擊 `×` 移除或一鍵「清除全部」；當已達 10 檔上限時，搜尋選單自動禁用新增並提示已達上限。
+* **全市場有效台股 ETF ＋ 全球 5 大基準指數（一次性排除已下市標的）**：
+  - 支援從全市場有效掛牌之台股原型 ETF（`GlobalAssetMetadata`，一次性過濾排除 `fundSizeTwd` 與 `netAssetValue` 皆為 `null` 之已下市標的）及全球 5 大市場基準指數（`^TWII` 台灣加權指數、`^GSPC` 標普 500、`^NDX` 那斯達克 100、`^SOX` 費城半導體、`^N225` 日經 225）中自由搜尋與勾選。
+* **預設狀態、狀態保留與選取上限**：
+  - **預設空白 (Default Empty)**：首次進入或重新整理網頁時預設選取 `0` 檔標的，畫布中央呈現簡潔空狀態引導（「請從上方搜尋框挑選最多 10 檔 ETF 或大盤指數，比對同起點含息累積報酬走勢」）。
+  - **同次瀏覽階段保留 (In-Session Persistence)**：於同一次瀏覽階段中切換至其他主頁籤或子頁籤再切回「績效比較」時，保留當前已選標的清單與所選時間視窗；重新整理網頁時重設為預設空白（不寫入 `localStorage`）。
+  - **選取上限 10 檔與最終報酬標籤 (Max 10 Assets & Final Return Chip)**：最多允許同時選取 **10 檔**標的同台疊圖。已選標的以帶專屬色點的膠囊標籤（Colored Chip）呈現，**標籤上直接顯示該標的於當前視窗的最終含息總報酬（如 `+18.6%` / `-4.2%`）**，支援單一點擊 `×` 移除或一鍵「清除全部」；當已達 10 檔上限時，搜尋選單自動禁用新增並提示已達上限。
   - **不設一鍵快選組合 (No Presets)**：保持介面乾淨純粹，不放置任何預設組合快選按鈕。
 * **上市時間門檻過濾 (Listing Age & Coverage Gate)**：
-  - **上市時間不滿足所選時間視窗者一律不顯示**：系統以資料庫最新可用交易日 $t_{\text{end}}$ 為基準，依當前所選時間視窗（`1M` / `3M` / `6M` / `1Y`）往回推算共同起始日 $t_0$；凡 `listingDate` 晚於 $t_0$（或歷史日行情起點未覆蓋 $t_0$）之新上市 ETF，於可選清單中自動隱藏不顯示；若使用者在短天期（如 `1M`）已選取某新上市標的，隨後切換至長天期（如 `1Y`）導致其上市時間不滿足 $t_0$，該標的折線不予顯示並以輕量提示告知。
+  - **上市時間不滿足所選時間視窗者一律不顯示**：系統以資料庫最新可用交易日 $t_{\text{end}}$ 為基準，依當前所選時間視窗（`1M` / `3M` / `6M` / `1Y`）往回推算共同起始日 $t_0$；凡 `listingDate` 晚於 $t_0$ 之新上市 ETF，於可選清單中自動隱藏不顯示。
+  - **切換長天期保留灰階 Chip 並自動恢復**：若使用者在短天期（如 `1M`）已選取某新上市標的，隨後切換至長天期（如 `1Y`）導致其上市時間不滿足 $t_0$，**該標的保留於已選 Chip 列中（呈半透明灰階並標註「上市未滿 1Y，暫不顯示」），折線圖不繪製其曲線**；待使用者切回較短天期（如 `1M`/`3M`）時自動恢復繪製。
 
 ##### 2. 時間視窗與同起點對齊規範 (Time Window & 0% Origin Alignment)
 * **四段標準時間視窗**：
@@ -390,9 +392,10 @@
   - 所有時間視窗（`1M` / `3M` / `6M` / `1Y`）的區間推算、查詢範圍與上市時間門檻判斷，**嚴格以資料庫最新可用交易日 $t_{\text{end}}$（取自 `DataFeedSyncWatermark.latestRecordDate` 或行情序列最新 `tradeDate`）為結束基準日往回推算起點 $t_0$**，嚴禁直接以瀏覽器系統時鐘（`new Date()`）往回扣減。
   - 確保在跨週末/連假休市、或使用固定歷史快照資料（如本地 Flyway 測試資料庫）的開發與驗證環境中，各時間視窗均能穩定呈現完整的歷史區間而不發生空資料或區間截斷。
 * **同起點歸零對齊 ($t_0 \to 0.00\%$)**：
-  - 以所選時間視窗之首個有效交易日 $t_0$ 作為共同起點，所有入選標的在 $t_0$ 當日之累積報酬率統一強制對齊為 **`0.00%`**。
-* **跨市場休市日對齊 (Cross-Market Forward-Fill Alignment)**：
-  - 當同時比較台股 ETF 與跨國基準指數（如美股 `^GSPC`、`^NDX`、`^SOX` 或日股 `^N225`）時，X 軸取所選標的在區間內之交易日聯集；若特定標的於某日因該國國定假日休市無報價，自動沿用該標的於前一有效交易日之含息累積報酬率（Forward-Fill），確保多條比較折線平滑連續、不出現斷裂或歸零假摔。
+  - 自 $t_{\text{end}}$ 往回推算目標日期（如 `1M` 減 1 個月、`3M` 減 3 個月、`6M` 減 6 個月、`1Y` 減 1 年），取 **`<= 目標日期` 之最近一個有效交易日** 作為共同歸零起點 $t_0$（例如 `2026-09-30` 推 `1M` 遇 `2026-08-30` 週日則取 `2026-08-28` 週五，與後端天梯榜 `1M/3M/6M/1Y` 計算起點一致）。
+  - 所有入選標的在 $t_0$ 當日之累積報酬率統一強制對齊為 **`0.00%`**；若個別市場於 $t_0$ 當日休市，取該標的 `<= t_0` 之最後一筆有效收盤價作為起始基準價 $P_{t_0}$。
+* **跨市場原日曆日對齊與休市補值 (Same-Calendar-Date & Forward-Fill Alignment)**：
+  - 當同時比較台股 ETF 與跨國基準指數（美股 `^GSPC`、`^NDX`、`^SOX` 或日股 `^N225`）時，X 軸嚴格依**原始日曆交易日直接對齊**（例如 `2026-09-30` 對應台股 9/30 與美股 9/30 收盤，不做 Shift +1 跨時區位移），取所選標的在區間內之交易日聯集；若特定標的於某日因該國國定假日休市無報價，自動沿用該標的於前一有效交易日之含息累積報酬率（Forward-Fill），確保多條比較折線平滑連續、不出現斷裂或歸零假摔。
 
 ##### 3. 含息累積報酬率計算公式 (Dividend-Included Compound Total Return - Formula B)
 * **一律採含息報酬 (Always Dividend-Included)**：
@@ -417,7 +420,7 @@
   - 內建 10 組高辨識度、深淺對比鮮明之專屬折線配色。
   - 於 Y 軸 `0.00%` 處繪製清晰水平虛線（Zero Baseline），正負報酬分界一目了然。
 * **互動十字準線與動態排名 Tooltip (Crosshair & Rank-Sorted Tooltip)**：
-  - 滑鼠於圖表上移動時，顯示垂直十字準線對齊當日所有標的資料點，浮動 Tooltip 即時依當日含息累積報酬率 **由高至低（DESC）動態排序** 列出各標的色點、代碼、名稱與累計報酬百分比（如 `+28.45%` / `-4.12%`）。
+  - 滑鼠於圖表上移動時，顯示垂直十字準線對齊當日所有標的資料點，浮動 Tooltip 即時依當日含息累積報酬率 **由高至低（DESC）動態排序** 列出各標的色點、代碼、名稱與累計報酬百分比（如 `+28.45%` / `-4.12%`）。（不設 Hover Chip 高亮/淡化其餘折線之交互）。
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -425,7 +428,7 @@
 │  子頁籤：[ 核心大盤 (Core Top 10) ]  [ 動能衛星 (Satellite Top 50) ]  [ 防禦債券 (Defensive Top 5) ]  [ 📈 績效比較 (選中) ] │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │  🔍 新增比較標的：[ 搜尋 ETF 代碼/名稱或全球基準指數 (已選 3 / 10 檔)... ▾ ]   時間視窗：[ 1M | 3M | 6M (選中) | 1Y ] │
-│  已選標的： [ 🔵 0050 元大台灣50 × ]  [ 🟣 00757 統一FANG+ × ]  [ 🟠 ^TWII 台灣加權指數 × ]          [ 清除全部 ]     │
+│  已選標的： [ 🔵 0050 元大台灣50 +18.6% × ]  [ 🟣 00757 統一FANG+ +36.4% × ]  [ 🟠 ^TWII 台灣加權 +15.2% × ] [ 清除全部 ] │
 │  * 說明：所有標的於區間起始日 (t₀) 對齊為 0.00%，報酬率一律採「含息總報酬 (除息再投入複利)」；上市時間不滿足者不顯示。│
 ├───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │  含息累積報酬率 (%)                                                                          [ 2026-11-06 績效排序 ]  │
@@ -618,7 +621,7 @@
 | **4 大恐慌指數 ＆ 5 大基準走勢** | `BenchmarkIndexGraphQLResolver.listBenchmarkIndices`<br>`MarketDailyQuoteGraphQLResolver.listQuotesByTickerAndDateRange` | `ticker`, `name`, `tradeDate`, `closePrice` (前端即時計算 20/60/120/240MA 與 BB 20, 2σ，並由 corporateAction 做分割平滑) |
 | **合規標的天梯榜 (一站式齊全)** | `GlobalAssetScoreGraphQLResolver.getOrthogonalCandidates`<br>`GlobalAssetScoreGraphQLResolver.listScoresByClassAndDate` | `ticker`, `name`, `distributionFrequency`, `classRank`, `compositeScore`, `fundSizeTwd`, `closePrice`, `changePct`, `return1m`, `return3m`, `return6m`, `return1y`, `orthogonalStatus`, `collisionDetail` |
 | **兩兩正交矩陣視圖** | `GlobalAssetScoreGraphQLResolver.getPairwiseMatrix` | `assetClass`, `baseTicker`, `targetTicker`, `rSquared`, `correlationCoefficient` (前端支援 Top 10 / Top 20 / 全部視角切換與代碼搜尋) |
-| **多標的同起點含息績效比較視圖** | `DataFeedSyncWatermarkGraphQLResolver.listDataFeedWatermarks`<br>`GlobalAssetMetadataGraphQLResolver.listGlobalAssets`<br>`MarketDailyQuoteGraphQLResolver.getQuoteTimeSeries`<br>`DividendAnnouncementGraphQLResolver.listDividendAnnouncements` | 1. **資料錨點 $t_{\text{end}}$**：由 `listDataFeedWatermarks`（`latestRecordDate`）或行情最新 `tradeDate` 決定視窗結束基準日 $t_{\text{end}}$，再依 `1M`/`3M`/`6M`/`1Y` 往回推算起點 $t_0$（不依賴系統時鐘 `new Date()`）。<br>2. **可選標的池**：合併 `listGlobalAssets`（`ticker`, `name`, `listingDate`）與 5 大全球基準指數（`^TWII`, `^GSPC`, `^NDX`, `^SOX`, `^N225`），過濾排除 `listingDate` 晚於 $t_0$ 之標的。<br>3. **含息累積報酬序列**：以 $t_{\text{end}}$ 往回拉取足額（至少 1 年＋緩衝）之已選標的（上限 10 檔）分割折算日收盤價序列與除息記錄，以起點 $t_0 \to 0.00\%$ 執行除息日再投入複利歸一化對齊與跨市場休市 Forward-Fill。 |
+| **多標的同起點含息績效比較視圖** | `DataFeedSyncWatermarkGraphQLResolver.listDataFeedWatermarks`<br>`GlobalAssetMetadataGraphQLResolver.listGlobalAssets`<br>`MarketDailyQuoteGraphQLResolver.getQuoteTimeSeries`<br>`DividendAnnouncementGraphQLResolver.listDividendAnnouncements` | 1. **資料錨點 $t_{\text{end}}$ 與起點 $t_0$**：由 `listDataFeedWatermarks`（`latestRecordDate`）或行情最新 `tradeDate` 決定視窗結束基準日 $t_{\text{end}}$，依 `1M`/`3M`/`6M`/`1Y` 往回推算並取 `<= 目標日` 最近交易日為共同起點 $t_0$（不依賴系統時鐘 `new Date()`）。<br>2. **可選標的池（一次性過濾）**：合併 `listGlobalAssets`（`ticker`, `name`, `listingDate`, `netAssetValue`, `fundSizeTwd`；一次性排除 `fundSizeTwd` 與 `netAssetValue` 皆為 `null` 之已下市標的，並過濾排除 `listingDate > t_0` 者）與 5 大全球基準指數（`^TWII`, `^GSPC`, `^NDX`, `^SOX`, `^N225`）。<br>3. **含息累積報酬序列**：以 $t_{\text{end}}$ 往回拉取足額（至少 1 年＋緩衝）之已選標的（上限 10 檔）分割折算日收盤價序列與除息記錄，依原日曆日對齊並以 $t_0 \to 0.00\%$ 執行除息日再投入複利計算與跨市場休市 Forward-Fill。 |
 | **手動評估/覆蓋重算 (Admin Trigger)** | REST API `POST /api/v1/globalAssetScores:evaluate` (GraphQL 嚴守純 Read Gateway，不提供 Mutation) | `yearMonth` (選填，格式 YYYY-MM，如 "2026-08"), `force` (布林值，預設 false) |
 | **超跌加碼勝率指數卡片** | `MarketDailyQuoteGraphQLResolver.getDipBuyOpportunity` (純函數求解) | `score` ($S_{\text{dip}}$), `grade`, `winRateRange`, `bollingerScore`, `fibonacciScore`, `maSupportScore`, `panicScore`, `recommendation` |
 | **ETF 除息月曆與清單視圖** | `DividendAnnouncementGraphQLResolver.listDividendAnnouncements` (支援 `filter: DividendAnnouncementFilterInput`) | 1. **月曆模式**：傳入 `{ startDate, endDate }`，後端呼叫 Spring Data 原生 OR 衍生方法 `findByExDateBetweenOrPaymentDateBetweenOrderByExDateAsc`，同時精準覆蓋當月除息與發放。<br>2. **清單模式**：傳入 `{ ticker }`，後端呼叫 `findByTickerOrderByExDateDesc` 精準拉取該標的歷史紀錄。<br>欄位：`ticker`, `exDate`, `paymentDate`, `dividendPerShare`, `taxTag` |
@@ -645,10 +648,10 @@
 8. **黃金分割回撤驗收**：回撤圖能準確標記 -23.6%、-38.2%、-61.8% 警戒線，並能平滑切換整數閥值與單一市場基準。
 9. **權限隔離驗收**：後端維運端點具備權限隔離，前端維運頁面現階段暫緩建置，日常使用者無法直接發起後端重算。
 10. **多標的同起點含息績效比較視圖驗收**：
-    - 位於 Tab 2「合規標的天梯榜」第 4 個子頁籤（`📈 績效比較`），支援搜尋選取全市場台股 ETF 與 5 大全球基準指數，預設為空白（`0` 檔）、上限 `10` 檔、無預設快選組合按鈕。
-    - 時間視窗支援 `1M`、`3M`、`6M`（預設）、`1Y` 快速切換，無自訂起始日期選擇器；所有視窗範圍與起始日 $t_0$ 一律以資料庫最新可用交易日 $t_{\text{end}}$（Watermark / 行情最新日）為基準往回推算（不依賴系統時鐘 `new Date()`）；上市時間（或報價起點）不滿足所選時間視窗起點 $t_0$ 之標的自動隱藏不予顯示。
-    - 所有選中標的於起點 $t_0$ 強制歸零對齊為 `0.00%`，一律採「含息總報酬（除息日配息再投入複利，$S_t = S_{t-1} \times (1 + D_t / P_t)$）」計算每日累積報酬率，跨市場休市日採 Forward-Fill 平滑對齊。
-    - 僅呈現折線圖（下方無摘要表格），且 Y 軸垂直高度拉長（$\ge 520\text{px}$）以確保最多 10 條曲線清晰分離，具備 `0.00%` 基準虛線與依當日累積報酬率由高至低（DESC）排序之互動 Tooltip。
+    - 位於 Tab 2「合規標的天梯榜」第 4 個子頁籤（`📈 績效比較`），支援搜尋選取有效台股 ETF（一次性排除 `fundSizeTwd` 與 `netAssetValue` 皆為 `null` 之已下市標的）與 5 大全球基準指數；預設空白（`0` 檔）、上限 `10` 檔、無預設快選組合按鈕；同次瀏覽切頁籤保留狀態、重整網頁回到預設空白。
+    - 時間視窗支援 `1M`、`3M`、`6M`（預設）、`1Y` 快速切換，無自訂起始日期選擇器；所有視窗範圍自資料庫最新可用交易日 $t_{\text{end}}$ 往回推算並取 `<= 目標日` 最近交易日為起點 $t_0$（不依賴系統時鐘 `new Date()`）；`listingDate > t_0` 之標的於清單中隱藏，已選標的於切換長天期不滿足時保留半透明灰階 Chip（「上市未滿 XX，暫不顯示」）且不繪線，切回短天期自動恢復。
+    - 所有選中標的於起點 $t_0$ 強制歸零對齊為 `0.00%`，一律採「含息總報酬（除息日配息再投入複利，$S_t = S_{t-1} \times (1 + D_t / P_t)$）」計算每日累積報酬率，跨市場依原日曆交易日對齊並以 Forward-Fill 平滑補值。
+    - 僅呈現折線圖（下方無摘要表格），已選 Chip 直接顯示各標的於當前視窗之最終含息總報酬，Y 軸垂直高度拉長（$\ge 520\text{px}$），具備 `0.00%` 基準虛線與依當日累積報酬率由高至低（DESC）排序之互動 Tooltip（不設 Hover 淡化他線交互）。
 
 ---
 
