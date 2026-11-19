@@ -826,7 +826,7 @@
                         "id": "performance-compare-asset-selector",
                         "abstract_type": "Selection",
                         "semantic_variant": "multi-select",
-                        "label": "新增比較標的 (全市場有效台股原型 ETF [排除規模與淨值皆為 NULL 之已下市標的] ＋ 全球 5 大基準指數，預設空白、同次瀏覽保留、上限 10 檔，Chip 顯示最終含息報酬，上市未滿視窗者隱藏於選單並於切換長天期時呈灰階 Chip 暫不繪線)",
+                        "label": "新增比較標的 (全市場有效台股原型 ETF [僅一次性排除規模與淨值皆為 NULL 之已下市標的，不事先過濾 listingDate] ＋ 全球 5 大基準指數，預設空白、同次瀏覽保留、上限 10 檔，Chip 顯示最終含息報酬，上市未滿視窗者統一呈灰階 Chip 暫不繪線)",
                         "data_ref": "listGlobalAssets",
                         "behavior_ref": "nielsen:control, nielsen:error-prevention",
                         "checks": [
@@ -850,7 +850,7 @@
                         "id": "performance-compare-window-selector",
                         "abstract_type": "Selection",
                         "semantic_variant": "radio",
-                        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y，自資料最新交易日 t_end 往回取 <= 目標日之最近交易日為起點 t₀)",
+                        "label": "時間視窗切換 (1M / 3M / 6M (預設) / 1Y，自資料最新交易日 t_end 往回取交易日聯集 <= 目標日之最近交易日為共同起點 t₀，個別休市標的各自往前取 <= t₀ 最後收盤價作基準)",
                         "behavior_ref": "nielsen:control",
                         "ux_hints": {
                           "max_visible_options": 4
@@ -860,11 +860,6 @@
                             "on_event": "on_change",
                             "target_id": "performance-comparison-chart",
                             "behavior_ref": "nielsen:feedback"
-                          },
-                          {
-                            "on_event": "on_change",
-                            "target_id": "performance-compare-asset-selector",
-                            "behavior_ref": "nielsen:error-prevention"
                           }
                         ]
                       },
