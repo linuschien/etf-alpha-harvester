@@ -48,17 +48,62 @@ describe('performance-comparison pure calculation engine', () => {
     ).toBe('2026-09-28');
   });
 
-  it('computes calendar target start dates and 2Y fetch ranges cleanly including month-end clamping', () => {
+  it('computes calendar target start dates and 13-month cache-friendly fetch ranges including month-end clamping', () => {
     expect(computeTargetStartDate('2026-09-30', '1M')).toBe('2026-08-30');
     expect(computeTargetStartDate('2026-03-31', '1M')).toBe('2026-02-28');
     expect(computeTargetStartDate('2026-09-30', '3M')).toBe('2026-06-30');
     expect(computeTargetStartDate('2026-09-30', '6M')).toBe('2026-03-30');
     expect(computeTargetStartDate('2026-09-30', '1Y')).toBe('2025-09-30');
 
+    expect(computeFetchRange('2026-11-20')).toEqual({
+      startDate: '2025-11-01',
+      endDate: '2026-11-20',
+    });
     expect(computeFetchRange('2026-09-30')).toEqual({
-      startDate: '2024-09-30',
+      startDate: '2025-09-01',
       endDate: '2026-09-30',
     });
+  });
+
+  it('handles 1Y month-boundary weekend smoothly in production while marking missing-months dev snapshot as insufficient_history', () => {
+    const universeMap = new Map<string, GlobalAssetOption>([
+      ['0050', { ticker: '0050', name: '元大台灣50', listingDate: '2003-06-30', netAssetValue: 190, fundSizeTwd: 4e11 }],
+    ]);
+
+    // Production on 2026-11-02 (Mon): 2025-11-01 & 2025-11-02 were Sat/Sun, so first trading day in 2025-11 is 2025-11-03 (1 day gap)
+    const prodModel = buildPerformanceComparisonModel({
+      selectedTickers: ['0050'],
+      universeMap,
+      quotesByTicker: {
+        '0050': [
+          { tradeDate: '2025-11-03', closePrice: 150 },
+          { tradeDate: '2026-11-02', closePrice: 180 },
+        ],
+      },
+      dividendsByTicker: {},
+      anchorDate: '2026-11-02',
+      window: '1Y',
+    });
+    expect(prodModel.originDate).toBe('2025-11-03');
+    expect(prodModel.series).toHaveLength(1);
+    expect(prodModel.series[0].finalReturnPct).toBe(20);
+
+    // Local dev snapshot ending 2026-09-30 when cache only retains >= 2025-11 (34 days gap) -> insufficient_history (expected)
+    const devModel = buildPerformanceComparisonModel({
+      selectedTickers: ['0050'],
+      universeMap,
+      quotesByTicker: {
+        '0050': [
+          { tradeDate: '2025-11-03', closePrice: 150 },
+          { tradeDate: '2026-09-30', closePrice: 180 },
+        ],
+      },
+      dividendsByTicker: {},
+      anchorDate: '2026-09-30',
+      window: '1Y',
+    });
+    expect(devModel.series).toHaveLength(0);
+    expect(devModel.chipStates[0].status).toBe('insufficient_history');
   });
 
   it('computes Formula B compound dividend reinvestment accurately (exact +21.00% on textbook 3-day case)', () => {

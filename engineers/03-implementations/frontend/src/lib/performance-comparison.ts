@@ -213,15 +213,24 @@ export function computeTargetStartDate(
 }
 
 /**
- * Compute the GraphQL query fetch range [startDate, endDate] anchored at t_end
- * with a 2-year lookback buffer so 1Y always has a valid trading day <= targetStartDate
- * even when local dev snapshots lag behind wall-clock time or span long holidays.
+ * Compute the GraphQL query fetch range [startDate, endDate] anchored at t_end,
+ * starting from the 1st day of the month 1 year prior (delta <= 12 months).
+ * This stays strictly within the backend MonthlyQuoteExpiryPolicy 13-month cache window
+ * so production requests achieve 100% Path 1 cache hits without querying unneeded older months.
  */
 export function computeFetchRange(anchorDate: string): { startDate: string; endDate: string } {
   const normalized = normalizeIsoDate(anchorDate) || formatDate(new Date());
   const oneYearAgo = computeTargetStartDate(normalized, '1Y');
-  const twoYearsAgo = computeTargetStartDate(oneYearAgo, '1Y');
-  return { startDate: twoYearsAgo, endDate: normalized };
+  const startOfMonthOneYearAgo = `${oneYearAgo.slice(0, 7)}-01`;
+  return { startDate: startOfMonthOneYearAgo, endDate: normalized };
+}
+
+function calendarDaysBetween(startIso: string, endIso: string): number {
+  const [y1, m1, d1] = startIso.split('-').map(Number);
+  const [y2, m2, d2] = endIso.split('-').map(Number);
+  const t1 = Date.UTC(y1, m1 - 1, d1);
+  const t2 = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((t2 - t1) / (24 * 60 * 60 * 1000));
 }
 
 /**
@@ -332,9 +341,14 @@ export function buildPerformanceComparisonModel({
       return;
     }
 
-    // Must have at least one valid quote <= targetStartDate to satisfy the window baseline
+    // Must cover targetStartDate (allowing up to 7-day weekend/holiday gap at the start of the 1Y month boundary)
     const earliestDate = sortedQuotes[0].date;
-    if (earliestDate > targetStartDate) {
+    const isMonthBoundaryWeekendGap =
+      window === '1Y' &&
+      earliestDate > targetStartDate &&
+      calendarDaysBetween(targetStartDate, earliestDate) <= 7;
+
+    if (earliestDate > targetStartDate && !isMonthBoundaryWeekendGap) {
       statusMap.set(ticker, {
         status: 'insufficient_history',
         reason: `上市未滿 ${window}，暫不顯示`,
@@ -380,11 +394,18 @@ export function buildPerformanceComparisonModel({
   const unionDates = Array.from(unionDateSet).sort();
 
   // Determine common origin date t_0: latest date in unionDates that is <= targetStartDate
+  // (Fallback to first date >= targetStartDate only when 1Y starts on a month-boundary weekend)
   let originDate: string | null = null;
   for (let i = unionDates.length - 1; i >= 0; i--) {
     if (unionDates[i] <= targetStartDate) {
       originDate = unionDates[i];
       break;
+    }
+  }
+  if (!originDate && window === '1Y' && unionDates.length > 0) {
+    const firstOnOrAfter = unionDates.find((d) => d >= targetStartDate);
+    if (firstOnOrAfter && calendarDaysBetween(targetStartDate, firstOnOrAfter) <= 7) {
+      originDate = firstOnOrAfter;
     }
   }
 
