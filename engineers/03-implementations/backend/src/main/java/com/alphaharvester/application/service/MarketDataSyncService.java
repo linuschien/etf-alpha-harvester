@@ -28,9 +28,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -269,7 +271,17 @@ public class MarketDataSyncService implements MarketDataSyncUseCase {
                             .filter(asset -> asset.getFundSizeTwd() != null && asset.getNetAssetValue() != null)
                             .map(GlobalAssetMetadata::getTicker)
                             .collectList()
-                            .flatMapMany(externalMarketDataPort::fetchTaiwanEtfDailyQuotes)
+                            .flatMapMany(monitoredTickers -> {
+                                Set<String> monitoredSet = new HashSet<>(monitoredTickers);
+                                return externalMarketDataPort.fetchTaiwanEtfDailyQuotes(monitoredTickers)
+                                        .filter(q -> {
+                                            if (!monitoredSet.contains(q.getTicker())) {
+                                                log.warn("Skipping daily quote for unmonitored/newly listed ETF '{}' (not in active global_asset_metadata with NAV/AUM).", q.getTicker());
+                                                return false;
+                                            }
+                                            return true;
+                                        });
+                            })
                             .flatMap(this::upsertDailyQuote);
 
                     Flux<MarketDailyQuote> backfillFlux;

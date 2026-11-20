@@ -124,7 +124,7 @@ class MarketDataSyncServiceTest {
         // Mock repository calls
         when(metadataRepository.findByTicker("0050")).thenReturn(Mono.just(asset50));
         when(metadataRepository.findByTicker("00720B")).thenReturn(Mono.just(asset720b));
-        when(metadataRepository.findAll()).thenReturn(Flux.just(asset720b));
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset50, asset720b));
         when(metadataRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         when(quoteRepository.findByTickerAndTradeDate(any(), any())).thenReturn(Mono.empty());
@@ -216,6 +216,8 @@ class MarketDataSyncServiceTest {
         UUID id = UUID.randomUUID();
         GlobalAssetMetadata asset = new GlobalAssetMetadata(id, "0050", "元大台灣50", now, null,
                 1, now, now, null);
+        asset.setFundSizeTwd(new BigDecimal("10000000000"));
+        asset.setNetAssetValue(new BigDecimal("185.0"));
 
         MarketDailyQuote etfQuote = new MarketDailyQuote(null, id, null, "0050", now,
                 new BigDecimal("185.0"), new BigDecimal("189.0"), new BigDecimal("184.0"),
@@ -586,6 +588,57 @@ class MarketDataSyncServiceTest {
                 .assertNext(res -> {
                     assertThat(res.syncedRecords().dividendAnnouncementsCount()).isEqualTo(1);
                     verify(externalMarketDataPort).fetchDividendsAndSplits(eq("0050"), anyString());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should skip unregistered mid-month newly listed ETF quote without interrupting subsequent TPEx bond ETF quotes")
+    void shouldSkipUnregisteredNewlyListedEtfQuoteWithoutInterruptingSubsequentQuotes() {
+        LocalDateTime now = LocalDateTime.now();
+        UUID id50 = UUID.randomUUID();
+        UUID id679b = UUID.randomUUID();
+
+        GlobalAssetMetadata asset50 = new GlobalAssetMetadata(id50, "0050", "元大台灣50", now.minusYears(10), null, 1, now, now, null);
+        asset50.setFundSizeTwd(new BigDecimal("400000000000"));
+        asset50.setNetAssetValue(new BigDecimal("190.0"));
+
+        GlobalAssetMetadata asset679b = new GlobalAssetMetadata(id679b, "00679B", "元大美債20年", now.minusYears(5), null, 1, now, now, null);
+        asset679b.setFundSizeTwd(new BigDecimal("250000000000"));
+        asset679b.setNetAssetValue(new BigDecimal("30.5"));
+
+        // 009833 newly listed mid-month and NOT YET in global_asset_metadata
+        MarketDailyQuote quote50 = new MarketDailyQuote(null, null, null, "0050", now,
+                new BigDecimal("189.0"), new BigDecimal("191.0"), new BigDecimal("188.5"),
+                new BigDecimal("190.5"), 1000000L, new BigDecimal("190500000"));
+        MarketDailyQuote quote9833 = new MarketDailyQuote(null, null, null, "009833", now,
+                new BigDecimal("10.08"), new BigDecimal("10.18"), new BigDecimal("9.92"),
+                new BigDecimal("10.09"), 17825363L, new BigDecimal("179597774"));
+        MarketDailyQuote quote679b = new MarketDailyQuote(null, null, null, "00679B", now,
+                new BigDecimal("30.4"), new BigDecimal("30.6"), new BigDecimal("30.3"),
+                new BigDecimal("30.5"), 5000000L, new BigDecimal("152500000"));
+
+        DataFeedSyncWatermark recentWatermark = new DataFeedSyncWatermark(
+                UUID.randomUUID(), MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES,
+                now.minusDays(1), now.minusDays(1), 250, "SUCCESS", null, now.minusDays(1)
+        );
+        when(watermarkRepository.findByFeedName(MarketDataSyncService.WATERMARK_TAIWAN_ETF_QUOTES))
+                .thenReturn(Mono.just(recentWatermark));
+        when(metadataRepository.findAll()).thenReturn(Flux.just(asset50, asset679b));
+        when(externalMarketDataPort.fetchTaiwanEtfDailyQuotes(any()))
+                .thenReturn(Flux.just(quote50, quote9833, quote679b));
+        when(quoteRepository.findByTickerAndTradeDate(any(), any())).thenReturn(Mono.empty());
+        when(quoteRepository.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        MarketDataSyncRequest req = new MarketDataSyncRequest(SyncScope.QUOTES, false);
+
+        StepVerifier.create(syncService.syncMarketData(req))
+                .assertNext(res -> {
+                    assertThat(res.status()).isEqualTo("SUCCESS");
+                    assertThat(res.syncedRecords().dailyQuotesCount()).isEqualTo(2);
+                    verify(quoteRepository).save(argThat(q -> "0050".equals(q.getTicker())));
+                    verify(quoteRepository).save(argThat(q -> "00679B".equals(q.getTicker())));
+                    verify(quoteRepository, never()).save(argThat(q -> "009833".equals(q.getTicker())));
                 })
                 .verifyComplete();
     }
