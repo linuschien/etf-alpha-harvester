@@ -1,6 +1,6 @@
 # ETF Alpha Harvester — Known Issues & TODO 清單
 
-最後更新日期：2026-11-05
+最後更新日期：2026-11-20
 
 ---
 
@@ -8,7 +8,7 @@
 
 | # | 端別 | 嚴重度 | 議題名稱 | 觸發條件 / 現象 | 對系統的影響（副作用） | 目前狀態 |
 | :-: | :-: | :-: | :--- | :--- | :--- | :-: |
-| **1** | 後端 | 🔴 **高** | **月中新掛牌 ETF 觸發 Foreign Key 崩潰** | 月中新上市 ETF（如 `009831`）已出現在證交所收盤報價 API，但尚未同步進 `global_asset_metadata` 表 | `upsertDailyQuote` 寫入新代號時拋出 `CONSTRAINT_54` FK 例外，**腰斬後續所有櫃買債券 ETF（如 `00679B`）的報價寫入**，且 Watermark 卡在 `FAILED` | **保留**<br>*(待下次有新 ETF 上市時修復驗證)* |
+| **1** | 後端 | 🔴 **高** | **月中新掛牌 ETF 觸發 Foreign Key 崩潰** | 月中新上市 ETF（如 `009831`、`009833`）已出現在證交所收盤報價 API，但尚未同步進 `global_asset_metadata` 表 | `upsertDailyQuote` 寫入新代號時拋出 `CONSTRAINT_54` FK 例外，**腰斬後續所有櫃買債券 ETF（如 `00679B`）的報價寫入**，且 Watermark 卡在 `FAILED` | **✅ 已修復**<br>*(2026-11-20)* |
 | **2** | 後端 | 🟢 **低** | **突發颱風假 (`7/10`, `10/23`) 產生 ETF `vol=0` 平盤日 K** | 突發休市隔天觸發 `hasGap` 去 Yahoo 回補，Yahoo 對 ETF 回傳平盤 `vol=0`（`^TWII` 無資料） | `R`、`R²`、`MOM`、`KER`、`MDD`、`YTM` **零誤差**；`Vol 90d`、`Sharpe`、`30d 成交額` 影響 `< 1%` 且隨視窗推進自動消失 | **保留觀察** |
 | **3** | 後端 | 🟢 **低** | **Yahoo 配息 `payment_date` 為推估值 & 指數 `volume` 單位不一** | Yahoo API 不提供配息發放日（目前用 `exDate + 30d`）；各國指數 `volume` 單位不一或恆為 `0` | `payment_date` 可能與真實發放日不同或落在週末；指數的 `volume` / `trade_value_twd` 僅存 DB 未被量化引擎與前端使用 | **保留備忘** |
 | **4** | 後端 | 🟢 **低** | **月中 ETF 分割若在收錄前先點開 UI 抽屜，會使 Ehcache 錯過 Path 3 重刷** | ETF 於月中（如 `10/08`）分割，但 `DIVIDENDS_AND_SPLITS` 要到下月初（`11/01`）才同步進 DB；若在 `10/08 ~ 10/31` 空窗期先點開該 ETF 的 K 線抽屜，`cacheDate` 會推進至 `> splitDate` | **對每月 ETF 評選排行榜、總經 200MA、逢低加碼雷達 0 影響**（皆直接讀 DB 運算）；僅影響該檔 ETF 在 UI 抽屜的 K 線與均線圖快取（因 `cacheDate < splitDate` 不再成立而未觸發 Path 3 全量重刷） | **保留備忘** |
@@ -17,16 +17,17 @@
 
 ## 各項細節與關鍵程式位置
 
-### 1. [後端 🔴 高] 月中新掛牌 ETF 觸發 Foreign Key (`CONSTRAINT_54`) 崩潰
+### 1. [後端 🔴 高] 月中新掛牌 ETF 觸發 Foreign Key (`CONSTRAINT_54`) 崩潰 — ✅ 已修復 (2026-11-20)
 - **相關檔案與行號**：
-  - [`CompositeExternalMarketDataAdapter.fetchTaiwanEtfDailyQuotes()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/adapter/out/external/CompositeExternalMarketDataAdapter.java#L102-L137)
-  - [`MarketDataSyncService.syncTaiwanEtfQuotes()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/application/service/MarketDataSyncService.java#L268-L317)
+  - [`MarketDataSyncService.syncTaiwanEtfQuotes()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/application/service/MarketDataSyncService.java#L270-L285)
+  - [`MarketDataSyncServiceTest.shouldSkipUnregisteredNewlyListedEtfQuoteWithoutInterruptingSubsequentQuotes()`](engineers/03-implementations/backend/src/test/java/com/alphaharvester/service/MarketDataSyncServiceTest.java#L595-L645)
 - **詳細原因**：
-  1. `TWSE_ETF_METADATA` 僅在每月初同步一次；當月中出現新掛牌 ETF（且代號符合 Stage 0 白名單 `^00\d{2,4}B?$`）時，證交所盤後 API `STOCK_DAY_ALL` 當天就會回傳該代號，但 `global_asset_metadata` 表尚無該代號紀錄。
-  2. `primaryQuotes = Flux.concat(twseQuotes, tpexQuotes)` 未以已知的 `monitoredSet`（`monitoredTickers`）過濾，直接嘗試寫入 `market_daily_quote`，觸發外鍵 `CONSTRAINT_54` 例外。
+  1. `TWSE_ETF_METADATA` 僅在每月初同步一次；當月中出現新掛牌 ETF（如 `2026-10-29` 上市的 `009831`、`2026-11-19` 上市的 `009833`，代號符合 Stage 0 白名單 `^00\d{2,4}B?$`）時，證交所盤後 API `STOCK_DAY_ALL` 當天就會回傳該代號，但 `global_asset_metadata` 表尚無該代號紀錄。
+  2. 原本 `primaryFlux` 未以 `monitoredSet`（`monitoredTickers`）過濾，直接嘗試寫入 `market_daily_quote`，觸發外鍵 `CONSTRAINT_54` 例外。
   3. 因為 `Flux.concat` 是依序串流，一旦在 `twseQuotes` 中途拋錯中斷，排在該代號之後的上市 ETF 與**整批上櫃債券 ETF (`tpexQuotes`)** 在月底前每天都會被取消而漏寫入；同時外層 `.onErrorResume(...)` 吞掉例外導致 `@Transactional` 不會 Rollback 前半段已寫入的紀錄，且 `TAIWAN_ETF_QUOTES` Watermark 停留在 `FAILED`。
-- **預計修復方向（待下次新 ETF 上市時實測驗證）**：
-  - 在 `CompositeExternalMarketDataAdapter.fetchTaiwanEtfDailyQuotes` 中將 `primaryQuotes` 嚴格過濾於 `monitoredSet.contains(q.getTicker())` 內，或在偵測到未註冊新代號時先觸發增量 `syncMetadata`。
+- **實際修復內容（方案 A）**：
+  - 於 `MarketDataSyncService.syncTaiwanEtfQuotes()` 的 `primaryFlux` 進 `upsertDailyQuote` 前，以有淨值與規模的 `monitoredSet` 過濾（`monitoredSet.contains(q.getTicker())`）；尚未建檔或未具淨值的新上市 ETF 印出 `WARN` 日誌並安全跳過，不影響後續所有上市與櫃買債券 ETF 入庫，待次月 1 日月度 Metadata 同步後自動納入每日收價。
+  - 已補上 `MarketDataSyncServiceTest` 回歸單元測試並通過 `mvn clean test`（183/183 tests passed，JaCoCo 達標）。
 
 ---
 
