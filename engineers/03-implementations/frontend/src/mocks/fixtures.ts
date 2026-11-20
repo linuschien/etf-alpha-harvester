@@ -644,3 +644,46 @@ export const mockMarketDailyQuotes: any[] = [
     tradeValueTwd: 0,
   },
 ];
+
+export const mockGlobalAssets: any[] = [
+  {
+    ticker: '0050',
+    name: '元大台灣50',
+    listingDate: '2003-06-30',
+    underlyingIndex: '富時臺灣證券交易所臺灣50指數',
+    netAssetValue: 190.5,
+    fundSizeTwd: 420000000000,
+  },
+  {
+    ticker: '00757',
+    name: '統一FANG+',
+    listingDate: '2018-12-06',
+    underlyingIndex: 'NYSE FANG+ Index',
+    netAssetValue: 98.5,
+    fundSizeTwd: 28000000000,
+  },
+  {
+    ticker: '00830',
+    name: '國泰費城半導體',
+    listingDate: '2019-05-03',
+    underlyingIndex: 'PHLX Semiconductor Sector Index',
+    netAssetValue: 52.1,
+    fundSizeTwd: 19000000000,
+  },
+  {
+    ticker: '00999',
+    name: '測試新上市ETF',
+    listingDate: '2026-08-15',
+    underlyingIndex: '測試指數',
+    netAssetValue: 15.2,
+    fundSizeTwd: 5000000000,
+  },
+  {
+    ticker: '0054',
+    name: '元大台商收成(已下市)',
+    listingDate: '2007-07-16',
+    underlyingIndex: 'S&P台商收成指數',
+    netAssetValue: null,
+    fundSizeTwd: null,
+  },
+];

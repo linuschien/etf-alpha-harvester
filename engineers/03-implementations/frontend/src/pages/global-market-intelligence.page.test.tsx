@@ -596,4 +596,35 @@ describe('GlobalMarketIntelligencePage', () => {
     });
     expect(pill).toBeInTheDocument();
   });
+
+  it('switches to 4th subtab Performance Comparison, hides leaderboard controls, and preserves in-session selection across subtab switches', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const compareSubTab = await screen.findByRole('tab', {
+      name: /績效比較/i,
+    });
+    await user.click(compareSubTab);
+
+    expect(store.get('/filters/asset-class-selector')).toBe('COMPARE');
+    expect(await screen.findByText('多標的同起點含息績效比較')).toBeInTheDocument();
+    expect(screen.getByText('尚未挑選任何比較標的')).toBeInTheDocument();
+    expect(screen.queryByText('ETF投資清單篩選')).not.toBeInTheDocument();
+
+    // Pick 0050 in Compare subtab
+    const combobox = screen.getByRole('combobox', { name: '新增比較標的' });
+    await user.click(combobox);
+    const listbox = await screen.findByRole('listbox');
+    await user.click(within(listbox).getByRole('option', { name: /0050/ }));
+    expect(store.get('/filters/performance-compare-tickers')).toEqual(['0050']);
+
+    // Switch back to Core leaderboard -> leaderboard heading reappears
+    const coreSubTab = screen.getByRole('tab', { name: /核心大盤/i });
+    await user.click(coreSubTab);
+    expect(await screen.findByText('ETF投資清單篩選')).toBeInTheDocument();
+
+    // Switch back to Compare -> 0050 selection is preserved in-session
+    await user.click(screen.getByRole('tab', { name: /績效比較/i }));
+    expect(await screen.findByTestId('compare-chip-0050')).toBeInTheDocument();
+  });
 });

@@ -10,6 +10,7 @@ import {
   mockMacroYieldSnapshot,
   mockMacroRegime,
   mockMarketDailyQuotes,
+  mockGlobalAssets,
 } from './fixtures';
 
 export const handlers = [
@@ -112,6 +113,12 @@ export const handlers = [
         data: {
           listMacroYieldSnapshots: [mockMacroYieldSnapshot],
         },
+      });
+    }
+
+    if (query.includes('listGlobalAssets') || operationName === 'ListGlobalAssets') {
+      return HttpResponse.json({
+        data: { listGlobalAssets: mockGlobalAssets },
       });
     }
 

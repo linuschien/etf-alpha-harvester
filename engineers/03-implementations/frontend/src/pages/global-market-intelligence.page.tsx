@@ -70,6 +70,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
 
   const parseAssetClass = (val?: string) => {
     if (!val) return 'CORE';
+    if (val.includes('COMPARE') || val.includes('績效比較')) return 'COMPARE';
     if (val.includes('CORE') || val.includes('核心')) return 'CORE';
     if (val.includes('SATELLITE') || val.includes('衛星')) return 'SATELLITE';
     if (val.includes('DEFENSIVE') || val.includes('債券')) return 'DEFENSIVE';
@@ -77,10 +78,12 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
   };
 
   const effectiveAssetClass = parseAssetClass(storeAssetClass);
+  const isCompareSubTab = effectiveAssetClass === 'COMPARE';
   const effectiveEvaluationDate = storeEvaluationDate || getDefaultEvaluationDate();
 
   const isTab1 = isTest || activeTab === 'all' || activeTab === 'macro-sentiment-section';
   const isTab2 = isTest || activeTab === 'all' || activeTab === 'qualified-leaderboard-section';
+  const isTab2Leaderboard = isTab2 && !isCompareSubTab;
   const isTab3 = isTest || activeTab === 'all' || activeTab === 'dca-calendar-section';
 
   const isBenchmark =
@@ -122,7 +125,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       threshold: 0.8,
       evaluationDate: effectiveEvaluationDate,
     },
-    { enabled: isTab2 }
+    { enabled: isTab2Leaderboard }
   );
   // Reset seedTicker when asset class changes
   const prevAssetClassRef = useRef(effectiveAssetClass);
@@ -141,7 +144,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       seedTicker: storeSeedTicker || undefined,
       evaluationDate: effectiveEvaluationDate,
     },
-    { enabled: isTab2 }
+    { enabled: isTab2Leaderboard }
   );
   const { data: watermarks } = useListDataFeedWatermarks();
   const { data: macroYield } = useGetLatestMacroYieldSnapshot({ enabled: isYield });
@@ -155,7 +158,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       assetClass: effectiveAssetClass,
       evaluationDate: effectiveEvaluationDate,
     },
-    { enabled: isTab2 }
+    { enabled: isTab2Leaderboard }
   );
   const { data: benchmarkQuotes } = useBenchmarkQuotes(undefined, undefined, {
     enabled: isBenchmark,
@@ -464,6 +467,12 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     if (store.get('/filters/toggle-kline-fib-switch') === undefined) {
       store.set('/filters/toggle-kline-fib-switch', true);
     }
+    if (!Array.isArray(store.get('/filters/performance-compare-tickers'))) {
+      store.set('/filters/performance-compare-tickers', []);
+    }
+    if (!store.get('/filters/performance-compare-window')) {
+      store.set('/filters/performance-compare-window', '6M');
+    }
   }, [store, currentPerspectiveMode]);
 
   // Dynamic spec: toggle className of tab sections to 'block' or 'hidden', and toggle active leaderboard table
@@ -533,17 +542,19 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
       }
     });
 
-    // Table visibility toggle inside qualified-leaderboard-section based on perspective mode
+    // Subtab visibility inside qualified-leaderboard-section: 3 leaderboard pools vs 4th Performance Comparison subtab
     const isClusteringActive = currentPerspectiveMode.includes('分群');
     if (cloned.elements?.['qualified-leaderboard-section']) {
-      cloned.elements['qualified-leaderboard-section'].children = [
-        'asset-class-selector',
-        'leaderboard-heading',
-        'orthogonal-control-bar',
-        isClusteringActive
-          ? 'clustering-leaderboard-table'
-          : 'qualified-leaderboard-table',
-      ];
+      cloned.elements['qualified-leaderboard-section'].children = isCompareSubTab
+        ? ['asset-class-selector', 'performance-comparison-container']
+        : [
+            'asset-class-selector',
+            'leaderboard-heading',
+            'orthogonal-control-bar',
+            isClusteringActive
+              ? 'clustering-leaderboard-table'
+              : 'qualified-leaderboard-table',
+          ];
     }
 
     if (cloned.elements?.['qualified-leaderboard-table']) {
@@ -660,6 +671,7 @@ function PageContent({ initialPerspectiveMode }: PageProps) {
     activeTab,
     activeSubTab,
     activeDcaSubTab,
+    isCompareSubTab,
     currentPerspectiveMode,
     storeSelectedAsset,
     orthogonalCandidates,
@@ -700,6 +712,8 @@ const defaultStore = createStateStore({
     'toggle-kline-ma-switch': true,
     'toggle-kline-bb-switch': true,
     'toggle-kline-fib-switch': true,
+    'performance-compare-tickers': [],
+    'performance-compare-window': '6M',
   },
   metrics: {
     'dip-buy-score-metric': '--',

@@ -15,6 +15,7 @@ import SegmentedRadio from './components/SegmentedRadio';
 import MacroRegimeBanner from './components/MacroRegimeBanner';
 import MonthStepper from './components/MonthStepper';
 import Drawer from './components/Drawer';
+import PerformanceComparisonChart from './components/PerformanceComparisonChart';
 
 // ── Adapter: ComponentRenderProps → BaseComponentProps ──────────────────────
 export function adapt(Comp: ComponentType<any>): ComponentType<any> {
@@ -153,6 +154,7 @@ export const componentRegistry: Record<string, ComponentType<any>> = {
   MacroRegimeBanner: MacroRegimeBanner,
   MonthStepper: adapt(MonthStepper),
   Drawer: Drawer,
+  PerformanceComparisonChart: PerformanceComparisonChart,
 
   // ── 4. Chart wrappers (Real interactive SVG charts) ──────────────────────
   'Chart:bar': ChartComponent,

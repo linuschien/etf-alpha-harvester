@@ -624,8 +624,17 @@
         "leaderboard-heading",
         "orthogonal-control-bar",
         "qualified-leaderboard-table",
-        "clustering-leaderboard-table"
+        "clustering-leaderboard-table",
+        "performance-comparison-container"
       ]
+    },
+    "performance-comparison-container": {
+      "type": "PerformanceComparisonChart",
+      "props": {
+        "id": "performance-comparison-container",
+        "label": "多標的同起點含息績效比較"
+      },
+      "children": []
     },
     "leaderboard-heading": {
       "type": "Heading",
@@ -677,6 +686,10 @@
           {
             "label": "防禦債券 (Defensive)",
             "value": "DEFENSIVE"
+          },
+          {
+            "label": "📈 績效比較 (Compare)",
+            "value": "COMPARE"
           }
         ],
         "defaultValue": "CORE",
