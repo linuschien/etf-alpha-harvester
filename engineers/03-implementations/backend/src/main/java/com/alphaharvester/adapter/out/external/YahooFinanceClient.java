@@ -239,7 +239,7 @@ public class YahooFinanceClient {
                             : TaxTag.DOMESTIC_54C;
 
                     dividends.add(new DividendAnnouncement(
-                            null, null, ticker, exDate, exDate.plusDays(30),
+                            null, null, ticker, exDate, exDate.plusDays(28),
                             amount, taxTag
                     ));
                 }

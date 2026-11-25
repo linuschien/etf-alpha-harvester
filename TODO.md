@@ -1,6 +1,6 @@
 # ETF Alpha Harvester — Known Issues & TODO 清單
 
-最後更新日期：2026-11-20
+最後更新日期：2026-11-25
 
 ---
 
@@ -10,7 +10,7 @@
 | :-: | :-: | :-: | :--- | :--- | :--- | :-: |
 | **1** | 後端 | 🔴 **高** | **月中新掛牌 ETF 觸發 Foreign Key 崩潰** | 月中新上市 ETF（如 `009831`、`009833`）已出現在證交所收盤報價 API，但尚未同步進 `global_asset_metadata` 表 | `upsertDailyQuote` 寫入新代號時拋出 `CONSTRAINT_54` FK 例外，**腰斬後續所有櫃買債券 ETF（如 `00679B`）的報價寫入**，且 Watermark 卡在 `FAILED` | **✅ 已修復**<br>*(2026-11-20)* |
 | **2** | 後端 | 🟢 **低** | **突發颱風假 (`7/10`, `10/23`) 產生 ETF `vol=0` 平盤日 K** | 突發休市隔天觸發 `hasGap` 去 Yahoo 回補，Yahoo 對 ETF 回傳平盤 `vol=0`（`^TWII` 無資料） | `R`、`R²`、`MOM`、`KER`、`MDD`、`YTM` **零誤差**；`Vol 90d`、`Sharpe`、`30d 成交額` 影響 `< 1%` 且隨視窗推進自動消失 | **保留觀察** |
-| **3** | 後端 | 🟢 **低** | **Yahoo 配息 `payment_date` 為推估值 & 指數 `volume` 單位不一** | Yahoo API 不提供配息發放日（目前用 `exDate + 30d`）；各國指數 `volume` 單位不一或恆為 `0` | `payment_date` 可能與真實發放日不同或落在週末；指數的 `volume` / `trade_value_twd` 僅存 DB 未被量化引擎與前端使用 | **保留備忘** |
+| **3** | 後端 | 🟢 **低** | **Yahoo 配息 `payment_date` 為推估值 & 指數 `volume` 單位不一** | Yahoo API 不提供配息發放日（原用 `exDate + 30d` 易落於週末）；各國指數 `volume` 單位不一或恆為 `0` | 改用 `exDate + 28d`（4 週，永不落週末且覆蓋 92.7% 真實發放日）＋前端標註「預計發放 (估)」；指數 `volume` 系統未讀取採 Won't Fix | **✅ 已結案**<br>*(2026-11-25)* |
 | **4** | 後端 | 🟢 **低** | **月中 ETF 分割若在收錄前先點開 UI 抽屜，會使 Ehcache 錯過 Path 3 重刷** | ETF 於月中（如 `10/08`）分割，但 `DIVIDENDS_AND_SPLITS` 要到下月初（`11/01`）才同步進 DB；若在 `10/08 ~ 10/31` 空窗期先點開該 ETF 的 K 線抽屜，`cacheDate` 會推進至 `> splitDate` | **對每月 ETF 評選排行榜、總經 200MA、逢低加碼雷達 0 影響**（皆直接讀 DB 運算）；僅影響該檔 ETF 在 UI 抽屜的 K 線與均線圖快取（因 `cacheDate < splitDate` 不再成立而未觸發 Path 3 全量重刷） | **保留備忘** |
 
 ---
@@ -44,14 +44,15 @@
 
 ---
 
-### 3. [後端 🟢 低] Yahoo 配息 `payment_date` 為推估值 & 指數 `volume` 單位不一
+### 3. [後端 🟢 低] Yahoo 配息 `payment_date` 為推估值 & 指數 `volume` 單位不一 — ✅ 已結案 (2026-11-25)
 - **相關檔案與行號**：
   - [`YahooFinanceClient.parseDividendsAndSplits()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/adapter/out/external/YahooFinanceClient.java#L241-L244)
-  - [`YahooFinanceClient.fetchHistoricalQuotes()`](engineers/03-implementations/backend/src/main/java/com/alphaharvester/adapter/out/external/YahooFinanceClient.java#L101-L110)
-- **詳細原因與影響評估**：
-  - **配息發放日 (`payment_date`)**：Yahoo Finance v8 chart events 僅提供精確的除息日（`exDate`），不提供發放日，目前以 `exDate.plusDays(30)` 推估；後端量化引擎計算殖利率與配息頻率皆只使用 `exDate`，僅前端月曆/列表顯示此推估發放日。
-  - **大盤指數 (`benchmark_index`) 的 `volume_shares`**：8 大基準指數（`^TWII`、`^GSPC`、`^NDX`、`^SOX`、`^N225`、`^VIX`、`^VXN`、`^MOVE`）在 Yahoo Finance 的 `volume` 單位不一或恆為 `0`；但系統對大盤指數僅讀取 `close_price`，不參與 ETF 的 2,000 萬成交額一票否決（台股 ETF 的成交量與成交額單位在全資料源皆 100% 一致為「股」與「新台幣元」）。
-- **備選官方 RWD JSON API（若未來需真實 `payment_date` 或批次查詢）**：
+  - [`V11__normalize_estimated_payment_date_28d.sql`](engineers/03-implementations/backend/src/main/resources/db/migration/V11__normalize_estimated_payment_date_28d.sql)
+  - [`EventCalendar.tsx`](engineers/03-implementations/frontend/src/json-render/components/EventCalendar.tsx#L475-L695)
+- **實際處理結果**：
+  - **配息發放日 (`payment_date`)**：實測櫃買中心近 5 個月 286 筆真實配息紀錄，92.7% 於 28 天（4 週）內發放（中位數 24 天、P90 為 27 天）。已將推估公式由 `exDate.plusDays(30)` 改為 **`exDate.plusDays(28)`**（精準 4 週，星期幾與除息日一致，100% 不落週末），並新增 Flyway `V11` 遷移同步既有歷史紀錄；前端 `EventCalendar` 標註為 **`🔵 預計發放 (除息+4週)`** / **`發放(估)`** / **`預計發放日 (估)`**。
+  - **大盤指數 (`benchmark_index`) 的 `volume_shares`**：採 **Won't Fix (B2)**，因全系統對 8 大基準指數僅使用 `close_price`，未讀取其 `volume_shares` / `trade_value_twd`。
+- **備選官方 RWD JSON API（若未來 Personal Scope P-03 需精確入帳日）**：
   - 上市除息：`GET https://www.twse.com.tw/rwd/zh/ETF/etfDiv?response=json`
   - 上櫃除息：`POST https://info.tpex.org.tw/api/etfExDiv`（Form data: `stkNo=&startDate=YYYYMMDD&endDate=YYYYMMDD&lang=zh-tw`）
 

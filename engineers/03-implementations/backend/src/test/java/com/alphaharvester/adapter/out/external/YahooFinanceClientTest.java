@@ -48,6 +48,7 @@ class YahooFinanceClientTest {
         assertThat(div.getTicker()).isEqualTo("00679B");
         assertThat(div.getDividendPerShare().doubleValue()).isEqualTo(0.35);
         assertThat(div.getTaxTag()).isEqualTo(TaxTag.OVERSEAS_76W);
+        assertThat(div.getPaymentDate()).isEqualTo(div.getExDate().plusDays(28));
     }
 
     @Test

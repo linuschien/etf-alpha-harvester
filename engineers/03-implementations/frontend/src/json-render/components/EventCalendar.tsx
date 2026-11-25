@@ -472,7 +472,7 @@ export default function EventCalendar({
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-          🔵 發放日 (股利匯入帳戶)
+          🔵 預計發放 (除息+4週)
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
@@ -570,9 +570,9 @@ export default function EventCalendar({
                           <div
                             key={eIdx}
                             className="text-[10px] truncate px-1.5 py-0.5 rounded font-medium bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30"
-                            title={`${e.ticker} 股利發放`}
+                            title={`${e.ticker} 預計股利發放 (除息+4週)`}
                           >
-                            發放 {e.ticker}
+                            發放(估) {e.ticker}
                           </div>
                         );
                       })}
@@ -629,7 +629,7 @@ export default function EventCalendar({
                             ? '🟣 股票分割'
                             : e.type === 'DIVIDEND_EX'
                             ? '🟢 除息日'
-                            : '🔵 發放日'}
+                            : '🔵 預計發放 (估)'}
                         </span>
                       </div>
 
@@ -692,7 +692,7 @@ export default function EventCalendar({
                   <tr>
                     <th className="py-3 px-4">標的代碼</th>
                     <th className="py-3 px-4">除息日 / 生效日</th>
-                    <th className="py-3 px-4">發放日</th>
+                    <th className="py-3 px-4">預計發放日 (估)</th>
                     <th className="py-3 px-4">每股配息 / 分割比例</th>
                     <th className="py-3 px-4">稅務標籤 / 備註</th>
                   </tr>
